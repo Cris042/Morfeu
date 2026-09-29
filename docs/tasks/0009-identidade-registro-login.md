@@ -24,7 +24,7 @@ Refresh/logout/deleção (0010); rotas de backoffice (E2); SPA (E5/E8).
 
 ## Dependências esperadas
 
-`golang.org/x/crypto` (argon2) promovida a direta (≥ 0.56.0 — advisories de 0.54 são só em `ssh`/`openpgp`, bump por higiene).
+`golang.org/x/crypto` (argon2) promovida a direta (v0.55.0 — última compatível com Go 1.25; advisories abertos são só em `ssh`/`openpgp`).
 
 ## Critérios de aceite
 

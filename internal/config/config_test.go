@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -86,5 +87,35 @@ func TestValidate_InvalidPoolSizes(t *testing.T) {
 	err := cfg.Validate()
 	if err == nil {
 		t.Error("Expected validation error for PoolMaxSize < PoolMinSize")
+	}
+}
+
+// TestValidarAutenticacao cobre CA10 do PRD 0009: segredo ausente/curto e kid
+// vazio falham, sem ecoar o valor na mensagem.
+func TestValidarAutenticacao(t *testing.T) {
+	cfg := &Config{JWTSegredo: "curto-demais-segredo-31-bytes!!", JWTKid: "k1"}
+	err := cfg.ValidarAutenticacao()
+	if err == nil {
+		t.Fatal("segredo de 31 bytes deveria falhar")
+	}
+	if strings.Contains(err.Error(), cfg.JWTSegredo) {
+		t.Error("mensagem de erro não pode conter o segredo")
+	}
+	if (&Config{JWTKid: "k1"}).ValidarAutenticacao() == nil {
+		t.Error("segredo ausente deveria falhar")
+	}
+	if (&Config{JWTSegredo: strings.Repeat("x", 32)}).ValidarAutenticacao() == nil {
+		t.Error("kid vazio deveria falhar")
+	}
+	if err := (&Config{JWTSegredo: strings.Repeat("x", 32), JWTKid: "k1"}).ValidarAutenticacao(); err != nil {
+		t.Errorf("config válida rejeitada: %v", err)
+	}
+}
+
+// TestValidate_Argon2ForaDosLimites: parâmetros absurdos são recusados no boot.
+func TestValidate_Argon2ForaDosLimites(t *testing.T) {
+	t.Setenv("ARGON2_MEMORIA_KIB", "1024")
+	if _, err := LoadConfig(); err == nil {
+		t.Error("ARGON2_MEMORIA_KIB=1024 deveria falhar")
 	}
 }

@@ -24,12 +24,15 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
+	"github.com/mclovin137/morfeu/internal/autenticacao"
 	"github.com/mclovin137/morfeu/internal/broker"
 	"github.com/mclovin137/morfeu/internal/cache"
 	"github.com/mclovin137/morfeu/internal/catalogo"
 	catalogodb "github.com/mclovin137/morfeu/internal/catalogo/db"
 	"github.com/mclovin137/morfeu/internal/config"
 	"github.com/mclovin137/morfeu/internal/health"
+	"github.com/mclovin137/morfeu/internal/identidade"
+	identidadedb "github.com/mclovin137/morfeu/internal/identidade/db"
 	"github.com/mclovin137/morfeu/internal/logger"
 	"github.com/mclovin137/morfeu/internal/outbox"
 	"github.com/mclovin137/morfeu/internal/telemetria"
@@ -54,6 +57,15 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "criar-filme" {
 		if err := runCriarFilme(os.Args[2:]); err != nil {
 			fmt.Fprintf(os.Stderr, "criar-filme: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+	// Subcomando seed-operador (RF05 do PRD 0009): único caminho que cria
+	// operador — nenhuma rota HTTP faz isso.
+	if len(os.Args) > 1 && os.Args[1] == "seed-operador" {
+		if err := runSeedOperador(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "seed-operador: %v\n", err)
 			os.Exit(1)
 		}
 		return
@@ -144,6 +156,10 @@ func runServer(mode string) {
 	registrarMetricasMensageria(tel, dbPool, brokerClient, log)
 
 	e := setupRouter(log, tel, filmHandler, healthHandler)
+	// /auth/* só onde o processo serve a API (api|all): exige JWT_SEGREDO.
+	if mode != modeWorker {
+		montarIdentidade(cfg, dbPool, redisClient, log).RegistrarRotas(e)
+	}
 
 	go func() {
 		if err := e.Start(":" + cfg.AppPort); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -238,6 +254,9 @@ func startConsumer(ctx context.Context, brokerClient *broker.Client, dbPool *pgx
 // setupRouter creates the Echo instance, wiring middleware and routes.
 func setupRouter(log *logger.Logger, tel *telemetria.Telemetria, filmHandler *catalogo.FilmHandler, healthHandler *health.HealthHandler) *echo.Echo {
 	e := echo.New()
+	// IP do cliente = endereço da conexão (limitador por IP, PRD 0009 RF09):
+	// sem proxy confiável até a E0c-CD, X-Forwarded-For seria forjável.
+	e.IPExtractor = echo.ExtractIPDirect()
 
 	// Primeiro middleware: o span/métrica cobre recover e logger (RF03, PRD 0006).
 	e.Use(tel.MiddlewareHTTP("morfeu"))
@@ -359,6 +378,107 @@ func runCriarFilme(args []string) error {
 	}
 
 	fmt.Println(film.ID)
+	return nil
+}
+
+// Limites de tentativas (RN02 do PRD 0008 / RF02–RF03 do PRD 0009).
+const (
+	limiteFalhasConta   = 5
+	limiteFalhasIP      = 20
+	janelaFalhasLogin   = 5 * time.Minute
+	limiteCadastrosIP   = 10
+	janelaCadastrosIP   = time.Hour
+	prefixoLimitadorRdb = "morfeu:auth:"
+)
+
+// montarIdentidade monta emissor, limitadores (Redis + fallback em memória),
+// métricas e o serviço de identidade. Falha de config é fatal: a API não sobe
+// sem segredo JWT válido (RF09).
+func montarIdentidade(cfg *config.Config, dbPool *pgxpool.Pool, redisClient redis.Cmdable, log *logger.Logger) *identidade.Handler {
+	fatal := func(msg string, err error) {
+		log.ErrorMsg(msg, zap.Error(err))
+		os.Exit(1)
+	}
+	if err := cfg.ValidarAutenticacao(); err != nil {
+		fatal("configuração de autenticação inválida", err)
+	}
+	emissor, err := autenticacao.NovoEmissor(autenticacao.ConfigJWT{
+		Segredo: []byte(cfg.JWTSegredo), Kid: cfg.JWTKid, TTL: autenticacao.TTLAccessPadrao,
+	})
+	if err != nil {
+		fatal("emissor JWT", err)
+	}
+	novoLimitador := func(escopo string, maxim int, janela time.Duration) *autenticacao.Limitador {
+		l, lerr := autenticacao.NovoLimitador(autenticacao.ConfigLimitador{
+			Redis: redisClient, Prefixo: prefixoLimitadorRdb + escopo + ":", Max: maxim, Janela: janela,
+		}, log.Logger)
+		if lerr != nil {
+			fatal("limitador "+escopo, lerr)
+		}
+		return l
+	}
+	metricas, err := autenticacao.NovasMetricas()
+	if err != nil {
+		fatal("métricas de autenticação", err)
+	}
+	servico, err := identidade.NovoServico(identidadedb.New(dbPool), emissor, identidade.Config{
+		Argon2:           parametrosArgon2(cfg),
+		HashConcorrencia: cfg.HashConcorrencia,
+		LimiteConta:      novoLimitador("conta", limiteFalhasConta, janelaFalhasLogin),
+		LimiteIP:         novoLimitador("ip", limiteFalhasIP, janelaFalhasLogin),
+		LimiteRegistro:   novoLimitador("registro", limiteCadastrosIP, janelaCadastrosIP),
+	}, metricas, log.Logger)
+	if err != nil {
+		fatal("serviço de identidade", err)
+	}
+	return identidade.NovoHandler(servico, emissor, log.Logger)
+}
+
+// parametrosArgon2 converte a config (faixas já validadas em config.Validate).
+func parametrosArgon2(cfg *config.Config) identidade.ParametrosArgon2 {
+	return identidade.ParametrosArgon2{
+		MemoriaKiB:  uint32(cfg.Argon2MemoriaKiB), //nolint:gosec // G115: 8192..1048576 validado em config.Validate
+		Iteracoes:   uint32(cfg.Argon2Iteracoes),  //nolint:gosec // G115: 1..10 validado em config.Validate
+		Paralelismo: uint8(cfg.Argon2Paralelismo), //nolint:gosec // G115: 1..16 validado em config.Validate
+	}
+}
+
+// runSeedOperador implementa `morfeu seed-operador -nome <n> -email <e>`
+// (RF05 do PRD 0009): cria o operador com senha aleatória exibida UMA vez no
+// stdout (nunca logada); e-mail existente → nada muda (idempotente).
+func runSeedOperador(args []string) error {
+	fs := flag.NewFlagSet("seed-operador", flag.ContinueOnError)
+	nome := fs.String("nome", "", "nome do operador (obrigatório)")
+	email := fs.String("email", "", "e-mail do operador (obrigatório)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if strings.TrimSpace(*nome) == "" || strings.TrimSpace(*email) == "" {
+		return errors.New("-nome e -email são obrigatórios")
+	}
+
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return fmt.Errorf("carregar config: %w", err)
+	}
+	log := logger.NewLogger(cfg.LogLevel)
+	defer func() { _ = log.Sync() }()
+
+	pool, err := createDBPool(cfg, log)
+	if err != nil {
+		return fmt.Errorf("conectar ao banco: %w", err)
+	}
+	defer pool.Close()
+
+	senha, criado, err := identidade.SeedOperador(context.Background(), identidadedb.New(pool), parametrosArgon2(cfg), log.Logger, *nome, *email)
+	if err != nil {
+		return fmt.Errorf("criar operador: %w", err)
+	}
+	if !criado {
+		fmt.Println("operador já existe — nada alterado")
+		return nil
+	}
+	fmt.Printf("operador criado. Senha inicial (exibida só agora, guarde-a): %s\n", senha)
 	return nil
 }
 

@@ -35,3 +35,20 @@ sql:
         emit_exact_table_names: false
         emit_pointers_for_null_types: true
         sql_package: "pgx/v5"
+  # Módulo identidade (task 0009): dono exclusivo da tabela usuario.
+  - schema: "./migrations/005_usuario.up.sql"
+    queries: "./internal/identidade/queries.sql"
+    engine: "postgresql"
+    gen:
+      go:
+        out: "./internal/identidade/db"
+        package: "db"
+        emit_db_tags: true
+        emit_interface: false
+        emit_prepared_queries: false
+        emit_exact_table_names: false
+        emit_pointers_for_null_types: true
+        sql_package: "pgx/v5"
+        overrides:
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"

@@ -3,9 +3,13 @@ package config
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"strconv"
 	"time"
 )
+
+// tamanhoMinimoSegredoJWT: HS256 exige chave de pelo menos 256 bits (PRD 0008).
+const tamanhoMinimoSegredoJWT = 32
 
 // Config holds application configuration loaded from environment variables
 type Config struct {
@@ -18,6 +22,14 @@ type Config struct {
 	PoolMinSize int
 	PoolMaxSize int
 	PoolTimeout time.Duration
+
+	// Autenticação (PRD 0009). JWTSegredo nunca tem default nem é logado.
+	JWTSegredo        string
+	JWTKid            string
+	Argon2MemoriaKiB  int
+	Argon2Iteracoes   int
+	Argon2Paralelismo int
+	HashConcorrencia  int
 }
 
 // LoadConfig loads configuration from environment variables with defaults
@@ -33,6 +45,14 @@ func LoadConfig() (*Config, error) {
 		AppPort:     getEnv("APP_PORT", "8080"),
 		PoolMinSize: getEnvInt("POOL_MIN_SIZE", 5),
 		PoolMaxSize: getEnvInt("POOL_MAX_SIZE", 25),
+
+		JWTSegredo: getEnv("JWT_SEGREDO", ""),
+		JWTKid:     getEnv("JWT_KID", "k1"),
+		// Mínimo OWASP (m=19 MiB, t=2, p=1) — recalibrar na VM (E0c-CD).
+		Argon2MemoriaKiB:  getEnvInt("ARGON2_MEMORIA_KIB", 19*1024),
+		Argon2Iteracoes:   getEnvInt("ARGON2_ITERACOES", 2),
+		Argon2Paralelismo: getEnvInt("ARGON2_PARALELISMO", 1),
+		HashConcorrencia:  getEnvInt("HASH_CONCORRENCIA", runtime.NumCPU()),
 	}
 
 	// Parse cache TTL
@@ -77,7 +97,38 @@ func (c *Config) Validate() error {
 	if c.CacheTTL < 1*time.Second {
 		return fmt.Errorf("CACHE_TTL_SECONDS must be >= 1")
 	}
+	return c.validarArgon2()
+}
 
+// validarArgon2 limita os custos do hash a faixas sãs (evita DoS acidental por
+// config e overflow na conversão para os tipos do argon2).
+func (c *Config) validarArgon2() error {
+	if c.Argon2MemoriaKiB < 8*1024 || c.Argon2MemoriaKiB > 1024*1024 {
+		return fmt.Errorf("ARGON2_MEMORIA_KIB deve estar entre 8192 e 1048576")
+	}
+	if c.Argon2Iteracoes < 1 || c.Argon2Iteracoes > 10 {
+		return fmt.Errorf("ARGON2_ITERACOES deve estar entre 1 e 10")
+	}
+	if c.Argon2Paralelismo < 1 || c.Argon2Paralelismo > 16 {
+		return fmt.Errorf("ARGON2_PARALELISMO deve estar entre 1 e 16")
+	}
+	if c.HashConcorrencia < 1 {
+		return fmt.Errorf("HASH_CONCORRENCIA deve ser >= 1")
+	}
+
+	return nil
+}
+
+// ValidarAutenticacao exige o segredo do JWT — chamado só quando o processo
+// serve HTTP (-mode=api|all); worker e CLI não precisam dele. A mensagem de
+// erro nunca inclui o valor.
+func (c *Config) ValidarAutenticacao() error {
+	if len(c.JWTSegredo) < tamanhoMinimoSegredoJWT {
+		return fmt.Errorf("JWT_SEGREDO ausente ou curto (mínimo %d bytes)", tamanhoMinimoSegredoJWT)
+	}
+	if c.JWTKid == "" {
+		return fmt.Errorf("JWT_KID não pode ser vazio")
+	}
 	return nil
 }
 
