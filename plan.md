@@ -4,15 +4,15 @@
 
 ## Estado corrente (2026-09-29)
 
-**Task 0010 — Refresh rotativo + detecção de reuso + pseudonimização (E1 T2): ABERTA** (branch `feature/0010-refresh-pseudonimizacao`, da main `3ef3188`). 0007/0008/0009 mergeadas (PRs #31/#33/#34).
+**Task 0010 — Refresh rotativo + detecção de reuso + pseudonimização (E1 T2): IMPLEMENTAÇÃO COMPLETA e validada (2026-09-29); gate → PR** (branch `feature/0010-refresh-pseudonimizacao`, da main `3ef3188`). 0007/0008/0009 mergeadas (PRs #31/#33/#34).
 
 ### Plano da task 0010
 
-1. PRD 0010 (refinamento E1 §T2); desvio: logout em `/auth/refresh/logout` p/ manter o cookie com `Path=/auth/refresh`.
-2. Migration 006 `refresh_token` + queries (FOR UPDATE).
-3. `sessao.go`: emitir/rotacionar/revogar na mesma TX (`outbox.WithTx`); reuso → revoga família + métrica + log.
-4. Handler: cookie no login, `/auth/refresh`, `/auth/refresh/logout`, `DELETE /auth/conta`; anti-CSRF por header.
-5. Limpeza no worker; alerta de reuso (7ª regra); testes (corrida 20× `-race`); gate.
+1. ~~PRD 0010~~ — desvio registrado: logout em `/auth/refresh/logout` (cookie com `Path=/auth/refresh`).
+2. ~~Migration 006 + queries~~ — `refresh_token` (hash BYTEA UNIQUE, índices usuario/familia/expira); `TravarRefreshPorHash` com `FOR UPDATE OF r` + JOIN do papel; revogação por família/hash/usuário; `PseudonimizarUsuario` (só papel cliente); overrides `timestamptz`→`time.Time`/`*time.Time` (domínio sem pgtype).
+3. ~~`sessao.go`~~ — refresh 32 B base64url + SHA-256; `Renovar` numa TX (`outbox.WithTx`): reuso revoga a família e **commita** (erro devolvido depois), métrica + log `refresh_reuso_detectado` só com `familia_id`; `Encerrar` idempotente; `RemoverConta` (pseudonimiza + revoga tudo); `LimparRefreshExpirados`.
+4. ~~Handler/wiring~~ — login seta o cookie (`HttpOnly; Secure; SameSite=Strict; Path=/auth/refresh; Max-Age=604800`); `/auth/refresh` e `/auth/refresh/logout` exigem `X-Requested-With: morfeu`; `DELETE /auth/conta` só cliente; limpeza horária no worker (`startWorker`); depguard `identidade-domain` + `internal/outbox`; 7ª regra de alerta (reuso).
+5. ~~Testes~~ — cookie + hash no banco; CSRF 403 sem consumir o token; rotação na mesma família; reuso revoga inclusive o sucessor (2 logs: usado + revogado); **corrida 20× com barreira sob `-race`: sempre 1 sucesso + família revogada**; logout; pseudonimização com oráculo exato + e-mail liberado + operador 403; limpeza. Ajustes de teste: lista de rotas POST permitidas, IP por cadastro (o limite de 10/h da 0009 é real). Suíte completa `-race` verde; lint 0 issues; `sqlc diff` limpo.
 
 ---
 
