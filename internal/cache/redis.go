@@ -14,6 +14,8 @@ import (
 type Cache interface {
 	Get(ctx context.Context, key string) ([]byte, error)
 	Set(ctx context.Context, key string, value []byte, ttl time.Duration) error
+	// Delete remove a chave (invalidação síncrona após escrita — PRD 0011 RF05).
+	Delete(ctx context.Context, key string) error
 }
 
 // RedisCache implements Cache using Redis
@@ -96,4 +98,20 @@ func MarshalJSON(v interface{}) ([]byte, error) {
 // Helper function to unmarshal JSON bytes to data
 func UnmarshalJSON(data []byte, v interface{}) error {
 	return json.Unmarshal(data, v)
+}
+
+// Delete remove a chave do Redis (ausência não é erro).
+func (rc *RedisCache) Delete(ctx context.Context, key string) error {
+	cacheCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	defer cancel()
+
+	if err := rc.client.Del(cacheCtx, key).Err(); err != nil {
+		rc.logger.Warn("cache delete error",
+			zap.String("action", "cache_delete_error"),
+			zap.String("key", key),
+			zap.Error(err),
+		)
+		return err
+	}
+	return nil
 }

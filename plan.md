@@ -4,9 +4,21 @@
 
 ## Estado corrente (2026-09-29)
 
-**Task 0010 — Refresh rotativo + detecção de reuso + pseudonimização (E1 T2): IMPLEMENTAÇÃO COMPLETA e validada (2026-09-29); gate → PR** (branch `feature/0010-refresh-pseudonimizacao`, da main `3ef3188`). 0007/0008/0009 mergeadas (PRs #31/#33/#34).
+**Task 0011 — Catálogo: migração `films`→`filmes` + CRUD do operador (E2 T1): IMPLEMENTAÇÃO COMPLETA e validada (2026-09-29); gate → PR** (branch `feature/0011-catalogo-filmes-crud`, da main `5d2ca7f`). **E1 concluído** (0008/0009/0010 — PRs #33/#34/#35). E2 refinado.
 
-### Plano da task 0010
+### Plano da task 0011
+
+1. ~~PRD 0011~~ — lista fechada (27 arquivos reais; fechamento de status da 0010 adiado p/ a 0012).
+2. ~~Migration 007~~ — renames PT, `criado_em`→TIMESTAMPTZ, `tmdb_id` UNIQUE, `arquivado_em`, `atualizado_em`, CHECKs (título, duração 1–1440), `GENERATED ALWAYS AS IDENTITY` + `setval` acima do maior id; down completo. Validada à mão (up → próximo id 11; down preserva os 11; up → 12) e pelos testes.
+3. ~~Catálogo~~ — `Servico` (ListarPublicos c/ cache read-through `catalogo:filmes:publicos`, BuscarPublico, ListarBackoffice, Criar c/ evento na mesma TX, Atualizar, Arquivar idempotente, validação RF04, `invalidarCartaz` síncrono pós-commit); `Handler` público + backoffice com middleware injetado (catálogo não importa `autenticacao`); projeção com payload PT; `cache.Delete`; overrides timestamptz→time.Time.
+4. ~~Wiring~~ — `registrarRotasDeDominio` (cartaz sempre; /auth + backoffice só em api|all); CLI `criar-filme` exige `-duracao` (mesmo caso de uso).
+5. ~~Testes~~ — harness de `internal/integration*`, `outbox` e `cmd/morfeu` pelos arquivos de migration (fim do DDL duplicado); assert de ordem do cartaz virou presença (ordem agora definida: criado_em/id DESC); novos: validação por campo (12 casos, inclui host-sufixo `image.tmdb.org.evil`), cartaz PT/404, matriz 4 papéis × 4 rotas, CRUD/arquivamento idempotente, 8 criações concorrentes sem colisão + 8 eventos, invalidação verificada no Redis. Suíte completa `-race` verde; lint 0 issues; `sqlc diff` limpo.
+6. **Auditoria APROVADA (2026-09-29, `qa`)** — PR #36. Não-bloqueante aplicado: `TestMigrationsUpDownUpIdempotent` passa a executar os arquivos de down (007 → verifica os 10 filmes em films/EN → 001) em vez de `DROP TABLE`. Registrado: assert de ordem do cartaz ficou por presença (robustez).
+
+---
+
+### Task 0010 — Refresh + pseudonimização: CONCLUÍDA e MERGEADA (PR #35, `5d2ca7f`)
+
 
 1. ~~PRD 0010~~ — desvio registrado: logout em `/auth/refresh/logout` (cookie com `Path=/auth/refresh`).
 2. ~~Migration 006 + queries~~ — `refresh_token` (hash BYTEA UNIQUE, índices usuario/familia/expira); `TravarRefreshPorHash` com `FOR UPDATE OF r` + JOIN do papel; revogação por família/hash/usuário; `PseudonimizarUsuario` (só papel cliente); overrides `timestamptz`→`time.Time`/`*time.Time` (domínio sem pgtype).

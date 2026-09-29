@@ -57,11 +57,11 @@ func TestCacheHitMiss_FirstRequestMisses(t *testing.T) {
 	redisClient.FlushDB(ctx)
 
 	cacheLayer := cache.NewRedisCache(redisClient, zap.NewNop())
-	svc := catalogo.NewFilmService(db.New(pool), pool, cacheLayer, zap.NewNop())
+	svc := catalogo.NovoServico(db.New(pool), pool, cacheLayer, zap.NewNop())
 
 	// First request should miss cache
 	start := time.Now()
-	films, err := svc.ListFilms(ctx)
+	films, err := svc.ListarPublicos(ctx)
 	duration := time.Since(start)
 
 	if err != nil {
@@ -76,7 +76,7 @@ func TestCacheHitMiss_FirstRequestMisses(t *testing.T) {
 	t.Logf("First request (cache miss) took %v", duration)
 
 	// Verify cache was populated
-	cachedData, err := redisClient.Get(ctx, "films:list").Result()
+	cachedData, err := redisClient.Get(ctx, "catalogo:filmes:publicos").Result()
 	if err == redis.Nil {
 		t.Error("Cache was not populated after first request")
 	} else if err != nil {
@@ -88,7 +88,7 @@ func TestCacheHitMiss_FirstRequestMisses(t *testing.T) {
 	}
 
 	// Parse cached data to verify it's valid JSON
-	var cachedFilms []db.Film
+	var cachedFilms []catalogo.Filme
 	if err := json.Unmarshal([]byte(cachedData), &cachedFilms); err != nil {
 		t.Fatalf("Failed to unmarshal cached data: %v", err)
 	}
@@ -137,17 +137,17 @@ func TestCacheHitMiss_SecondRequestHits(t *testing.T) {
 	redisClient.FlushDB(ctx)
 
 	cacheLayer := cache.NewRedisCache(redisClient, zap.NewNop())
-	svc := catalogo.NewFilmService(db.New(pool), pool, cacheLayer, zap.NewNop())
+	svc := catalogo.NovoServico(db.New(pool), pool, cacheLayer, zap.NewNop())
 
 	// First request (cache miss)
-	_, err = svc.ListFilms(ctx)
+	_, err = svc.ListarPublicos(ctx)
 	if err != nil {
 		t.Fatalf("First ListFilms failed: %v", err)
 	}
 
 	// Second request (should hit cache)
 	start := time.Now()
-	films, err := svc.ListFilms(ctx)
+	films, err := svc.ListarPublicos(ctx)
 	duration := time.Since(start)
 
 	if err != nil {
@@ -162,7 +162,7 @@ func TestCacheHitMiss_SecondRequestHits(t *testing.T) {
 	t.Logf("Second request (cache hit) took %v", duration)
 
 	// Verify cache entry still exists with TTL
-	ttl, err := redisClient.PTTL(ctx, "films:list").Result()
+	ttl, err := redisClient.PTTL(ctx, "catalogo:filmes:publicos").Result()
 	if err != nil {
 		t.Fatalf("Failed to get TTL: %v", err)
 	}
@@ -213,16 +213,16 @@ func TestCacheTTLRespected(t *testing.T) {
 	redisClient.FlushDB(ctx)
 
 	cacheLayer := cache.NewRedisCache(redisClient, zap.NewNop())
-	svc := catalogo.NewFilmService(db.New(pool), pool, cacheLayer, zap.NewNop())
+	svc := catalogo.NovoServico(db.New(pool), pool, cacheLayer, zap.NewNop())
 
 	// First request to populate cache
-	_, err = svc.ListFilms(ctx)
+	_, err = svc.ListarPublicos(ctx)
 	if err != nil {
 		t.Fatalf("First ListFilms failed: %v", err)
 	}
 
 	// Verify cache has entry with TTL
-	ttl1, err := redisClient.PTTL(ctx, "films:list").Result()
+	ttl1, err := redisClient.PTTL(ctx, "catalogo:filmes:publicos").Result()
 	if err != nil {
 		t.Fatalf("Failed to get initial TTL: %v", err)
 	}
@@ -235,7 +235,7 @@ func TestCacheTTLRespected(t *testing.T) {
 
 	// Wait and check TTL decreased
 	time.Sleep(100 * time.Millisecond)
-	ttl2, err := redisClient.PTTL(ctx, "films:list").Result()
+	ttl2, err := redisClient.PTTL(ctx, "catalogo:filmes:publicos").Result()
 	if err != nil {
 		t.Fatalf("Failed to get second TTL: %v", err)
 	}

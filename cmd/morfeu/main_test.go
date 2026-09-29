@@ -64,30 +64,18 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, "pool do postgres:", err)
 		os.Exit(1)
 	}
-	if _, err := pool.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS films (
-			id BIGINT PRIMARY KEY,
-			title VARCHAR(255) NOT NULL,
-			year INTEGER,
-			runtime INTEGER,
-			synopsis TEXT,
-			imdb_id VARCHAR(20),
-			poster_url VARCHAR(500),
-			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-		);
-
-		CREATE TABLE IF NOT EXISTS outbox_events (
-			id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			event_type   TEXT NOT NULL,
-			aggregate_id TEXT NOT NULL,
-			occurred_at  TIMESTAMPTZ NOT NULL,
-			payload      JSONB NOT NULL,
-			created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-			published_at TIMESTAMPTZ
-		);
-	`); err != nil {
-		fmt.Fprintln(os.Stderr, "criar schema:", err)
-		os.Exit(1)
+	// Schema pelos arquivos de migration reais (001 filmes-seed, 002 outbox,
+	// 007 catálogo em PT) — sem DDL duplicado no teste (task 0011).
+	for _, arq := range []string{"001_initial_schema.up.sql", "002_outbox_events.up.sql", "007_filmes.up.sql"} {
+		ddl, lerErr := os.ReadFile("../../migrations/" + arq)
+		if lerErr != nil {
+			fmt.Fprintln(os.Stderr, "ler migration:", lerErr)
+			os.Exit(1)
+		}
+		if _, execErr := pool.Exec(ctx, string(ddl)); execErr != nil {
+			fmt.Fprintln(os.Stderr, "aplicar migration", arq, execErr)
+			os.Exit(1)
+		}
 	}
 	pool.Close()
 
@@ -142,7 +130,7 @@ func TestRunCriarFilme_FlagsValidas(t *testing.T) {
 
 	var count int
 	if err := pool.QueryRow(context.Background(),
-		"SELECT count(*) FROM films WHERE title = $1", "Filme de Teste CLI",
+		"SELECT count(*) FROM filmes WHERE titulo = $1", "Filme de Teste CLI",
 	).Scan(&count); err != nil {
 		t.Fatalf("verificar filme criado: %v", err)
 	}
@@ -153,13 +141,21 @@ func TestRunCriarFilme_FlagsValidas(t *testing.T) {
 	var pendingEvents int
 	if err := pool.QueryRow(context.Background(),
 		`SELECT count(*) FROM outbox_events oe
-		 JOIN films f ON f.id::text = oe.aggregate_id
-		 WHERE f.title = $1 AND oe.event_type = 'catalogo.filme_criado'`,
+		 JOIN filmes f ON f.id::text = oe.aggregate_id
+		 WHERE f.titulo = $1 AND oe.event_type = 'catalogo.filme_criado'`,
 		"Filme de Teste CLI",
 	).Scan(&pendingEvents); err != nil {
 		t.Fatalf("verificar evento enfileirado: %v", err)
 	}
 	if pendingEvents != 1 {
 		t.Fatalf("esperava 1 evento catalogo.filme_criado enfileirado, encontrei %d", pendingEvents)
+	}
+}
+
+// TestRunCriarFilme_SemDuracao: a duração passou a ser obrigatória (PRD 0011
+// RF07 — o E3 depende dela para a regra de não-conflito).
+func TestRunCriarFilme_SemDuracao(t *testing.T) {
+	if err := runCriarFilme([]string{"-titulo=Sem Duração"}); err == nil {
+		t.Fatal("esperava erro sem -duracao")
 	}
 }

@@ -3,6 +3,7 @@ sql:
   - schema:
       - "./migrations/001_initial_schema.up.sql"
       - "./migrations/004_catalogo_filmes_projetados.up.sql"
+      - "./migrations/007_filmes.up.sql"
     queries: "./internal/catalogo/queries.sql"
     engine: "postgresql"
     gen:
@@ -15,6 +16,14 @@ sql:
         emit_exact_table_names: false
         emit_pointers_for_null_types: true
         sql_package: "pgx/v5"
+        overrides:
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+          - db_type: "timestamptz"
+            nullable: true
+            go_type:
+              type: "time.Time"
+              pointer: true
   # Ownership excepcional da plataforma (RN03, PRD 0002): outbox_events não
   # pertence a nenhum domínio. Schema restrito à sua própria migration para
   # não vazar o modelo Film (de 001) — e vice-versa — entre os dois DAOs

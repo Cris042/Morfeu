@@ -1,11 +1,18 @@
+// Package catalogo é o módulo dono dos filmes (doc.md §5): cartaz público,
+// CRUD do operador no backoffice e o evento catalogo.filme_criado. Transaction
+// script (ADR 0005). Não conhece autenticação: o backoffice recebe o middleware
+// de papel já montado (PRD 0011 RNF01).
 package catalogo
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"go.uber.org/zap"
 
@@ -14,158 +21,269 @@ import (
 	"github.com/mclovin137/morfeu/internal/outbox"
 )
 
-// filmsCacheTTL: PRD 0001 (CA05) — cache read-through com TTL de 5 minutos
-const filmsCacheTTL = 5 * time.Minute
+const (
+	// chaveCachePublico: cartaz público em cache read-through (PRD 0001 CA05,
+	// renomeada na 0011); apagada de forma síncrona após toda escrita (RF05).
+	chaveCachePublico = "catalogo:filmes:publicos"
+	ttlCachePublico   = 5 * time.Minute
 
-// eventoFilmeCriado é o event_type do evento de domínio emitido por
-// CreateFilm na outbox (RF01/RF02, PRD 0002).
-const eventoFilmeCriado = "catalogo.filme_criado"
+	// eventoFilmeCriado é o event_type emitido na criação (PRD 0002 RF01).
+	eventoFilmeCriado = "catalogo.filme_criado"
 
-// FilmService handles film-related business logic
-type FilmService struct {
-	queries *db.Queries
-	pool    outbox.Pool
-	cache   cache.Cache
-	logger  *zap.Logger
+	// Limites de entrada (RF04 do PRD 0011).
+	tituloMax     = 255
+	sinopseMax    = 2000
+	duracaoMin    = 1
+	duracaoMax    = 1440
+	anoMin        = 1888
+	anoMax        = 2100
+	prefixoPoster = "https://image.tmdb.org/" // hotlink — decisão do usuário (refinamento E2)
+)
+
+var padraoImdb = regexp.MustCompile(`^tt[0-9]{7,10}$`)
+
+// Filme é a visão do filme exposta pela API (JSON em PT).
+type Filme struct {
+	ID          int64      `json:"id"`
+	Titulo      string     `json:"titulo"`
+	Sinopse     *string    `json:"sinopse,omitempty"`
+	DuracaoMin  *int32     `json:"duracao_min,omitempty"`
+	Ano         *int32     `json:"ano,omitempty"`
+	PosterURL   *string    `json:"poster_url,omitempty"`
+	ImdbID      *string    `json:"imdb_id,omitempty"`
+	TmdbID      *int64     `json:"tmdb_id,omitempty"`
+	ArquivadoEm *time.Time `json:"arquivado_em,omitempty"`
 }
 
-// NewFilmService creates a new film service. queries é o DAO gerado pelo sqlc
-// (internal/catalogo/db) — o domínio depende dele, não do pool pgx cru (ADR 0003).
-// pool é usado só para abrir a transação de CreateFilm via outbox.WithTx
-// (RF01/RF02) — nunca importado diretamente aqui (alias outbox.Pool).
-func NewFilmService(queries *db.Queries, pool outbox.Pool, cache cache.Cache, logger *zap.Logger) *FilmService {
-	return &FilmService{
-		queries: queries,
-		pool:    pool,
-		cache:   cache,
-		logger:  logger,
-	}
+// DadosFilme são os campos editáveis (criação manual, edição e CLI).
+type DadosFilme struct {
+	Titulo     string
+	Sinopse    *string
+	DuracaoMin *int32
+	Ano        *int32
+	PosterURL  *string
+	ImdbID     *string
 }
 
-// CreateFilmParams são os dados de entrada de CreateFilm (RF02): usados pelo
-// subcomando CLI criar-filme, validados antes de chegar aqui (forma) — a
-// única regra de negócio é a atomicidade filme+evento (RN01).
-type CreateFilmParams struct {
-	Title    string
-	Year     *int32
-	Runtime  *int32
-	Synopsis *string
-}
-
-// filmeCriadoPayload é o shape JSON do payload do evento catalogo.filme_criado
-// (RF05) — o consumidor (task 0005) faz o parse deste mesmo shape.
+// filmeCriadoPayload é o payload JSON de catalogo.filme_criado — em PT desde
+// a 0011 (sem versionamento: único consumidor é a projeção interna).
 type filmeCriadoPayload struct {
-	ID       int64   `json:"id"`
-	Title    string  `json:"title"`
-	Year     *int32  `json:"year,omitempty"`
-	Runtime  *int32  `json:"runtime,omitempty"`
-	Synopsis *string `json:"synopsis,omitempty"`
+	ID         int64   `json:"id"`
+	Titulo     string  `json:"titulo"`
+	Ano        *int32  `json:"ano,omitempty"`
+	DuracaoMin *int32  `json:"duracao_min,omitempty"`
+	Sinopse    *string `json:"sinopse,omitempty"`
 }
 
-// CreateFilm insere o filme e enfileira catalogo.filme_criado na outbox
-// dentro da mesma transação (RF01/RF02): rollback de um é rollback do outro
-// (RN01, CA01). É o único caminho de escrita do módulo catalogo até agora.
-func (fs *FilmService) CreateFilm(ctx context.Context, params CreateFilmParams) (db.Film, error) {
-	var created db.Film
+// Servico implementa os casos de uso do catálogo.
+type Servico struct {
+	q      *db.Queries
+	pool   outbox.Pool
+	cache  cache.Cache // nil na CLI (sem cartaz a invalidar/servir)
+	logger *zap.Logger
+}
 
-	err := outbox.WithTx(ctx, fs.pool, func(tx outbox.Tx) error {
-		q := fs.queries.WithTx(tx)
+// NovoServico cria o serviço. pool abre as transações via outbox.WithTx
+// (ADR 0002) — o domínio nunca importa o driver.
+func NovoServico(q *db.Queries, pool outbox.Pool, c cache.Cache, logger *zap.Logger) *Servico {
+	return &Servico{q: q, pool: pool, cache: c, logger: logger}
+}
 
-		film, err := q.InsertFilm(ctx, db.InsertFilmParams{
-			Title:    params.Title,
-			Year:     params.Year,
-			Runtime:  params.Runtime,
-			Synopsis: params.Synopsis,
+// ListarPublicos devolve o cartaz (não arquivados) com cache read-through.
+func (s *Servico) ListarPublicos(ctx context.Context) ([]Filme, error) {
+	if filmes, ok := s.lerCache(ctx); ok {
+		return filmes, nil
+	}
+	linhas, err := s.q.ListarFilmesPublicos(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("catalogo: listar cartaz: %w", err)
+	}
+	filmes := make([]Filme, len(linhas))
+	for i, l := range linhas {
+		filmes[i] = Filme{ID: l.ID, Titulo: l.Titulo, Sinopse: l.Sinopse, DuracaoMin: l.DuracaoMin, Ano: l.Ano,
+			PosterURL: l.PosterUrl, ImdbID: l.ImdbID, TmdbID: l.TmdbID}
+	}
+	s.gravarCache(ctx, filmes)
+	return filmes, nil
+}
+
+// BuscarPublico devolve um filme não arquivado.
+func (s *Servico) BuscarPublico(ctx context.Context, id int64) (Filme, error) {
+	linhas, err := s.q.BuscarFilmePublico(ctx, id)
+	if err != nil {
+		return Filme{}, fmt.Errorf("catalogo: buscar filme: %w", err)
+	}
+	if len(linhas) == 0 {
+		return Filme{}, ErrFilmeNaoEncontrado
+	}
+	l := linhas[0]
+	return Filme{ID: l.ID, Titulo: l.Titulo, Sinopse: l.Sinopse, DuracaoMin: l.DuracaoMin, Ano: l.Ano,
+		PosterURL: l.PosterUrl, ImdbID: l.ImdbID, TmdbID: l.TmdbID}, nil
+}
+
+// ListarBackoffice devolve todos os filmes, inclusive arquivados.
+func (s *Servico) ListarBackoffice(ctx context.Context) ([]Filme, error) {
+	linhas, err := s.q.ListarFilmesBackoffice(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("catalogo: listar backoffice: %w", err)
+	}
+	filmes := make([]Filme, len(linhas))
+	for i, l := range linhas {
+		filmes[i] = Filme{ID: l.ID, Titulo: l.Titulo, Sinopse: l.Sinopse, DuracaoMin: l.DuracaoMin, Ano: l.Ano,
+			PosterURL: l.PosterUrl, ImdbID: l.ImdbID, TmdbID: l.TmdbID, ArquivadoEm: l.ArquivadoEm}
+	}
+	return filmes, nil
+}
+
+// Criar insere o filme e enfileira catalogo.filme_criado na MESMA TX (PRD
+// 0002 RN01) e invalida o cartaz após o commit (RF05).
+func (s *Servico) Criar(ctx context.Context, dados DadosFilme) (Filme, error) {
+	d, err := validar(dados)
+	if err != nil {
+		return Filme{}, err
+	}
+	var criado Filme
+	err = outbox.WithTx(ctx, s.pool, func(tx outbox.Tx) error {
+		l, err := s.q.WithTx(tx).InserirFilme(ctx, db.InserirFilmeParams{
+			Titulo: d.Titulo, Sinopse: d.Sinopse, DuracaoMin: d.DuracaoMin, Ano: d.Ano, PosterUrl: d.PosterURL, ImdbID: d.ImdbID,
 		})
 		if err != nil {
-			return fmt.Errorf("inserir filme: %w", err)
+			return fmt.Errorf("catalogo: inserir filme: %w", err)
 		}
-
-		payload, err := json.Marshal(filmeCriadoPayload{
-			ID:       film.ID,
-			Title:    film.Title,
-			Year:     film.Year,
-			Runtime:  film.Runtime,
-			Synopsis: film.Synopsis,
-		})
+		payload, err := json.Marshal(filmeCriadoPayload{ID: l.ID, Titulo: l.Titulo, Ano: l.Ano, DuracaoMin: l.DuracaoMin, Sinopse: l.Sinopse})
 		if err != nil {
-			return fmt.Errorf("serializar payload do evento %s: %w", eventoFilmeCriado, err)
+			return fmt.Errorf("catalogo: serializar %s: %w", eventoFilmeCriado, err)
 		}
-
 		if _, err := outbox.Enqueue(ctx, tx, outbox.Evento{
-			EventType:   eventoFilmeCriado,
-			AggregateID: strconv.FormatInt(film.ID, 10),
-			OccurredAt:  time.Now(),
-			Payload:     payload,
+			EventType: eventoFilmeCriado, AggregateID: strconv.FormatInt(l.ID, 10), OccurredAt: time.Now(), Payload: payload,
 		}); err != nil {
 			return err
 		}
-
-		created = film
+		criado = Filme{ID: l.ID, Titulo: l.Titulo, Sinopse: l.Sinopse, DuracaoMin: l.DuracaoMin, Ano: l.Ano,
+			PosterURL: l.PosterUrl, ImdbID: l.ImdbID, TmdbID: l.TmdbID}
 		return nil
 	})
 	if err != nil {
-		fs.logger.Error("falha ao criar filme", zap.Error(err))
-		return db.Film{}, err
+		return Filme{}, err
 	}
-
-	fs.logger.Info("filme criado",
-		zap.Int64("film_id", created.ID),
-		zap.String("event_type", eventoFilmeCriado),
-	)
-	return created, nil
+	s.invalidarCartaz(ctx)
+	s.logger.Info("filme criado", zap.Int64("filme_id", criado.ID), zap.String("event_type", eventoFilmeCriado))
+	return criado, nil
 }
 
-// ListFilms lists all films with cache read-through strategy
-func (fs *FilmService) ListFilms(ctx context.Context) ([]db.Film, error) {
-	cacheKey := "films:list"
-
-	// Try to get from cache first
-	cachedData, err := fs.cache.Get(ctx, cacheKey)
+// Atualizar substitui os campos editáveis (RF03).
+func (s *Servico) Atualizar(ctx context.Context, id int64, dados DadosFilme) (Filme, error) {
+	d, err := validar(dados)
 	if err != nil {
-		fs.logger.Warn("cache error, falling back to database",
-			zap.String("action", "cache_error"),
-			zap.Error(err),
-		)
+		return Filme{}, err
 	}
-
-	if cachedData != nil {
-		fs.logger.Info("serving from cache",
-			zap.String("action", "cache_hit"),
-		)
-		var films []db.Film
-		unmarshalErr := json.Unmarshal(cachedData, &films)
-		if unmarshalErr == nil {
-			return films, nil
-		}
-		fs.logger.Warn("failed to unmarshal cached data",
-			zap.Error(unmarshalErr),
-		)
-		// Continue to fetch from database
-	}
-
-	// Cache miss or error - fetch from database
-	fs.logger.Info("fetching from database",
-		zap.String("action", "database_query"),
-	)
-
-	films, err := fs.queries.ListFilms(ctx)
+	linhas, err := s.q.AtualizarFilme(ctx, db.AtualizarFilmeParams{
+		ID: id, Titulo: d.Titulo, Sinopse: d.Sinopse, DuracaoMin: d.DuracaoMin, Ano: d.Ano, PosterUrl: d.PosterURL, ImdbID: d.ImdbID,
+	})
 	if err != nil {
-		fs.logger.Error("failed to fetch films from database",
-			zap.Error(err),
-		)
-		return nil, err
+		return Filme{}, fmt.Errorf("catalogo: atualizar filme: %w", err)
 	}
-
-	// Store in cache for future requests (best effort)
-	if data, err := json.Marshal(films); err == nil {
-		if err := fs.cache.Set(ctx, cacheKey, data, filmsCacheTTL); err != nil {
-			fs.logger.Warn("failed to set cache",
-				zap.Error(err),
-			)
-			// Not critical - we already have the data from database
-		}
+	if len(linhas) == 0 {
+		return Filme{}, ErrFilmeNaoEncontrado
 	}
+	s.invalidarCartaz(ctx)
+	l := linhas[0]
+	s.logger.Info("filme atualizado", zap.Int64("filme_id", l.ID))
+	return Filme{ID: l.ID, Titulo: l.Titulo, Sinopse: l.Sinopse, DuracaoMin: l.DuracaoMin, Ano: l.Ano,
+		PosterURL: l.PosterUrl, ImdbID: l.ImdbID, TmdbID: l.TmdbID}, nil
+}
 
-	return films, nil
+// Arquivar tira o filme do cartaz sem apagá-lo (RN01). Idempotente.
+func (s *Servico) Arquivar(ctx context.Context, id int64) error {
+	n, err := s.q.ArquivarFilme(ctx, id)
+	if err != nil {
+		return fmt.Errorf("catalogo: arquivar filme: %w", err)
+	}
+	if n == 0 {
+		return ErrFilmeNaoEncontrado
+	}
+	s.invalidarCartaz(ctx)
+	s.logger.Info("filme arquivado", zap.Int64("filme_id", id))
+	return nil
+}
+
+func (s *Servico) lerCache(ctx context.Context) ([]Filme, bool) {
+	if s.cache == nil {
+		return nil, false
+	}
+	dados, err := s.cache.Get(ctx, chaveCachePublico)
+	if err != nil || dados == nil {
+		return nil, false
+	}
+	var filmes []Filme
+	if err := json.Unmarshal(dados, &filmes); err != nil {
+		s.logger.Warn("cartaz em cache ilegível — lendo do banco", zap.Error(err))
+		return nil, false
+	}
+	return filmes, true
+}
+
+func (s *Servico) gravarCache(ctx context.Context, filmes []Filme) {
+	if s.cache == nil {
+		return
+	}
+	if dados, err := json.Marshal(filmes); err == nil {
+		_ = s.cache.Set(ctx, chaveCachePublico, dados, ttlCachePublico) // best effort; RedisCache já loga
+	}
+}
+
+// invalidarCartaz apaga o cartaz em cache depois do commit (RF05). Falha =
+// warn: a inconsistência fica limitada pelo TTL.
+func (s *Servico) invalidarCartaz(ctx context.Context) {
+	if s.cache == nil {
+		return
+	}
+	if err := s.cache.Delete(ctx, chaveCachePublico); err != nil {
+		s.logger.Warn("não foi possível invalidar o cartaz em cache (TTL limita a defasagem)", zap.Error(err))
+	}
+}
+
+// validar normaliza e aplica as regras do RF04; devolve os campos inválidos
+// sem ecoar valores.
+func validar(d DadosFilme) (DadosFilme, error) {
+	d.Titulo = strings.TrimSpace(d.Titulo)
+	d.Sinopse = aparar(d.Sinopse)
+	d.PosterURL = aparar(d.PosterURL)
+	d.ImdbID = aparar(d.ImdbID)
+
+	var campos []string
+	if n := utf8.RuneCountInString(d.Titulo); n == 0 || n > tituloMax {
+		campos = append(campos, "titulo")
+	}
+	if d.Sinopse != nil && utf8.RuneCountInString(*d.Sinopse) > sinopseMax {
+		campos = append(campos, "sinopse")
+	}
+	if d.DuracaoMin == nil || *d.DuracaoMin < duracaoMin || *d.DuracaoMin > duracaoMax {
+		campos = append(campos, "duracao_min")
+	}
+	if d.Ano != nil && (*d.Ano < anoMin || *d.Ano > anoMax) {
+		campos = append(campos, "ano")
+	}
+	if d.PosterURL != nil && (!strings.HasPrefix(*d.PosterURL, prefixoPoster) || len(*d.PosterURL) > 500) {
+		campos = append(campos, "poster_url")
+	}
+	if d.ImdbID != nil && !padraoImdb.MatchString(*d.ImdbID) {
+		campos = append(campos, "imdb_id")
+	}
+	if len(campos) > 0 {
+		return DadosFilme{}, &ErroValidacao{Campos: campos}
+	}
+	return d, nil
+}
+
+// aparar faz trim e trata string vazia como ausente.
+func aparar(s *string) *string {
+	if s == nil {
+		return nil
+	}
+	t := strings.TrimSpace(*s)
+	if t == "" {
+		return nil
+	}
+	return &t
 }
