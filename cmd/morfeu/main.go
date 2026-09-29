@@ -22,6 +22,8 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/redis/go-redis/v9"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 
 	"github.com/mclovin137/morfeu/internal/autenticacao"
@@ -36,6 +38,8 @@ import (
 	identidadedb "github.com/mclovin137/morfeu/internal/identidade/db"
 	"github.com/mclovin137/morfeu/internal/logger"
 	"github.com/mclovin137/morfeu/internal/outbox"
+	"github.com/mclovin137/morfeu/internal/sessao"
+	sessaodb "github.com/mclovin137/morfeu/internal/sessao/db"
 	"github.com/mclovin137/morfeu/internal/telemetria"
 )
 
@@ -157,7 +161,7 @@ func runServer(mode string) {
 	registrarMetricasMensageria(tel, dbPool, brokerClient, log)
 
 	e := setupRouter(log, tel, healthHandler)
-	registrarRotasDeDominio(e, mode, cfg, dbPool, redisClient, catalogoHandler, log)
+	registrarRotasDeDominio(e, mode, cfg, dbPool, redisClient, catalogoServico, catalogoHandler, log)
 
 	go func() {
 		if err := e.Start(":" + cfg.AppPort); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -267,14 +271,43 @@ func conectarTMDB(s *catalogo.Servico, cfg *config.Config, log *logger.Logger) {
 // registrarRotasDeDominio monta as rotas dos módulos. Cartaz público sempre;
 // /auth/* e o backoffice só onde o processo serve a API (api|all), pois
 // exigem JWT_SEGREDO (PRD 0009) e o papel operador (PRD 0011).
-func registrarRotasDeDominio(e *echo.Echo, mode string, cfg *config.Config, dbPool *pgxpool.Pool, redisClient redis.Cmdable, catalogoHandler *catalogo.Handler, log *logger.Logger) {
+func registrarRotasDeDominio(e *echo.Echo, mode string, cfg *config.Config, dbPool *pgxpool.Pool, redisClient redis.Cmdable, catalogoServico *catalogo.Servico, catalogoHandler *catalogo.Handler, log *logger.Logger) {
 	catalogoHandler.RegistrarRotasPublicas(e)
 	if mode == modeWorker {
 		return
 	}
 	identidadeHandler, emissor := montarIdentidade(cfg, dbPool, redisClient, log)
 	identidadeHandler.RegistrarRotas(e)
-	catalogoHandler.RegistrarRotasBackoffice(e, autenticacao.Exigir(emissor, autenticacao.PapelOperador))
+	exigirOperador := autenticacao.Exigir(emissor, autenticacao.PapelOperador)
+	catalogoHandler.RegistrarRotasBackoffice(e, exigirOperador)
+	montarSessao(dbPool, catalogoServico, log).RegistrarRotasBackoffice(e, exigirOperador, operadorDaRequisicao)
+}
+
+// operadorDaRequisicao identifica o operador para o log de auditoria mínima
+// do módulo sessao (PRD 0013 RF07) sem o módulo importar autenticação.
+func operadorDaRequisicao(c echo.Context) string {
+	id, _ := autenticacao.UsuarioID(c)
+	return id.String()
+}
+
+// montarSessao liga o módulo sessao: porta de filmes = catálogo (ADR 0003),
+// métrica de conflitos criada aqui (o domínio não conhece OTel).
+func montarSessao(dbPool *pgxpool.Pool, filmes sessao.FonteFilmes, log *logger.Logger) *sessao.Handler {
+	conflitos, err := otel.Meter("morfeu/sessao").Int64Counter("sessao_conflitos_total",
+		metric.WithDescription("Tentativas de sessão rejeitadas por conflito de horário na sala."))
+	if err != nil {
+		log.ErrorMsg("métrica de conflitos de sessão", zap.Error(err))
+		os.Exit(1)
+	}
+	servico, err := sessao.NovoServico(sessaodb.New(dbPool), sessao.Config{
+		Filmes:     filmes,
+		AoConflito: func(ctx context.Context) { conflitos.Add(ctx, 1) },
+	}, log.Logger)
+	if err != nil {
+		log.ErrorMsg("serviço de sessões", zap.Error(err))
+		os.Exit(1)
+	}
+	return sessao.NovoHandler(servico, log.Logger)
 }
 
 // startWorker sobe tudo que roda só em -mode=worker|all: relay da outbox,

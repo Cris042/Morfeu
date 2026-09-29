@@ -125,6 +125,20 @@ linters:
         # Fronteira do PRD 0008 (RNF02): o JWT só é emitido/validado em
         # internal/autenticacao — módulos autorizam via autenticacao.Exigir e
         # nunca manipulam tokens diretamente. Testes de fora podem forjar tokens.
+        # Módulo sessao (PRD 0013 RNF01): transaction script sem driver, sem
+        # OTel e sem autenticação (injetados pelo main). pgconn só em
+        # internal/sessao/db/erros.go (fora deste glob).
+        sessao-domain:
+          files:
+            - "**/internal/sessao/*.go"
+            - "!$test"
+          list-mode: strict
+          allow:
+            - $gostd
+            - github.com/labstack/echo/v4
+            - go.uber.org/zap
+            - github.com/mclovin137/morfeu/internal/sessao/db
+
         # Módulo identidade (PRD 0009 RNF01): transaction script sem driver.
         identidade-domain:
           files:
