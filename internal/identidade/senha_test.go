@@ -49,6 +49,9 @@ func TestHash_Malformado(t *testing.T) {
 		"", "texto", "$argon2i$v=19$m=8192,t=1,p=1$c2FsdA$aGFzaA",
 		"$argon2id$v=18$m=8192,t=1,p=1$c2FsdA$aGFzaA",
 		"$argon2id$v=19$m=0,t=1,p=1$c2FsdA$aGFzaA",
+		"$argon2id$v=19$m=4000000000,t=1,p=1$c2FsdA$aGFzaA", // custo absurdo (DoS)
+		"$argon2id$v=19$m=8192,t=99,p=1$c2FsdA$aGFzaA",
+		"$argon2id$v=19$m=8192,t=1,p=64$c2FsdA$aGFzaA",
 		"$argon2id$v=19$m=8192,t=1,p=1$!!!$aGFzaA",
 		"$argon2id$v=19$m=8192,t=1,p=1$c2FsdA$",
 	}

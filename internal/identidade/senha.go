@@ -59,7 +59,9 @@ func verificarHash(senha, codificado string) (bool, error) {
 	if _, err := fmt.Sscanf(partes[3], "m=%d,t=%d,p=%d", &p.MemoriaKiB, &p.Iteracoes, &p.Paralelismo); err != nil {
 		return false, errHashMalformado
 	}
-	if p.MemoriaKiB == 0 || p.Iteracoes == 0 || p.Paralelismo == 0 {
+	// Tetos iguais aos da config (config.validarArgon2): um hash adulterado no
+	// banco com custo absurdo não vira DoS no login (auditoria 0009).
+	if p.MemoriaKiB == 0 || p.MemoriaKiB > 1024*1024 || p.Iteracoes == 0 || p.Iteracoes > 10 || p.Paralelismo == 0 || p.Paralelismo > 16 {
 		return false, errHashMalformado
 	}
 	salt, err := base64.RawStdEncoding.DecodeString(partes[4])
