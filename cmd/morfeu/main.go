@@ -29,6 +29,7 @@ import (
 	"github.com/mclovin137/morfeu/internal/cache"
 	"github.com/mclovin137/morfeu/internal/catalogo"
 	catalogodb "github.com/mclovin137/morfeu/internal/catalogo/db"
+	"github.com/mclovin137/morfeu/internal/catalogo/tmdb"
 	"github.com/mclovin137/morfeu/internal/config"
 	"github.com/mclovin137/morfeu/internal/health"
 	"github.com/mclovin137/morfeu/internal/identidade"
@@ -136,7 +137,9 @@ func runServer(mode string) {
 	log.Info("Migrations completed")
 
 	cacheLayer := cache.NewRedisCache(redisClient, log.Logger)
-	catalogoHandler := catalogo.NovoHandler(catalogo.NovoServico(catalogodb.New(dbPool), dbPool, cacheLayer, log.Logger), log.Logger)
+	catalogoServico := catalogo.NovoServico(catalogodb.New(dbPool), dbPool, cacheLayer, log.Logger)
+	conectarTMDB(catalogoServico, cfg, log)
+	catalogoHandler := catalogo.NovoHandler(catalogoServico, log.Logger)
 	// Relay + consumer ativos só em worker|all (RF04 da 0002, RF08 da 0005) —
 	// api nunca publica nem consome. Sobem antes do HTTP para o health já
 	// refletir o broker (RF09).
@@ -244,6 +247,21 @@ func startConsumer(ctx context.Context, brokerClient *broker.Client, dbPool *pgx
 		}
 	}()
 	log.Info("Consumer de catalogo.filme_criado iniciado")
+}
+
+// conectarTMDB liga o adapter do TMDB ao catálogo quando há token (PRD
+// 0012). Sem token o cadastro manual segue normal e as rotas de TMDB dão 503.
+func conectarTMDB(s *catalogo.Servico, cfg *config.Config, log *logger.Logger) {
+	if cfg.TMDBToken == "" {
+		log.Info("TMDB_API_TOKEN ausente — importação do TMDB desativada")
+		return
+	}
+	cliente, err := tmdb.NovoCliente(tmdb.Config{Token: cfg.TMDBToken}, log.Logger)
+	if err != nil {
+		log.ErrorMsg("cliente TMDB", zap.Error(err))
+		os.Exit(1)
+	}
+	s.ComFonteTMDB(cliente)
 }
 
 // registrarRotasDeDominio monta as rotas dos módulos. Cartaz público sempre;
