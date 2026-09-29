@@ -1,7 +1,7 @@
 # Task 0012 — Importação de filmes do TMDB no backoffice (E2, T2 — marco M2)
 
 - **Data:** 2026-09-29
-- **Status:** em andamento
+- **Status:** concluída
 - **Branch:** `feature/0012-importacao-tmdb` (da main `dfe0d01`, pós-0011)
 - **PRD:** docs/prd/0012-importacao-tmdb.md
 - **Item do roadmap:** E2 — Catálogo + TMDB (task 2/2; fecha o épico e o **M2 — operador importa filme real**). Refinamento: `docs/refinamentos/E2-catalogo-tmdb.md` §T2.
