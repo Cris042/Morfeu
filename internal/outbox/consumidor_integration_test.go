@@ -339,6 +339,10 @@ func TestConsumidor_ShutdownTerminaEntregaEmCurso(t *testing.T) {
 
 // TestWalkingSkeleton_CriarFilmeAteProjecao cobre CA05: CreateFilm (service
 // real) → outbox → relay → broker (topologia real) → consumer → projeção.
+//
+// Guard-rail (auditoria 0005): único teste do consumidor na fila REAL,
+// compartilhada com os testes do relay. O isolamento depende do pacote não usar
+// t.Parallel() nem -shuffle; se isso mudar, migre este teste para fila própria.
 func TestWalkingSkeleton_CriarFilmeAteProjecao(t *testing.T) {
 	pool := newTestPool(t)
 	ctx, cancel := context.WithCancel(context.Background())

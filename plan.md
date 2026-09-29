@@ -14,7 +14,8 @@
 4. ~~Dedup + projeção~~ — `30b557b`: `outbox.ProcessarUmaVez`/`NovoHandler` (dedup e efeito na mesma TX; `message_id` inválido→permanente) + `catalogo.ProjetarFilmeCriado`.
 5. ~~Wiring + health~~ — `8b5809f`: consumer só em `-mode=worker|all`, mesmo WaitGroup do relay; `/health` ganha `rabbitmq` só com broker (`omitempty` — JSON da E0a intacto). Compose sem mudança (sem serviço de app; `depends_on` → E0c-CD).
 6. ~~Testes~~ — `93411cb`: 6 cenários de integração (CA01 dedup 2×→1, CA02 falha antes do commit, CA03 malformado+sem message_id→DLQ com fila viva, CA04 delivery-limit, CA06 shutdown com entrega em curso, CA05 walking skeleton CLI→projeção) + health com/sem broker. Evidência: suíte completa `-race -tags=integration` verde via container; golangci-lint 2.12.2 **0 issues**; `sqlc generate` sem diff + `sqlc vet` limpo. Diff: 25 arquivos (≤30).
-7. Gate: gitleaks pré-push → push → PR → CI verde → passe único de julgamento → merge (fecha o walking skeleton assíncrono do E0b).
+7. **Auditoria APROVADA (2026-09-29)** — passe único de julgamento (`qa`), itens 1–5, 7, 9, 10, 13 conformes; não-bloqueantes: (a) e2e na fila real depende de ausência de `t.Parallel()`/`-shuffle` → guard-rail em comentário adicionado; (b) `novoFilmID` aleatório — colisão teórica aceita; (c) pirâmide achatada para integração é proposital (dedup é interação transacional real).
+8. Gate: gitleaks pré-push → push → PR → CI verde → passe único de julgamento → merge (fecha o walking skeleton assíncrono do E0b).
 
 ---
 
