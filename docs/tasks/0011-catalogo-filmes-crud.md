@@ -1,7 +1,7 @@
 # Task 0011 — Catálogo: migração `films`→`filmes` + CRUD do operador (E2, T1)
 
 - **Data:** 2026-09-29
-- **Status:** em andamento
+- **Status:** concluída
 - **Branch:** `feature/0011-catalogo-filmes-crud` (da main `5d2ca7f`, pós-E1)
 - **PRD:** docs/prd/0011-catalogo-filmes-crud.md
 - **Item do roadmap:** E2 — Catálogo + TMDB (task 1/2). Refinamento: `docs/refinamentos/E2-catalogo-tmdb.md` §T1.

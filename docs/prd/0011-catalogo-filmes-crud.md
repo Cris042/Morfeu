@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0011-catalogo-filmes-crud.md
 - **Branch:** feature/0011-catalogo-filmes-crud
 - **Data:** 2026-09-29
-- **Status:** ativo
+- **Status:** concluído
 
 ## Objetivo
 

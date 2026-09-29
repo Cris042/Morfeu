@@ -4,9 +4,20 @@
 
 ## Estado corrente (2026-09-29)
 
-**Task 0011 — Catálogo: migração `films`→`filmes` + CRUD do operador (E2 T1): IMPLEMENTAÇÃO COMPLETA e validada (2026-09-29); gate → PR** (branch `feature/0011-catalogo-filmes-crud`, da main `5d2ca7f`). **E1 concluído** (0008/0009/0010 — PRs #33/#34/#35). E2 refinado.
+**Task 0012 — Importação de filmes do TMDB (E2 T2, fecha o M2): ABERTA** (branch `feature/0012-importacao-tmdb`, da main `dfe0d01`).
 
-### Plano da task 0011
+### Plano da task 0012
+
+1. PRD 0012 (refinamento E2 §T2; Context7 `/websites/developer_themoviedb_reference`).
+2. Port `FonteTMDB` + `ImportarDoTMDB`/`BuscarNoTMDB` no catálogo (upsert por `tmdb_id`, evento só na criação, 422 sem duração, normalização de dados externos).
+3. Adapter `internal/catalogo/tmdb` (stdlib, bearer, host fixo, retry/backoff/Retry-After, métricas, span).
+4. Rotas `/backoffice/filmes/tmdb` e `/backoffice/filmes/importar`; config `TMDB_API_TOKEN`; allowlist de labels.
+5. Testes (adapter com httptest; integração do import); gate.
+
+---
+
+### Task 0011 — Catálogo: CONCLUÍDA e MERGEADA (PR #36, `dfe0d01`)
+
 
 1. ~~PRD 0011~~ — lista fechada (27 arquivos reais; fechamento de status da 0010 adiado p/ a 0012).
 2. ~~Migration 007~~ — renames PT, `criado_em`→TIMESTAMPTZ, `tmdb_id` UNIQUE, `arquivado_em`, `atualizado_em`, CHECKs (título, duração 1–1440), `GENERATED ALWAYS AS IDENTITY` + `setval` acima do maior id; down completo. Validada à mão (up → próximo id 11; down preserva os 11; up → 12) e pelos testes.
