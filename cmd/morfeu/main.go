@@ -117,7 +117,20 @@ func runServer(mode string) {
 	cacheLayer := cache.NewRedisCache(redisClient, log.Logger)
 	filmService := catalogo.NewFilmService(catalogodb.New(dbPool), dbPool, cacheLayer, log.Logger)
 	filmHandler := catalogo.NewFilmHandler(filmService)
+	// Relay + consumer ativos só em worker|all (RF04 da 0002, RF08 da 0005) —
+	// api nunca publica nem consome. Sobem antes do HTTP para o health já
+	// refletir o broker (RF09).
+	var relayWG sync.WaitGroup
+	relayCtx, cancelRelay := context.WithCancel(context.Background())
+	defer cancelRelay()
+
 	healthHandler := health.NewHealthHandler(dbPool, redisClient)
+	var brokerClient *broker.Client
+	if mode == modeWorker || mode == modeAll {
+		brokerClient = startRelay(relayCtx, cfg.RabbitMQURL, dbPool, &relayWG, log)
+		startConsumer(relayCtx, brokerClient, dbPool, &relayWG, log)
+		healthHandler = healthHandler.WithBroker(brokerClient)
+	}
 
 	e := setupRouter(log, filmHandler, healthHandler)
 
@@ -127,16 +140,6 @@ func runServer(mode string) {
 		}
 	}()
 	log.Info("Server started", zap.String("port", cfg.AppPort))
-
-	// Relay ativo só em worker|all (RF04) — api nunca publica.
-	var relayWG sync.WaitGroup
-	relayCtx, cancelRelay := context.WithCancel(context.Background())
-	defer cancelRelay()
-
-	var brokerClient *broker.Client
-	if mode == modeWorker || mode == modeAll {
-		brokerClient = startRelay(relayCtx, cfg.RabbitMQURL, dbPool, &relayWG, log)
-	}
 
 	waitForShutdown(e, log, cancelRelay, &relayWG, brokerClient)
 }
@@ -162,6 +165,21 @@ func startRelay(ctx context.Context, rabbitURL string, dbPool *pgxpool.Pool, rel
 	log.Info("Relay da outbox iniciado")
 
 	return brokerClient
+}
+
+// startConsumer sobe a goroutine que consome catalogo.filme_criado com dedup
+// transacional (RF05/RF08 do PRD 0005), registrada no mesmo WaitGroup do
+// relay: no shutdown a entrega em curso termina antes do broker fechar.
+func startConsumer(ctx context.Context, brokerClient *broker.Client, dbPool *pgxpool.Pool, wg *sync.WaitGroup, log *logger.Logger) {
+	handler := outbox.NovoHandler(dbPool, catalogo.ConsumidorProjecaoFilmes, catalogo.ProjetarFilmeCriado, log.Logger)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := brokerClient.Consumir(ctx, broker.QueueFilmeCriado, handler); err != nil {
+			log.ErrorMsg("consumer encerrado com erro", zap.Error(err))
+		}
+	}()
+	log.Info("Consumer de catalogo.filme_criado iniciado")
 }
 
 // setupRouter creates the Echo instance, wiring middleware and routes.
@@ -195,8 +213,8 @@ func setupRouter(log *logger.Logger, filmHandler *catalogo.FilmHandler, healthHa
 
 // waitForShutdown blocks until a termination signal arrives, then shuts down
 // the server (and, se ativo, o relay + a conexão com o broker) gracefully
-// within a fixed timeout. RF04: para o polling, espera a publicação em curso
-// terminar (relayWG.Wait), fecha a conexão — sem goroutine órfã.
+// within a fixed timeout. RF04: para o polling e o consumo, espera a publicação/entrega
+// em curso terminar (relayWG.Wait), fecha a conexão — sem goroutine órfã.
 func waitForShutdown(e *echo.Echo, log *logger.Logger, cancelRelay context.CancelFunc, relayWG *sync.WaitGroup, brokerClient *broker.Client) {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
