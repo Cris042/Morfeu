@@ -10,14 +10,24 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"go.uber.org/zap"
 
+	"github.com/mclovin137/morfeu/internal/cache"
 	"github.com/mclovin137/morfeu/internal/sessao/db"
 )
+
+// ttlCachePublico: defasagem máxima das sessões públicas de um filme (PRD
+// 0014 RF02); escrita invalida na hora, o TTL só cobre falha do delete.
+const ttlCachePublico = 60 * time.Second
+
+func chaveCacheFilme(filmeID int64) string {
+	return fmt.Sprintf("sessao:filme:%d:futuras", filmeID)
+}
 
 // IntervaloLimpeza entre sessões na mesma sala (decisão do usuário no
 // refinamento E3: 20 min). Entra no fim de cada sessão.
@@ -42,6 +52,7 @@ type Config struct {
 	Filmes     FonteFilmes
 	AoConflito func(context.Context) // incrementa sessao_conflitos_total (RF07)
 	Agora      func() time.Time
+	Cache      cache.Cache // opcional (PRD 0014): cache das sessões públicas
 }
 
 // Servico implementa os casos de uso do módulo.
@@ -211,6 +222,7 @@ func (s *Servico) CriarSessao(ctx context.Context, in EntradaSessao, operador st
 		}
 		return Sessao{}, fmt.Errorf("sessao: inserir sessão (sqlstate %s): %w", db.CodigoSQL(err), err)
 	}
+	s.invalidarFilme(ctx, l.FilmeID)
 	s.logger.Info("sessão criada", zap.String("operador_id", operador), zap.Int64("sessao_id", l.ID))
 	return Sessao{ID: l.ID, FilmeID: l.FilmeID, SalaID: l.SalaID, Inicio: l.Inicio, Fim: l.Fim,
 		DuracaoMin: l.DuracaoMin, PrecoCentavos: l.PrecoCentavos, Status: l.Status}, nil
@@ -248,9 +260,21 @@ func (s *Servico) conflito(ctx context.Context, salaID int64, inicio, fim time.T
 	return &ErroConflitoHorario{SessaoID: linhas[0].ID, Inicio: linhas[0].Inicio, Fim: linhas[0].Fim}
 }
 
-// ListarSessoesBackoffice devolve as sessões mais recentes (RF05).
-func (s *Servico) ListarSessoesBackoffice(ctx context.Context) ([]Sessao, error) {
-	linhas, err := s.q.ListarSessoesBackoffice(ctx)
+// FiltroSessoes restringe a listagem do operador (PRD 0014 RF05).
+type FiltroSessoes struct {
+	SalaID *int64
+	Dia    *time.Time // dia em UTC (00:00 até 24:00)
+}
+
+// ListarSessoesBackoffice devolve as sessões mais recentes, com filtros.
+func (s *Servico) ListarSessoesBackoffice(ctx context.Context, f FiltroSessoes) ([]Sessao, error) {
+	p := db.ListarSessoesBackofficeParams{SalaID: f.SalaID}
+	if f.Dia != nil {
+		desde := time.Date(f.Dia.Year(), f.Dia.Month(), f.Dia.Day(), 0, 0, 0, 0, time.UTC)
+		ate := desde.AddDate(0, 0, 1)
+		p.Desde, p.Ate = &desde, &ate
+	}
+	linhas, err := s.q.ListarSessoesBackoffice(ctx, p)
 	if err != nil {
 		return nil, fmt.Errorf("sessao: listar sessões: %w", err)
 	}
@@ -262,18 +286,122 @@ func (s *Servico) ListarSessoesBackoffice(ctx context.Context) ([]Sessao, error)
 	return out, nil
 }
 
-// CancelarSessao tira a sessão da programação (idempotente) e libera o
-// horário na EXCLUDE. Cancelar com ingressos vendidos é E9.
+// CancelarSessao tira a sessão da programação (idempotente), libera o
+// horário na EXCLUDE e invalida a lista pública do filme. Cancelar com
+// ingressos vendidos é E9.
 func (s *Servico) CancelarSessao(ctx context.Context, id int64, operador string) error {
-	n, err := s.q.CancelarSessao(ctx, id)
+	filmes, err := s.q.CancelarSessao(ctx, id)
 	if err != nil {
 		return fmt.Errorf("sessao: cancelar sessão: %w", err)
 	}
-	if n == 0 {
+	if len(filmes) == 0 {
 		return ErrSessaoNaoEncontrada
 	}
+	s.invalidarFilme(ctx, filmes[0])
 	s.logger.Info("sessão cancelada", zap.String("operador_id", operador), zap.Int64("sessao_id", id))
 	return nil
+}
+
+// SessaoPublica é a sessão vista pelo público (PRD 0014 RF01) — sem nenhum
+// campo de filme (o SPA já tem o filme; fronteira ADR 0003).
+type SessaoPublica struct {
+	ID            int64     `json:"id"`
+	SalaID        int64     `json:"sala_id"`
+	SalaNome      string    `json:"sala_nome"`
+	Inicio        time.Time `json:"inicio"`
+	Fim           time.Time `json:"fim"`
+	PrecoCentavos int32     `json:"preco_centavos"`
+}
+
+// ListarSessoesPublicas devolve as sessões agendadas futuras do filme, com
+// cache read-through; o que vem do cache é refiltrado pelo horário atual
+// (sessão que começou durante o TTL nunca aparece — RF02).
+func (s *Servico) ListarSessoesPublicas(ctx context.Context, filmeID int64) ([]SessaoPublica, error) {
+	agora := s.cfg.Agora()
+	if lista, ok := s.lerCache(ctx, filmeID); ok {
+		return futuras(lista, agora), nil
+	}
+	linhas, err := s.q.ListarSessoesFuturasDoFilme(ctx, db.ListarSessoesFuturasDoFilmeParams{FilmeID: filmeID, Inicio: agora})
+	if err != nil {
+		return nil, fmt.Errorf("sessao: listar sessões públicas: %w", err)
+	}
+	lista := make([]SessaoPublica, len(linhas))
+	for i, l := range linhas {
+		lista[i] = SessaoPublica{ID: l.ID, SalaID: l.SalaID, SalaNome: l.SalaNome, Inicio: l.Inicio, Fim: l.Fim, PrecoCentavos: l.PrecoCentavos}
+	}
+	s.gravarCache(ctx, filmeID, lista)
+	return lista, nil
+}
+
+// MapaSessao é o mapa público de uma sessão (PRD 0014 RF04) — base do E4.
+type MapaSessao struct {
+	SessaoID int64     `json:"sessao_id"`
+	SalaID   int64     `json:"sala_id"`
+	SalaNome string    `json:"sala_nome"`
+	Fileiras int       `json:"fileiras"`
+	Colunas  int       `json:"colunas"`
+	Assentos []Assento `json:"assentos"`
+}
+
+// Mapa devolve layout e assentos de uma sessão agendada que não começou.
+func (s *Servico) Mapa(ctx context.Context, sessaoID int64) (MapaSessao, error) {
+	linhas, err := s.q.BuscarMapaDaSessao(ctx, db.BuscarMapaDaSessaoParams{ID: sessaoID, Inicio: s.cfg.Agora()})
+	if err != nil {
+		return MapaSessao{}, fmt.Errorf("sessao: mapa: %w", err)
+	}
+	if len(linhas) == 0 {
+		return MapaSessao{}, ErrSessaoNaoEncontrada
+	}
+	var layout Layout
+	if err := json.Unmarshal(linhas[0].Layout, &layout); err != nil {
+		return MapaSessao{}, fmt.Errorf("sessao: layout ilegível: %w", err)
+	}
+	return MapaSessao{SessaoID: linhas[0].ID, SalaID: linhas[0].SalaID, SalaNome: linhas[0].SalaNome,
+		Fileiras: layout.Fileiras, Colunas: layout.Colunas, Assentos: layout.Assentos()}, nil
+}
+
+func futuras(lista []SessaoPublica, agora time.Time) []SessaoPublica {
+	out := make([]SessaoPublica, 0, len(lista))
+	for _, l := range lista {
+		if l.Inicio.After(agora) {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+func (s *Servico) lerCache(ctx context.Context, filmeID int64) ([]SessaoPublica, bool) {
+	if s.cfg.Cache == nil {
+		return nil, false
+	}
+	dados, err := s.cfg.Cache.Get(ctx, chaveCacheFilme(filmeID))
+	if err != nil || dados == nil {
+		return nil, false
+	}
+	var lista []SessaoPublica
+	if err := json.Unmarshal(dados, &lista); err != nil {
+		return nil, false
+	}
+	return lista, true
+}
+
+func (s *Servico) gravarCache(ctx context.Context, filmeID int64, lista []SessaoPublica) {
+	if s.cfg.Cache == nil {
+		return
+	}
+	if dados, err := json.Marshal(lista); err == nil {
+		_ = s.cfg.Cache.Set(ctx, chaveCacheFilme(filmeID), dados, ttlCachePublico) // best effort
+	}
+}
+
+// invalidarFilme apaga a lista pública do filme após uma escrita (RF03).
+func (s *Servico) invalidarFilme(ctx context.Context, filmeID int64) {
+	if s.cfg.Cache == nil {
+		return
+	}
+	if err := s.cfg.Cache.Delete(ctx, chaveCacheFilme(filmeID)); err != nil {
+		s.logger.Warn("não foi possível invalidar as sessões públicas em cache (TTL limita)", zap.Error(err))
+	}
 }
 
 func validarSala(nome string, layoutJSON []byte) (string, Layout, error) {
@@ -293,8 +421,24 @@ func validarSala(nome string, layoutJSON []byte) (string, Layout, error) {
 	return nome, layout, nil
 }
 
+// mesmoLayout compara layouts ignorando a ordem de vaos/pcd (auditoria
+// 0013): reenviar o mesmo layout reordenado não conta como mudança.
 func mesmoLayout(a, b Layout) bool {
-	ja, _ := json.Marshal(a)
-	jb, _ := json.Marshal(b)
+	ja, _ := json.Marshal(normalizado(a))
+	jb, _ := json.Marshal(normalizado(b))
 	return string(ja) == string(jb)
+}
+
+func normalizado(l Layout) Layout {
+	ordenar := func(ps []Posicao) []Posicao {
+		out := append([]Posicao(nil), ps...)
+		sort.Slice(out, func(i, j int) bool {
+			if out[i].Fileira != out[j].Fileira {
+				return out[i].Fileira < out[j].Fileira
+			}
+			return out[i].Coluna < out[j].Coluna
+		})
+		return out
+	}
+	return Layout{Fileiras: l.Fileiras, Colunas: l.Colunas, Vaos: ordenar(l.Vaos), PCD: ordenar(l.PCD)}
 }
