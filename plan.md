@@ -4,9 +4,22 @@
 
 ## Estado corrente (2026-09-29)
 
-**Task 0012 — Importação de filmes do TMDB (E2 T2, fecha o M2): IMPLEMENTAÇÃO COMPLETA e validada (2026-09-29); gate → PR** (branch `feature/0012-importacao-tmdb`, da main `dfe0d01`).
+**Task 0013 — Sessões e salas: escrita e não-conflito (E3 T1): ABERTA** (branch `feature/0013-sessoes-salas-escrita`, da main `1514361`). **E2 concluído** (M2). E3 refinado.
 
-### Plano da task 0012
+### Plano da task 0013
+
+1. PRD 0013 (refinamento E3 §T1).
+2. Migration 008 (btree_gist, salas, sessoes com EXCLUDE parcial por status, índices).
+3. Módulo `sessao`: layout (validação + códigos), service (fim com relógio injetável, validações, conflito → 409 com horário), handler (backoffice com middleware e id do operador injetados), `db/erros.go` (23P01 → `EhConflitoDeHorario`).
+4. Porta `DuracaoFilmeAtivo` no catálogo; wiring no main (métrica de conflitos por callback); depguard.
+5. Testes (unit + integração com bordas, concorrência, imutabilidade, matriz); gate.
+
+---
+
+### Task 0012 — Importação do TMDB: CONCLUÍDA e MERGEADA (PR #37, `1514361`)
+
+Auditoria APROVADA (2026-09-29, `security`) — achados só informativos: termo de busca aparece no log de request (não sensível); remoção de HTML por regex é defesa em profundidade (SPA escapa); sem rate limit dedicado nas rotas de TMDB (uso só do operador).
+
 
 1. ~~PRD 0012~~ — Context7 `/websites/developer_themoviedb_reference`.
 2. ~~Catálogo~~ — port `FonteTMDB` (setter `ComFonteTMDB`, evita mexer em todos os chamadores de `NovoServico`); `ImportarDoTMDB` (upsert `ON CONFLICT (tmdb_id)` com `xmax = 0` → evento só na criação; reimport atualiza sem desarquivar; 422 sem duração); `BuscarNoTMDB`; normalização (HTML removido, truncagem, pôster montado por nós só de `poster_path` com formato válido, imdb validado, ano da data); atribuição TMDB nas respostas.
