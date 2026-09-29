@@ -4,16 +4,16 @@
 
 ## Estado corrente (2026-09-29)
 
-**Task 0008 — Autenticação (plataforma) (E1 T1 1/2): ABERTA; PRD a criar** (branch `feature/0008-autenticacao-plataforma`, empilhada sobre a 0007 enquanto o PR #31 aguarda autorização de merge). E1 refinado: `docs/refinamentos/E1-identidade.md`.
+**Task 0008 — Autenticação (plataforma) (E1 T1 1/2): IMPLEMENTAÇÃO COMPLETA e validada (2026-09-29); gate → PR** (branch `feature/0008-autenticacao-plataforma`, empilhada sobre a 0007 enquanto o PR #31 aguarda autorização de merge). E1 refinado: `docs/refinamentos/E1-identidade.md`.
 
 ### Plano da task 0008
 
 Divisão da T1 (§6.3 — ~34 arquivos): **0008** plataforma → **0009** `identidade` → **0010** T2.
 
-1. PRD 0008 (consome refinamento E1 §T1, parte de plataforma; jwt/v5 v5.3.1 no lib.md).
-2. `internal/autenticacao`: `Emissor` (JWT HS256 + kid, TTL 10 min, relógio injetável), `Claims`, `Exigir` fail-closed, helpers de contexto.
-3. `Limitador` (Redis INCR+TTL + fallback em memória) + métricas `auth_*`; allowlist de labels.
-4. Depguard da plataforma; testes (matriz do middleware, JWT negativo, limitador c/ Redis real e indisponível); lint, -race, gate.
+1. ~~PRD 0008~~ — `docs/prd/0008-autenticacao-plataforma.md`; `golang-jwt/jwt/v5` v5.3.1 no lib.md (echo-jwt não adotado: middleware próprio p/ fail-closed/kid/allowlist).
+2. ~~Emissor + middleware~~ — HS256, `kid` exato, allowlist, `WithExpirationRequired`/`WithIssuedAt`/relógio injetável; claims só `sub`/`papel`/`iat`/`exp`; `Exigir` fail-closed (lista vazia = 403), 401 com `WWW-Authenticate: Bearer`, corpos genéricos.
+3. ~~Limitador + métricas~~ — Redis INCR + `EXPIRE NX` (falha nova não estende a janela), chave = prefixo + SHA-256 (sem e-mail/IP no Redis); Redis fora → memória com teto de 10k entradas (cheio no fallback = bloqueia; bug de bloquear com Redis saudável pego antes do commit); `auth_login_total{resultado}`, `auth_login_duracao_segundos` (sem WithUnit — o exporter anexaria `_seconds`), `auth_ratelimit_bloqueios_total{escopo}`, `auth_refresh_reuso_total`; `resultado`/`escopo` na allowlist.
+4. ~~Testes + depguard~~ — 12 tokens hostis + expirado; matriz 7×4 do middleware; limitador em memória (relógio manual), mapa cheio, Redis real (hash na chave, PTTL real, EXPIRE NX, Limpar) e indisponível (log sem a chave); métricas no registry real. `jwt-boundary` provada com violação proposital (cache → jwt-boundary; catalogo → catalogo-domain), revertida. golangci-lint 0 issues; suíte completa `-race` verde.
 
 ---
 
