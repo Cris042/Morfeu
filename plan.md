@@ -4,16 +4,16 @@
 
 ## Estado corrente (2026-09-29)
 
-**Task 0008 — Identidade: registro/login + JWT + RBAC + seed (E1 T1): ABERTA; PRD a criar** (branch `feature/0008-identidade-registro-login`, empilhada sobre a 0007 enquanto o PR #31 aguarda autorização de merge). E1 refinado: `docs/refinamentos/E1-identidade.md`.
+**Task 0008 — Autenticação (plataforma) (E1 T1 1/2): ABERTA; PRD a criar** (branch `feature/0008-autenticacao-plataforma`, empilhada sobre a 0007 enquanto o PR #31 aguarda autorização de merge). E1 refinado: `docs/refinamentos/E1-identidade.md`.
 
 ### Plano da task 0008
 
-1. PRD 0008 (consome refinamento E1 §T1; deps jwt/v5 + x/crypto no lib.md).
-2. Migration 005 `usuario` + sqlc.
-3. `internal/autenticacao` (JWT, claims, middleware, exigência de papel).
-4. `internal/identidade` (registro, login, anti-enumeração, rate limit c/ fallback, semáforo) + métricas.
-5. CLI `seed-operador`, wiring, depguard.
-6. Testes (unit + integração PG/Redis), lint, -race, gate.
+Divisão da T1 (§6.3 — ~34 arquivos): **0008** plataforma → **0009** `identidade` → **0010** T2.
+
+1. PRD 0008 (consome refinamento E1 §T1, parte de plataforma; jwt/v5 v5.3.1 no lib.md).
+2. `internal/autenticacao`: `Emissor` (JWT HS256 + kid, TTL 10 min, relógio injetável), `Claims`, `Exigir` fail-closed, helpers de contexto.
+3. `Limitador` (Redis INCR+TTL + fallback em memória) + métricas `auth_*`; allowlist de labels.
+4. Depguard da plataforma; testes (matriz do middleware, JWT negativo, limitador c/ Redis real e indisponível); lint, -race, gate.
 
 ---
 
