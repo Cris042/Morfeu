@@ -41,6 +41,9 @@ var LabelsPermitidos = []attribute.Key{
 	"http.request.method",
 	"http.response.status_code",
 	"fila",
+	// auth (task 0008): valores fechados — resultado do login e escopo do limitador.
+	"resultado",
+	"escopo",
 }
 
 // Config parametriza Iniciar.
