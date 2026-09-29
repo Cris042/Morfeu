@@ -4,15 +4,15 @@
 
 ## Estado corrente (2026-09-29)
 
-**Task 0012 — Importação de filmes do TMDB (E2 T2, fecha o M2): ABERTA** (branch `feature/0012-importacao-tmdb`, da main `dfe0d01`).
+**Task 0012 — Importação de filmes do TMDB (E2 T2, fecha o M2): IMPLEMENTAÇÃO COMPLETA e validada (2026-09-29); gate → PR** (branch `feature/0012-importacao-tmdb`, da main `dfe0d01`).
 
 ### Plano da task 0012
 
-1. PRD 0012 (refinamento E2 §T2; Context7 `/websites/developer_themoviedb_reference`).
-2. Port `FonteTMDB` + `ImportarDoTMDB`/`BuscarNoTMDB` no catálogo (upsert por `tmdb_id`, evento só na criação, 422 sem duração, normalização de dados externos).
-3. Adapter `internal/catalogo/tmdb` (stdlib, bearer, host fixo, retry/backoff/Retry-After, métricas, span).
-4. Rotas `/backoffice/filmes/tmdb` e `/backoffice/filmes/importar`; config `TMDB_API_TOKEN`; allowlist de labels.
-5. Testes (adapter com httptest; integração do import); gate.
+1. ~~PRD 0012~~ — Context7 `/websites/developer_themoviedb_reference`.
+2. ~~Catálogo~~ — port `FonteTMDB` (setter `ComFonteTMDB`, evita mexer em todos os chamadores de `NovoServico`); `ImportarDoTMDB` (upsert `ON CONFLICT (tmdb_id)` com `xmax = 0` → evento só na criação; reimport atualiza sem desarquivar; 422 sem duração); `BuscarNoTMDB`; normalização (HTML removido, truncagem, pôster montado por nós só de `poster_path` com formato válido, imdb validado, ano da data); atribuição TMDB nas respostas.
+3. ~~Adapter `internal/catalogo/tmdb`~~ — stdlib, host fixo, bearer, 5 s/tentativa, ≤ 3 tentativas (5xx/rede/429 c/ Retry-After ≤ 5 s; 404/4xx sem retry), corpo ≤ 1 MiB, erros sem token, métricas `tmdb_requisicoes_total{operacao,classe_status}` + duração, span `tmdb.<operacao>`; sem circuit breaker.
+4. ~~Wiring~~ — `TMDB_API_TOKEN` opcional (`conectarTMDB`; ausente → 503 `tmdb_nao_configurado`); allowlist `operacao`/`classe_status`; env examples; lib.md (TMDB implementado).
+5. ~~Testes~~ — adapter com httptest (tentativas por classe, Retry-After e teto, timeout, JSON malformado, header, token fora dos erros, busca com escape e limite 20), guarda-chuva contra o host real em qualquer `_test.go`; normalização hostil (paths `../`, `//host`, query, svg; duração 5000; imdb `javascript:`); integração com fonte fake (2º implementador — o adapter não pode ser importado no pacote por ciclo): cria 201/reimporta 200/1 evento/não desarquiva/cache invalidado, 422/404/503/400, concorrência → 1 filme e 1 evento (um 201 + um 200), matriz. Suíte completa `-race` verde; lint 0 issues; `sqlc diff` limpo.
 
 ---
 
