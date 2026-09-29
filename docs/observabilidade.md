@@ -37,7 +37,7 @@ Dashboards (lista fechada — "sem mais um painel" sem PRD): **API — golden si
 | DLQ crescendo | `delta(morfeu_dlq_mensagens[15m]) > 0` | warning |
 | Consumidor parado | prontas em `catalogo.filme_criado` > 0 **e** 0 consumidores por 5m | critical |
 | Conexões do PostgreSQL acima de 80% | `pg_stat_activity_count / max_connections` por 5m | warning |
-| Reuso de refresh token detectado (E1, task 0010) | `increase(auth_refresh_reuso_total[15m]) > 0` | critical |
+| Reuso de refresh token detectado (E1, task 0010) | `increase(auth_refresh_reuso_total[15m]) > 0` — **triagem:** até o single-flight do SPA (E8), logout numa aba seguido de refresh em outra também dispara | critical |
 
 Destino: contact point `discord-morfeu` (`DISCORD_WEBHOOK_URL`). Em dev use o placeholder do `.env.observability.example` — o contact point exige URL válida no boot; o envio falha em log sem bloquear nada.
 

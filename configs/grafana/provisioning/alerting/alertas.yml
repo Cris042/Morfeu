@@ -218,4 +218,4 @@ groups:
           severity: critical
         annotations:
           summary: "Reuso de refresh token detectado"
-          description: "Token de refresh já usado foi reapresentado — família revogada; possível roubo de sessão (task 0010)."
+          description: "Token de refresh já usado/revogado foi reapresentado — família revogada; possível roubo de sessão (task 0010). Falso positivo conhecido até o single-flight do SPA (E8): logout numa aba seguido de refresh em outra."

@@ -13,6 +13,7 @@
 3. ~~`sessao.go`~~ — refresh 32 B base64url + SHA-256; `Renovar` numa TX (`outbox.WithTx`): reuso revoga a família e **commita** (erro devolvido depois), métrica + log `refresh_reuso_detectado` só com `familia_id`; `Encerrar` idempotente; `RemoverConta` (pseudonimiza + revoga tudo); `LimparRefreshExpirados`.
 4. ~~Handler/wiring~~ — login seta o cookie (`HttpOnly; Secure; SameSite=Strict; Path=/auth/refresh; Max-Age=604800`); `/auth/refresh` e `/auth/refresh/logout` exigem `X-Requested-With: morfeu`; `DELETE /auth/conta` só cliente; limpeza horária no worker (`startWorker`); depguard `identidade-domain` + `internal/outbox`; 7ª regra de alerta (reuso).
 5. ~~Testes~~ — cookie + hash no banco; CSRF 403 sem consumir o token; rotação na mesma família; reuso revoga inclusive o sucessor (2 logs: usado + revogado); **corrida 20× com barreira sob `-race`: sempre 1 sucesso + família revogada**; logout; pseudonimização com oráculo exato + e-mail liberado + operador 403; limpeza. Ajustes de teste: lista de rotas POST permitidas, IP por cadastro (o limite de 10/h da 0009 é real). Suíte completa `-race` verde; lint 0 issues; `sqlc diff` limpo.
+6. **Auditoria APROVADA (2026-09-29, `security`)** — PR #35. Não-bloqueante aplicado: nota de triagem no alerta de reuso e no runbook (falso positivo multi-aba até o single-flight do E8). Registrados: canal de timing teórico via e-mail tombstone (UUID não adivinhável).
 
 ---
 
