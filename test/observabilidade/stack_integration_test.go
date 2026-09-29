@@ -90,6 +90,7 @@ func endereco(t *testing.T, c testcontainers.Container, porta string) string {
 
 // TestPrometheus_ConfigValida cobre CA01.
 func TestPrometheus_ConfigValida(t *testing.T) {
+	t.Parallel() // containers próprios e portas efêmeras: isolados entre si
 	c := iniciar(t, testcontainers.ContainerRequest{
 		Image:        imgPrometheus,
 		ExposedPorts: []string{"9090/tcp"},
@@ -106,6 +107,7 @@ func TestPrometheus_ConfigValida(t *testing.T) {
 
 // TestLoki_ConfigValida cobre CA02: Loki fica ready com retenção habilitada.
 func TestLoki_ConfigValida(t *testing.T) {
+	t.Parallel() // containers próprios e portas efêmeras: isolados entre si
 	iniciar(t, testcontainers.ContainerRequest{
 		Image:        imgLoki,
 		Cmd:          []string{"-config.file=/etc/loki/loki.yml"},
@@ -117,6 +119,7 @@ func TestLoki_ConfigValida(t *testing.T) {
 
 // TestAlloy_ConfigValida cobre CA04: `alloy fmt` falha em sintaxe inválida.
 func TestAlloy_ConfigValida(t *testing.T) {
+	t.Parallel() // containers próprios e portas efêmeras: isolados entre si
 	c := iniciar(t, testcontainers.ContainerRequest{
 		Image:      imgAlloy,
 		Cmd:        []string{"fmt", "/etc/alloy/config.alloy"},
@@ -156,6 +159,7 @@ func getJSON(t *testing.T, url string, autenticado bool, destino any) int {
 // TestGrafana_Provisionamento cobre CA03: o provisioning do repo é aceito no
 // boot e expõe 3 dashboards, 2 datasources, 6 alertas e o contact point.
 func TestGrafana_Provisionamento(t *testing.T) {
+	t.Parallel() // containers próprios e portas efêmeras: isolados entre si
 	files := append(arquivosDe(t, "configs/grafana/provisioning", "/etc/grafana/provisioning"),
 		arquivosDe(t, "configs/grafana/dashboards", "/var/lib/grafana/dashboards")...)
 	c := iniciar(t, testcontainers.ContainerRequest{
@@ -172,11 +176,15 @@ func TestGrafana_Provisionamento(t *testing.T) {
 	})
 	base := endereco(t, c, "3000/tcp")
 
-	var dashboards []map[string]any
+	// Provisionamento pode terminar logo após o /api/health: todas as
+	// contagens usam poll com deadline (robustez a mudanças de ordem no boot).
+	var dashboards, regras, contatos []map[string]any
 	deadline := time.Now().Add(30 * time.Second)
 	for {
 		getJSON(t, base+"/api/search?type=dash-db&folderUIDs=morfeu", true, &dashboards)
-		if len(dashboards) == 3 || time.Now().After(deadline) {
+		getJSON(t, base+"/api/v1/provisioning/alert-rules", true, &regras)
+		getJSON(t, base+"/api/v1/provisioning/contact-points", true, &contatos)
+		if (len(dashboards) == 3 && len(regras) == 6 && len(contatos) > 0) || time.Now().After(deadline) {
 			break
 		}
 		time.Sleep(time.Second)
@@ -191,14 +199,10 @@ func TestGrafana_Provisionamento(t *testing.T) {
 		}
 	}
 
-	var regras []map[string]any
-	getJSON(t, base+"/api/v1/provisioning/alert-rules", true, &regras)
 	if len(regras) != 6 {
 		t.Errorf("esperava 6 regras de alerta (lista fechada), recebi %d", len(regras))
 	}
 
-	var contatos []map[string]any
-	getJSON(t, base+"/api/v1/provisioning/contact-points", true, &contatos)
 	achou := false
 	for _, cp := range contatos {
 		if cp["name"] == "discord-morfeu" && cp["type"] == "discord" {

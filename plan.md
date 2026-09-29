@@ -14,7 +14,8 @@
 4. ~~Grafana~~ — `738c49e`: datasources `prometheus`/`loki`, 3 dashboards (API golden signals, Infra USE, Mensageria), 6 alertas (lista fechada) → contact point Discord via env.
 5. ~~Teste + runbook~~ — `aba6e26`: `test/observabilidade` (Prometheus+promtool, Loki ready, Alloy fmt, Grafana provisioning via API: 3 dashboards/2 datasources/6 regras/contact point/401 anônimo; compose só publica Grafana) — **5/5 verdes**; `docs/observabilidade.md`.
 6. ~~Verificação manual (CA05)~~ — stack completa em projeto isolado `morfeu-verif` (override sem portas publicadas: o host já tinha 5432/5672/3000/9090 ocupados por outro projeto do usuário, que não foi tocado; senhas aleatórias descartáveis): **8/8 targets up**; golden signals por rota (`/filmes` 200×3; 404 sem label de path); `criar-filme` → log "mensagem consumida" no Loki com `trace_id`; 3 dashboards; **6 regras avaliando sem erro** (todas inactive). Ajustes descobertos: node-exporter sem `rslave` (WSL), regex do Alloy `morfeu.*`. Stack e volumes de verificação removidos. golangci-lint 0 issues. Diff: 29 arquivos.
-7. Gate: gitleaks → push → PR → CI → passe de julgamento → merge.
+7. **Auditoria APROVADA (2026-09-29)** — passe único (`qa`): itens 1–5, 7, 9, 10, 13 conformes (PromQL dos alertas revisado). Não-bloqueantes aplicados: poll com deadline também p/ alert-rules/contact-points e `t.Parallel()` nos 4 testes de container (suíte 23s com imagens em cache). Registrados: desvio da retenção por tamanho do Loki (PRD RF03); cAdvisor monta `/var/run` inteiro (padrão da imagem — revisar no hardening pós-E0c-CD). PR #31.
+8. Merge após CI verde (aguardando autorização do usuário).
 
 ---
 
