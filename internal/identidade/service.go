@@ -21,6 +21,7 @@ import (
 
 	"github.com/mclovin137/morfeu/internal/autenticacao"
 	"github.com/mclovin137/morfeu/internal/identidade/db"
+	"github.com/mclovin137/morfeu/internal/outbox"
 )
 
 // Limites de entrada (RF02).
@@ -59,14 +60,16 @@ type Usuario struct {
 	Papel autenticacao.Papel `json:"papel"`
 }
 
-// Sessao é o resultado do login.
+// Sessao é o resultado do login/refresh: access no corpo, refresh no cookie.
 type Sessao struct {
 	AccessToken string
 	ExpiraEm    time.Time
+	Refresh     Refresh
 }
 
 // Servico implementa os casos de uso de identidade.
 type Servico struct {
+	pool      outbox.Pool // transações de refresh/deleção (task 0010)
 	q         *db.Queries
 	emissor   *autenticacao.Emissor
 	metricas  *autenticacao.Metricas
@@ -82,7 +85,7 @@ type Servico struct {
 
 // NovoServico prepara o serviço e o hash dummy usado quando o e-mail não
 // existe (mesmos parâmetros → mesmo custo — anti-enumeração, RF03).
-func NovoServico(q *db.Queries, emissor *autenticacao.Emissor, cfg Config, metricas *autenticacao.Metricas, logger *zap.Logger) (*Servico, error) {
+func NovoServico(pool outbox.Pool, q *db.Queries, emissor *autenticacao.Emissor, cfg Config, metricas *autenticacao.Metricas, logger *zap.Logger) (*Servico, error) {
 	if cfg.HashConcorrencia <= 0 || cfg.LimiteConta == nil || cfg.LimiteIP == nil || cfg.LimiteRegistro == nil {
 		return nil, fmt.Errorf("identidade: configuração incompleta")
 	}
@@ -95,7 +98,7 @@ func NovoServico(q *db.Queries, emissor *autenticacao.Emissor, cfg Config, metri
 		return nil, err
 	}
 	return &Servico{
-		q: q, emissor: emissor, metricas: metricas, logger: logger, cfg: cfg,
+		pool: pool, q: q, emissor: emissor, metricas: metricas, logger: logger, cfg: cfg,
 		sem: make(chan struct{}, cfg.HashConcorrencia), hashDummy: dummy,
 		verificar: verificarHash, agora: time.Now,
 	}, nil
@@ -170,9 +173,14 @@ func (s *Servico) Login(ctx context.Context, email, senha, ip string) (Sessao, e
 	if err != nil {
 		return Sessao{}, err
 	}
+	// Cada login abre uma família nova de refresh (RF03 do PRD 0010).
+	refresh, err := s.emitirRefresh(ctx, s.q, usuario.ID, uuid.New())
+	if err != nil {
+		return Sessao{}, err
+	}
 	s.metricas.Login(ctx, autenticacao.ResultadoSucesso, s.agora().Sub(inicio))
 	s.logger.Info("login", zap.String("usuario_id", usuario.ID.String()))
-	return Sessao{AccessToken: token, ExpiraEm: expira}, nil
+	return Sessao{AccessToken: token, ExpiraEm: expira, Refresh: refresh}, nil
 }
 
 // conferirCredenciais roda o Argon2id SEMPRE — contra o hash do usuário ou

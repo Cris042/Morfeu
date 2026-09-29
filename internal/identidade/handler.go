@@ -16,6 +16,17 @@ import (
 // limiteCorpo protege o grupo /auth de payloads gigantes (RF09).
 const limiteCorpo = "16K"
 
+// Cookie do refresh (PRD 0010 RF03): escopo restrito ao path do refresh —
+// o logout fica sob o mesmo path (/auth/refresh/logout) para recebê-lo.
+const (
+	cookieRefresh     = "morfeu_refresh"
+	pathCookieRefresh = "/auth/refresh"
+	// headerAntiCSRF: só JS same-origin consegue setar (defesa em
+	// profundidade além do SameSite=Strict — refinamento E1).
+	headerAntiCSRF = "X-Requested-With"
+	valorAntiCSRF  = "morfeu"
+)
+
 // Handler expõe as rotas /auth/* (RF02–RF04). Não há rota que crie ou
 // promova operador (RF05).
 type Handler struct {
@@ -35,6 +46,89 @@ func (h *Handler) RegistrarRotas(e *echo.Echo) {
 	g.POST("/registro", h.registrar)
 	g.POST("/login", h.login)
 	g.GET("/eu", h.eu, autenticacao.Exigir(h.emissor, autenticacao.PapelCliente, autenticacao.PapelOperador))
+	g.POST("/refresh", h.refresh, exigirAntiCSRF)
+	g.POST("/refresh/logout", h.logout, exigirAntiCSRF)
+	// Só cliente remove a própria conta pela API (operador → 403).
+	g.DELETE("/conta", h.removerConta, autenticacao.Exigir(h.emissor, autenticacao.PapelCliente))
+}
+
+// exigirAntiCSRF barra rotas autenticadas por cookie sem o header custom.
+func exigirAntiCSRF(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		if c.Request().Header.Get(headerAntiCSRF) != valorAntiCSRF {
+			return c.JSON(http.StatusForbidden, map[string]string{"erro": "csrf"})
+		}
+		return next(c)
+	}
+}
+
+func (h *Handler) refresh(c echo.Context) error {
+	token := ""
+	if ck, err := c.Cookie(cookieRefresh); err == nil {
+		token = ck.Value
+	}
+	sessao, err := h.servico.Renovar(c.Request().Context(), token)
+	if err != nil {
+		limparCookieRefresh(c)
+		if errors.Is(err, ErrRefreshInvalido) {
+			return c.JSON(http.StatusUnauthorized, map[string]string{"erro": "sessao_invalida"})
+		}
+		return h.responderErro(c, err)
+	}
+	return responderSessao(c, sessao)
+}
+
+func (h *Handler) logout(c echo.Context) error {
+	token := ""
+	if ck, err := c.Cookie(cookieRefresh); err == nil {
+		token = ck.Value
+	}
+	if err := h.servico.Encerrar(c.Request().Context(), token); err != nil {
+		return h.responderErro(c, err)
+	}
+	limparCookieRefresh(c)
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (h *Handler) removerConta(c echo.Context) error {
+	id, ok := autenticacao.UsuarioID(c)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"erro": "nao_autenticado"})
+	}
+	if err := h.servico.RemoverConta(c.Request().Context(), id); err != nil {
+		if errors.Is(err, ErrContaNaoRemovivel) {
+			return c.JSON(http.StatusForbidden, map[string]string{"erro": "acesso_negado"})
+		}
+		return h.responderErro(c, err)
+	}
+	limparCookieRefresh(c)
+	return c.NoContent(http.StatusNoContent)
+}
+
+// responderSessao: access no corpo, refresh no cookie HttpOnly.
+func responderSessao(c echo.Context, s Sessao) error {
+	c.SetCookie(&http.Cookie{
+		Name:     cookieRefresh,
+		Value:    s.Refresh.Token,
+		Path:     pathCookieRefresh,
+		MaxAge:   int(TTLRefresh.Seconds()),
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+	})
+	c.Response().Header().Set(echo.HeaderCacheControl, "no-store")
+	return c.JSON(http.StatusOK, sessaoDTO{
+		AccessToken: s.AccessToken,
+		TokenType:   "Bearer",
+		ExpiraEm:    int64(time.Until(s.ExpiraEm).Seconds()),
+	})
+}
+
+func limparCookieRefresh(c echo.Context) {
+	c.SetCookie(&http.Cookie{
+		Name: cookieRefresh, Value: "", Path: pathCookieRefresh, MaxAge: -1,
+		HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode,
+	})
 }
 
 // registroDTO não tem campo de papel: um "papel" no JSON é ignorado (RN01).
@@ -76,12 +170,7 @@ func (h *Handler) login(c echo.Context) error {
 	if err != nil {
 		return h.responderErro(c, err)
 	}
-	c.Response().Header().Set(echo.HeaderCacheControl, "no-store")
-	return c.JSON(http.StatusOK, sessaoDTO{
-		AccessToken: sessao.AccessToken,
-		TokenType:   "Bearer",
-		ExpiraEm:    int64(time.Until(sessao.ExpiraEm).Seconds()),
-	})
+	return responderSessao(c, sessao)
 }
 
 func (h *Handler) eu(c echo.Context) error {

@@ -4,9 +4,21 @@
 
 ## Estado corrente (2026-09-29)
 
-**Task 0009 — Identidade: usuário, registro, login, seed (E1 T1 2/2): IMPLEMENTAÇÃO COMPLETA e validada (2026-09-29); gate → PR** (branch `feature/0009-identidade-registro-login`, empilhada sobre a 0008). **0007 mergeada** (PR #31, `757851f`); **0008 em PR #33** (reaberto do #32, fechado automaticamente pelo GitHub quando a branch-base da 0007 foi apagada — lição: retargetar PRs empilhados ANTES de apagar a base).
+**Task 0010 — Refresh rotativo + detecção de reuso + pseudonimização (E1 T2): IMPLEMENTAÇÃO COMPLETA e validada (2026-09-29); gate → PR** (branch `feature/0010-refresh-pseudonimizacao`, da main `3ef3188`). 0007/0008/0009 mergeadas (PRs #31/#33/#34).
 
-### Plano da task 0009
+### Plano da task 0010
+
+1. ~~PRD 0010~~ — desvio registrado: logout em `/auth/refresh/logout` (cookie com `Path=/auth/refresh`).
+2. ~~Migration 006 + queries~~ — `refresh_token` (hash BYTEA UNIQUE, índices usuario/familia/expira); `TravarRefreshPorHash` com `FOR UPDATE OF r` + JOIN do papel; revogação por família/hash/usuário; `PseudonimizarUsuario` (só papel cliente); overrides `timestamptz`→`time.Time`/`*time.Time` (domínio sem pgtype).
+3. ~~`sessao.go`~~ — refresh 32 B base64url + SHA-256; `Renovar` numa TX (`outbox.WithTx`): reuso revoga a família e **commita** (erro devolvido depois), métrica + log `refresh_reuso_detectado` só com `familia_id`; `Encerrar` idempotente; `RemoverConta` (pseudonimiza + revoga tudo); `LimparRefreshExpirados`.
+4. ~~Handler/wiring~~ — login seta o cookie (`HttpOnly; Secure; SameSite=Strict; Path=/auth/refresh; Max-Age=604800`); `/auth/refresh` e `/auth/refresh/logout` exigem `X-Requested-With: morfeu`; `DELETE /auth/conta` só cliente; limpeza horária no worker (`startWorker`); depguard `identidade-domain` + `internal/outbox`; 7ª regra de alerta (reuso).
+5. ~~Testes~~ — cookie + hash no banco; CSRF 403 sem consumir o token; rotação na mesma família; reuso revoga inclusive o sucessor (2 logs: usado + revogado); **corrida 20× com barreira sob `-race`: sempre 1 sucesso + família revogada**; logout; pseudonimização com oráculo exato + e-mail liberado + operador 403; limpeza. Ajustes de teste: lista de rotas POST permitidas, IP por cadastro (o limite de 10/h da 0009 é real). Suíte completa `-race` verde; lint 0 issues; `sqlc diff` limpo.
+6. **Auditoria APROVADA (2026-09-29, `security`)** — PR #35. Não-bloqueante aplicado: nota de triagem no alerta de reuso e no runbook (falso positivo multi-aba até o single-flight do E8). Registrados: canal de timing teórico via e-mail tombstone (UUID não adivinhável).
+
+---
+
+### Task 0009 — Identidade: CONCLUÍDA e MERGEADA (PR #34, `3ef3188`)
+
 
 1. ~~PRD 0009~~ — `docs/prd/0009-identidade-registro-login.md`; `x/crypto` direta **v0.55.0** (a 0.56.0 exige Go 1.26 e subiria o toolchain — revertido ao notar o bump do `go` no go.mod).
 2. ~~Migration 005 + sqlc~~ — `usuario` (UNIQUE + CHECK minúsculo + CHECK papel); queries `:execrows` (ON CONFLICT) e `:many`+LIMIT 1 — domínio sem `pgx.ErrNoRows`; override uuid→`google/uuid`.

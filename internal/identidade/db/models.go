@@ -5,16 +5,28 @@
 package db
 
 import (
+	"time"
+
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type RefreshToken struct {
+	ID         uuid.UUID  `db:"id"`
+	UsuarioID  uuid.UUID  `db:"usuario_id"`
+	FamiliaID  uuid.UUID  `db:"familia_id"`
+	Hash       []byte     `db:"hash"`
+	ExpiraEm   time.Time  `db:"expira_em"`
+	UsadoEm    *time.Time `db:"usado_em"`
+	RevogadoEm *time.Time `db:"revogado_em"`
+	CriadoEm   time.Time  `db:"criado_em"`
+}
+
 type Usuario struct {
-	ID           uuid.UUID          `db:"id"`
-	Nome         string             `db:"nome"`
-	Email        string             `db:"email"`
-	SenhaHash    string             `db:"senha_hash"`
-	Papel        string             `db:"papel"`
-	CriadoEm     pgtype.Timestamptz `db:"criado_em"`
-	AtualizadoEm pgtype.Timestamptz `db:"atualizado_em"`
+	ID           uuid.UUID `db:"id"`
+	Nome         string    `db:"nome"`
+	Email        string    `db:"email"`
+	SenhaHash    string    `db:"senha_hash"`
+	Papel        string    `db:"papel"`
+	CriadoEm     time.Time `db:"criado_em"`
+	AtualizadoEm time.Time `db:"atualizado_em"`
 }

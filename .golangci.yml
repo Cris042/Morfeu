@@ -139,6 +139,8 @@ linters:
             - golang.org/x/crypto/argon2
             - github.com/mclovin137/morfeu/internal/autenticacao
             - github.com/mclovin137/morfeu/internal/identidade/db
+            # WithTx/Tx/Pool — helper de transação da plataforma (ADR 0002, PRD 0010)
+            - github.com/mclovin137/morfeu/internal/outbox
 
         # Ninguém importa o módulo identidade (ADR 0003): outros módulos
         # autorizam via internal/autenticacao. Só o composition root o monta.

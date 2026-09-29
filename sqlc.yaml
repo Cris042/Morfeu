@@ -36,7 +36,9 @@ sql:
         emit_pointers_for_null_types: true
         sql_package: "pgx/v5"
   # Módulo identidade (task 0009): dono exclusivo da tabela usuario.
-  - schema: "./migrations/005_usuario.up.sql"
+  - schema:
+      - "./migrations/005_usuario.up.sql"
+      - "./migrations/006_refresh_token.up.sql"
     queries: "./internal/identidade/queries.sql"
     engine: "postgresql"
     gen:
@@ -52,3 +54,11 @@ sql:
         overrides:
           - db_type: "uuid"
             go_type: "github.com/google/uuid.UUID"
+          # Domínio sem pgtype (RNF01 do PRD 0009): timestamptz ↔ time.Time.
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+          - db_type: "timestamptz"
+            nullable: true
+            go_type:
+              type: "time.Time"
+              pointer: true

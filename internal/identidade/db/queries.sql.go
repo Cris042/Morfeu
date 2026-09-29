@@ -7,9 +7,22 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+const apagarRefreshExpirados = `-- name: ApagarRefreshExpirados :execrows
+DELETE FROM refresh_token WHERE expira_em < now()
+`
+
+func (q *Queries) ApagarRefreshExpirados(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, apagarRefreshExpirados)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
 
 const buscarUsuarioPorEmail = `-- name: BuscarUsuarioPorEmail :many
 SELECT id, nome, email, senha_hash, papel
@@ -93,6 +106,31 @@ func (q *Queries) BuscarUsuarioPorID(ctx context.Context, id uuid.UUID) ([]Busca
 	return items, nil
 }
 
+const inserirRefresh = `-- name: InserirRefresh :exec
+INSERT INTO refresh_token (id, usuario_id, familia_id, hash, expira_em)
+VALUES ($1, $2, $3, $4, $5)
+`
+
+type InserirRefreshParams struct {
+	ID        uuid.UUID `db:"id"`
+	UsuarioID uuid.UUID `db:"usuario_id"`
+	FamiliaID uuid.UUID `db:"familia_id"`
+	Hash      []byte    `db:"hash"`
+	ExpiraEm  time.Time `db:"expira_em"`
+}
+
+// Abre família (login) ou insere o sucessor (rotação) — task 0010.
+func (q *Queries) InserirRefresh(ctx context.Context, arg InserirRefreshParams) error {
+	_, err := q.db.Exec(ctx, inserirRefresh,
+		arg.ID,
+		arg.UsuarioID,
+		arg.FamiliaID,
+		arg.Hash,
+		arg.ExpiraEm,
+	)
+	return err
+}
+
 const inserirUsuario = `-- name: InserirUsuario :execrows
 INSERT INTO usuario (id, nome, email, senha_hash, papel)
 VALUES ($1, $2, $3, $4, $5)
@@ -121,4 +159,123 @@ func (q *Queries) InserirUsuario(ctx context.Context, arg InserirUsuarioParams) 
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const marcarRefreshUsado = `-- name: MarcarRefreshUsado :exec
+UPDATE refresh_token SET usado_em = now() WHERE id = $1
+`
+
+func (q *Queries) MarcarRefreshUsado(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, marcarRefreshUsado, id)
+	return err
+}
+
+const pseudonimizarUsuario = `-- name: PseudonimizarUsuario :execrows
+UPDATE usuario
+SET nome = 'Conta removida',
+    email = 'removido+' || id::text || '@invalido.local',
+    senha_hash = '!',
+    atualizado_em = now()
+WHERE id = $1 AND papel = 'cliente'
+`
+
+// Deleção de conta (RF07): preserva id/papel; e-mail tombstone único e
+// minúsculo libera o original; '!' não é hash PHC válido — nenhum login casa.
+func (q *Queries) PseudonimizarUsuario(ctx context.Context, id uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, pseudonimizarUsuario, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const revogarFamilia = `-- name: RevogarFamilia :execrows
+UPDATE refresh_token SET revogado_em = now()
+WHERE familia_id = $1 AND revogado_em IS NULL
+`
+
+func (q *Queries) RevogarFamilia(ctx context.Context, familiaID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, revogarFamilia, familiaID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const revogarFamiliaPorHash = `-- name: RevogarFamiliaPorHash :execrows
+UPDATE refresh_token SET revogado_em = now()
+WHERE familia_id = (SELECT atual.familia_id FROM refresh_token AS atual WHERE atual.hash = $1)
+  AND revogado_em IS NULL
+`
+
+// Logout: revoga a família a que o token apresentado pertence.
+func (q *Queries) RevogarFamiliaPorHash(ctx context.Context, hash []byte) (int64, error) {
+	result, err := q.db.Exec(ctx, revogarFamiliaPorHash, hash)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const revogarTodasDoUsuario = `-- name: RevogarTodasDoUsuario :execrows
+UPDATE refresh_token SET revogado_em = now()
+WHERE usuario_id = $1 AND revogado_em IS NULL
+`
+
+func (q *Queries) RevogarTodasDoUsuario(ctx context.Context, usuarioID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, revogarTodasDoUsuario, usuarioID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const travarRefreshPorHash = `-- name: TravarRefreshPorHash :many
+SELECT r.id, r.usuario_id, r.familia_id, r.expira_em, r.usado_em, r.revogado_em, u.papel
+FROM refresh_token r
+JOIN usuario u ON u.id = r.usuario_id
+WHERE r.hash = $1
+LIMIT 1
+FOR UPDATE OF r
+`
+
+type TravarRefreshPorHashRow struct {
+	ID         uuid.UUID  `db:"id"`
+	UsuarioID  uuid.UUID  `db:"usuario_id"`
+	FamiliaID  uuid.UUID  `db:"familia_id"`
+	ExpiraEm   time.Time  `db:"expira_em"`
+	UsadoEm    *time.Time `db:"usado_em"`
+	RevogadoEm *time.Time `db:"revogado_em"`
+	Papel      string     `db:"papel"`
+}
+
+// FOR UPDATE: dois refreshes concorrentes do mesmo token serializam aqui; o
+// segundo enxerga usado_em e vira reuso (RF05 do PRD 0010). :many p/ não
+// depender de pgx.ErrNoRows no domínio.
+func (q *Queries) TravarRefreshPorHash(ctx context.Context, hash []byte) ([]TravarRefreshPorHashRow, error) {
+	rows, err := q.db.Query(ctx, travarRefreshPorHash, hash)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TravarRefreshPorHashRow
+	for rows.Next() {
+		var i TravarRefreshPorHashRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UsuarioID,
+			&i.FamiliaID,
+			&i.ExpiraEm,
+			&i.UsadoEm,
+			&i.RevogadoEm,
+			&i.Papel,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

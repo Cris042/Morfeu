@@ -1,4 +1,5 @@
-# Alertas mínimos (task 0007, RF06) — lista FECHADA do refinamento E0d.
+# Alertas mínimos (task 0007, RF06) — lista FECHADA do refinamento E0d,
+# + 1 do refinamento E1 (task 0010: reuso de refresh token).
 # Grafana-managed; roteados ao Discord. Webhook só via env ($DISCORD_WEBHOOK_URL).
 # Cada regra segue o padrão A (query instantânea) → C (threshold). Nova regra
 # exige atualizar o PRD — a lista é fechada ("sem mais um alerta").
@@ -191,3 +192,30 @@ groups:
         annotations:
           summary: "Conexões do PostgreSQL acima de 80%"
           description: "Pool/conexões perto do limite de max_connections."
+      - uid: morfeu-refresh-reuso
+        title: "Reuso de refresh token detectado"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 900, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'sum(increase(auth_refresh_reuso_total[15m])) or vector(0)'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "Reuso de refresh token detectado"
+          description: "Token de refresh já usado/revogado foi reapresentado — família revogada; possível roubo de sessão (task 0010). Falso positivo conhecido até o single-flight do SPA (E8): logout numa aba seguido de refresh em outra."
