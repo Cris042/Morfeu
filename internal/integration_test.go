@@ -170,19 +170,35 @@ func TestMigrationsUpDownUpIdempotent(t *testing.T) {
 		t.Errorf("Expected 10 films after up, got %d", len(films))
 	}
 
-	// Simulate "down"
-	if _, err := pool.Exec(ctx, "DROP TABLE IF EXISTS filmes"); err != nil {
-		t.Fatalf("Failed to drop table (down): %v", err)
+	// Down real (auditoria 0011): 007 volta a films/EN preservando os dados,
+	// depois 001 remove a tabela — exercita os arquivos de down, não um DROP.
+	ddl007, err := os.ReadFile("../migrations/007_filmes.down.sql")
+	if err != nil {
+		t.Fatalf("ler 007 down: %v", err)
+	}
+	if _, err := pool.Exec(ctx, string(ddl007)); err != nil {
+		t.Fatalf("aplicar 007 down: %v", err)
+	}
+	var seedsEN int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM films WHERE title IS NOT NULL").Scan(&seedsEN); err != nil || seedsEN != 10 {
+		t.Fatalf("007 down deveria preservar os 10 filmes em films/EN: n=%d err=%v", seedsEN, err)
+	}
+	ddl001, err := os.ReadFile("../migrations/001_initial_schema.down.sql")
+	if err != nil {
+		t.Fatalf("ler 001 down: %v", err)
+	}
+	if _, err := pool.Exec(ctx, string(ddl001)); err != nil {
+		t.Fatalf("aplicar 001 down: %v", err)
 	}
 
-	// Verify table is gone
+	// Verify tables are gone
 	var exists bool
-	err = pool.QueryRow(ctx, "SELECT EXISTS(SELECT FROM information_schema.tables WHERE table_name='filmes')").Scan(&exists)
+	err = pool.QueryRow(ctx, "SELECT EXISTS(SELECT FROM information_schema.tables WHERE table_name IN ('filmes','films'))").Scan(&exists)
 	if err != nil {
 		t.Fatalf("Failed to check table existence: %v", err)
 	}
 	if exists {
-		t.Error("Expected films table to be dropped, but it exists")
+		t.Error("Expected catalog table to be dropped, but it exists")
 	}
 
 	// Simulate "up" again
