@@ -71,3 +71,31 @@ sql:
             go_type:
               type: "time.Time"
               pointer: true
+  # Módulo sessao (task 0013): dono de salas e sessoes. O schema inclui 001 e
+  # 007 só para o parser resolver a FK para filmes — nenhuma query lê filmes.
+  - schema:
+      - "./migrations/001_initial_schema.up.sql"
+      - "./migrations/007_filmes.up.sql"
+      - "./migrations/008_salas_sessoes.up.sql"
+    queries: "./internal/sessao/queries.sql"
+    engine: "postgresql"
+    gen:
+      go:
+        out: "./internal/sessao/db"
+        package: "db"
+        emit_db_tags: true
+        emit_interface: false
+        emit_prepared_queries: false
+        emit_exact_table_names: false
+        emit_pointers_for_null_types: true
+        sql_package: "pgx/v5"
+        overrides:
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+          - db_type: "timestamptz"
+            nullable: true
+            go_type:
+              type: "time.Time"
+              pointer: true
+          - db_type: "jsonb"
+            go_type: "encoding/json.RawMessage"

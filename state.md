@@ -6,13 +6,15 @@ Atualizado ao final de cada task e antes de cada PR (regras em `roles.md` §6.11
 
 **Descoberta concluída (2026-07-06).** Morfeu definido: **venda de ingressos de cinema online** (portfólio/aprendizado, dev solo, 10–12h/sem, horizonte 7–9 meses). Stack: Go + Echo, sqlc + pgx/v5, PostgreSQL (fonte da verdade, inclusive trava de assento), Redis (cache), RabbitMQ (saga do checkout), React + Vite, VM Oracle Always Free (PAYG), observabilidade self-hosted, k6. Artefatos gerados: `doc.md` (mini-UML), `lib.md` (stack `planejada`, validada Context7/OSV), `docs/roadmap.md` (E0–E12, marcos M1–M5).
 
-- **Última task concluída:** **0011 — Catálogo: migração `films`→`filmes` + CRUD do operador (E2 T1)** — mergeada (PR #36, `dfe0d01`, 2026-09-29; auditoria APROVADA). Antes: **E1 concluído** (0008 PR #33, 0009 PR #34, 0010 PR #35), 0007 (PR #31), 0006, 0005.
+- **Última task concluída:** **0012 — Importação do TMDB (E2 T2)** — mergeada (PR #37, `1514361`, 2026-09-29; auditoria APROVADA por `security`, achados só informativos). **E2 concluído — marco M2 atingido** (0011 PR #36, 0012 PR #37). **E1 concluído** (PRs #33/#34/#35).
 - **Épico E0 refinado (2026-07-09) e perguntas respondidas (2026-07-11):** cerimônia por épico (§6.14) em `docs/refinamentos/E0-walking-skeleton.md` — task 0002 reescopada; **usuário aprovou a reordenação** (E0c dividido em E0c-CI/E0c-CD; ordem: conformidade ✅ → **E0c-CI** → E0b → E0c-CD → E0d; roadmap atualizado) e **autorizou o ADR 0007 de mensageria** (criado). PRDs de E0b/E0c/E0d desbloqueados na nova ordem.
-- **Task atual:** **0012 — Importação de filmes do TMDB (E2 T2, fecha o M2)** (`docs/tasks/0012-importacao-tmdb.md`, branch `feature/0012-importacao-tmdb`, da main `dfe0d01`) — implementação completa e validada, em PR. Usuário autorizou merge de cada PR quando o CI passar. **E0c-CD segue bloqueada** (VM Oracle). Pendência do usuário (não bloqueia): conta TMDB + token v4 p/ uso real.
-- **PRD atual:** **`docs/prd/0012-importacao-tmdb.md`** (ativo).
+- **Task atual:** **0013 — Sessões e salas: escrita e não-conflito (E3 T1)** (`docs/tasks/0013-sessoes-salas-escrita.md`, branch `feature/0013-sessoes-salas-escrita`, da main `1514361`) — implementação completa e validada, em PR. **E3 refinado** (`docs/refinamentos/E3-sessoes-salas.md`: limpeza 20 min; telas do operador → E5/E9). Usuário autorizou merge de cada PR quando o CI passar. **E0c-CD segue bloqueada** (VM Oracle). Pendência do usuário (não bloqueia): token TMDB v4.
+- **PRD atual:** **`docs/prd/0013-sessoes-salas-escrita.md`** (ativo).
 - **ADRs ativos:** 0001 (Go+Echo) · 0002 (sqlc+pgx) · 0003 (fronteiras/camadas) · 0004 (padrões de código Go) · 0005 (DDD tático + patterns) · 0006 (estratégia de testes) — aceitos em 2026-07-07 — · **0007 (Mensageria: RabbitMQ)** — aceito em 2026-07-11 com autorização explícita (pergunta 2 do refinamento E0). Restantes (trava de assento, saga) nascem nos refinamentos E4/E6.
 
 ## Últimas decisões relevantes
+
+- 2026-09-29 — **Refinamento E3** (decisões do usuário): **intervalo de limpeza entre sessões = 20 min**; **telas do operador saem do E3** (só API; UI no E5/E9 — roadmap ajustado). Consensos: duração do filme por porta síncrona + snapshot na sessão; não-conflito por `EXCLUDE USING gist`; layout jsonb sem tabela de assentos, imutável com sessão ativa; preço em centavos; sessão no passado rejeitada.
 
 - 2026-09-29 — **Refinamento E2** (decisão do usuário): pôster dos filmes por **hotlink da CDN do TMDB** (sem storage próprio; URL validada `image.tmdb.org`). Consensos: PK por IDENTITY, arquivar em vez de deletar, cache do cartaz por DELETE síncrono, filme sem duração no TMDB → import rejeitado, token v4, payload do evento em PT sem versionar, anti-stampede do cartaz transferido ao E5.
 

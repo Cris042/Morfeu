@@ -4,9 +4,22 @@
 
 ## Estado corrente (2026-09-29)
 
-**Task 0012 — Importação de filmes do TMDB (E2 T2, fecha o M2): IMPLEMENTAÇÃO COMPLETA e validada (2026-09-29); gate → PR** (branch `feature/0012-importacao-tmdb`, da main `dfe0d01`).
+**Task 0013 — Sessões e salas: escrita e não-conflito (E3 T1): IMPLEMENTAÇÃO COMPLETA e validada (2026-09-29); gate → PR** (branch `feature/0013-sessoes-salas-escrita`, da main `1514361`). **E2 concluído** (M2). E3 refinado.
 
-### Plano da task 0012
+### Plano da task 0013
+
+1. ~~PRD 0013~~ — lista fechada de 29 arquivos (fechamento de status da 0012 adiado p/ a 0014).
+2. ~~Migration 008~~ — btree_gist; `salas` (nome único, layout jsonb); `sessoes` (FK filmes/salas, snapshot `duracao_min`, `fim`, `preco_centavos` 100–100000, status) com **`EXCLUDE USING gist (sala_id =, tstzrange(inicio,fim,'[)') &&) WHERE status='agendada'`**; índices `sala_id` e `(filme_id, inicio)` parcial. Validada à mão (encostada às 12:00 aceita; sobreposição → 23P01; up/down/up).
+3. ~~Módulo `sessao`~~ — `layout.go` (schema estrito, ≤64 KB, 26×50, sem repetição, PCD fora de vão, `Assentos()` determinístico sem vãos); `service.go` (validação na ordem do PRD, porta `FonteFilmes`, `CalcularFim` = início + duração + 20 min, conflito decidido pelo banco → reconsulta do conflitante → 409, layout imutável com sessão futura, cancelamento idempotente, log com `operador_id`); `handler.go` (backoffice com middleware e `operadorDe` injetados, JSON estrito); `db/erros.go` (único com `pgconn`: `EhConflitoDeHorario`/`EhNomeDuplicado`).
+4. ~~Wiring~~ — `catalogo.Servico.DuracaoFilmeAtivo` (porta); `montarSessao` no main (contador `sessao_conflitos_total` via callback — domínio sem OTel); depguard `sessao-domain` strict.
+5. ~~Testes~~ — unit (15 casos de layout, códigos determinísticos, `CalcularFim` inclusive virada do dia, validação antes do banco); integração com PG real e catálogo real como porta: bordas (parcial início/fim, contida → 409 com conflitante; encostada → 201; outra sala → 201; cancelar libera e é idempotente), **5 rodadas de 2 criações concorrentes → sempre 1×201 + 1×409**, filme arquivado/inexistente/sala inexistente → 422, passado/preço/RFC3339/campo desconhecido → 400, imutabilidade do layout (409) vs nome editável, nome duplicado 409, matriz 6 rotas × {sem token, cliente}. Um oráculo de teste corrigido (a sessão "encostada" ocupava o horário usado no teste de "cancelar libera"). Suíte completa `-race` verde; lint 0 issues; `sqlc diff` limpo.
+
+---
+
+### Task 0012 — Importação do TMDB: CONCLUÍDA e MERGEADA (PR #37, `1514361`)
+
+Auditoria APROVADA (2026-09-29, `security`) — achados só informativos: termo de busca aparece no log de request (não sensível); remoção de HTML por regex é defesa em profundidade (SPA escapa); sem rate limit dedicado nas rotas de TMDB (uso só do operador).
+
 
 1. ~~PRD 0012~~ — Context7 `/websites/developer_themoviedb_reference`.
 2. ~~Catálogo~~ — port `FonteTMDB` (setter `ComFonteTMDB`, evita mexer em todos os chamadores de `NovoServico`); `ImportarDoTMDB` (upsert `ON CONFLICT (tmdb_id)` com `xmax = 0` → evento só na criação; reimport atualiza sem desarquivar; 422 sem duração); `BuscarNoTMDB`; normalização (HTML removido, truncagem, pôster montado por nós só de `poster_path` com formato válido, imdb validado, ano da data); atribuição TMDB nas respostas.

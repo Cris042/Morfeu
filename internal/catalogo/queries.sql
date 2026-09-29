@@ -73,3 +73,8 @@ SET titulo = EXCLUDED.titulo,
     imdb_id = EXCLUDED.imdb_id,
     atualizado_em = now()
 RETURNING id, titulo, sinopse, duracao_min, ano, poster_url, imdb_id, tmdb_id, (xmax = 0) AS inserido;
+
+-- name: BuscarDuracaoFilme :many
+-- Porta para o módulo sessao (PRD 0013 RF06): o sessao não lê filmes — o
+-- catálogo responde se o filme existe, está ativo e qual a duração.
+SELECT duracao_min, arquivado_em FROM filmes WHERE id = $1 LIMIT 1;

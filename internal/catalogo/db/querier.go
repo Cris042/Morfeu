@@ -13,6 +13,9 @@ type Querier interface {
 	ArquivarFilme(ctx context.Context, id int64) (int64, error)
 	// Substitui os campos editáveis (RF03). tmdb_id não é editável à mão.
 	AtualizarFilme(ctx context.Context, arg AtualizarFilmeParams) ([]AtualizarFilmeRow, error)
+	// Porta para o módulo sessao (PRD 0013 RF06): o sessao não lê filmes — o
+	// catálogo responde se o filme existe, está ativo e qual a duração.
+	BuscarDuracaoFilme(ctx context.Context, id int64) ([]BuscarDuracaoFilmeRow, error)
 	BuscarFilmeProjetado(ctx context.Context, filmID int64) (CatalogoFilmesProjetado, error)
 	// :many + LIMIT 1: ausência = vazio (domínio sem pgx.ErrNoRows).
 	BuscarFilmePublico(ctx context.Context, id int64) ([]BuscarFilmePublicoRow, error)
