@@ -4,15 +4,15 @@
 
 ## Estado corrente (2026-09-29)
 
-**Task 0013 — Sessões e salas: escrita e não-conflito (E3 T1): ABERTA** (branch `feature/0013-sessoes-salas-escrita`, da main `1514361`). **E2 concluído** (M2). E3 refinado.
+**Task 0013 — Sessões e salas: escrita e não-conflito (E3 T1): IMPLEMENTAÇÃO COMPLETA e validada (2026-09-29); gate → PR** (branch `feature/0013-sessoes-salas-escrita`, da main `1514361`). **E2 concluído** (M2). E3 refinado.
 
 ### Plano da task 0013
 
-1. PRD 0013 (refinamento E3 §T1).
-2. Migration 008 (btree_gist, salas, sessoes com EXCLUDE parcial por status, índices).
-3. Módulo `sessao`: layout (validação + códigos), service (fim com relógio injetável, validações, conflito → 409 com horário), handler (backoffice com middleware e id do operador injetados), `db/erros.go` (23P01 → `EhConflitoDeHorario`).
-4. Porta `DuracaoFilmeAtivo` no catálogo; wiring no main (métrica de conflitos por callback); depguard.
-5. Testes (unit + integração com bordas, concorrência, imutabilidade, matriz); gate.
+1. ~~PRD 0013~~ — lista fechada de 29 arquivos (fechamento de status da 0012 adiado p/ a 0014).
+2. ~~Migration 008~~ — btree_gist; `salas` (nome único, layout jsonb); `sessoes` (FK filmes/salas, snapshot `duracao_min`, `fim`, `preco_centavos` 100–100000, status) com **`EXCLUDE USING gist (sala_id =, tstzrange(inicio,fim,'[)') &&) WHERE status='agendada'`**; índices `sala_id` e `(filme_id, inicio)` parcial. Validada à mão (encostada às 12:00 aceita; sobreposição → 23P01; up/down/up).
+3. ~~Módulo `sessao`~~ — `layout.go` (schema estrito, ≤64 KB, 26×50, sem repetição, PCD fora de vão, `Assentos()` determinístico sem vãos); `service.go` (validação na ordem do PRD, porta `FonteFilmes`, `CalcularFim` = início + duração + 20 min, conflito decidido pelo banco → reconsulta do conflitante → 409, layout imutável com sessão futura, cancelamento idempotente, log com `operador_id`); `handler.go` (backoffice com middleware e `operadorDe` injetados, JSON estrito); `db/erros.go` (único com `pgconn`: `EhConflitoDeHorario`/`EhNomeDuplicado`).
+4. ~~Wiring~~ — `catalogo.Servico.DuracaoFilmeAtivo` (porta); `montarSessao` no main (contador `sessao_conflitos_total` via callback — domínio sem OTel); depguard `sessao-domain` strict.
+5. ~~Testes~~ — unit (15 casos de layout, códigos determinísticos, `CalcularFim` inclusive virada do dia, validação antes do banco); integração com PG real e catálogo real como porta: bordas (parcial início/fim, contida → 409 com conflitante; encostada → 201; outra sala → 201; cancelar libera e é idempotente), **5 rodadas de 2 criações concorrentes → sempre 1×201 + 1×409**, filme arquivado/inexistente/sala inexistente → 422, passado/preço/RFC3339/campo desconhecido → 400, imutabilidade do layout (409) vs nome editável, nome duplicado 409, matriz 6 rotas × {sem token, cliente}. Um oráculo de teste corrigido (a sessão "encostada" ocupava o horário usado no teste de "cancelar libera"). Suíte completa `-race` verde; lint 0 issues; `sqlc diff` limpo.
 
 ---
 
