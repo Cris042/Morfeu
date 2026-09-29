@@ -28,6 +28,10 @@ Cobre: o modelo de dados da trava, o mecanismo de exclusão mútua, a expiraçã
 
 PostgreSQL 16: índice único parcial, `INSERT ... ON CONFLICT ... DO UPDATE ... WHERE`, advisory locks transacionais. Padrões: lease com expiração lazy, ordenação global de locks, aggregate + repository (ADR 0005).
 
+## Impacto esperado
+
+O módulo `reserva` nasce com a tabela `holds` (migration própria, índices parciais), um aggregate + repository manual (ADR 0005), uma porta síncrona para o `sessao` e um sweeper no worker (goroutine no `WaitGroup` do shutdown, como a limpeza de refresh). Não há serviço, dependência nem custo novo: tudo é PostgreSQL já existente. Na operação, a trava gera métricas de criados, indisponíveis e expirados, e o sweeper tem alerta de parada (PRD 0016). Na manutenção, os ingressos do E6 repetem o mesmo padrão de índice parcial, e qualquer mudança no caminho de escrita precisa manter verde o teste canônico de corrida.
+
 ## Alternativas consideradas e descartadas
 
 - **Redis `SET NX PX`**: rápido, mas a trava deixaria de ser transacional com o pedido (E6), um restart ou uma eviction perde travas, e o dado ficaria em duas fontes da verdade. O usuário descartou isso na descoberta.
