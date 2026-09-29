@@ -137,6 +137,7 @@ linters:
             - $gostd
             - github.com/labstack/echo/v4
             - go.uber.org/zap
+            - github.com/mclovin137/morfeu/internal/cache
             - github.com/mclovin137/morfeu/internal/sessao/db
 
         # Módulo identidade (PRD 0009 RNF01): transaction script sem driver.

@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0012-importacao-tmdb.md
 - **Branch:** feature/0012-importacao-tmdb
 - **Data:** 2026-09-29
-- **Status:** ativo
+- **Status:** concluído
 
 ## Objetivo
 

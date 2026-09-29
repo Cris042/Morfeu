@@ -66,3 +66,19 @@ func TestNovoServico_ExigePortaDeFilmes(t *testing.T) {
 		t.Fatal("sem porta de filmes deveria falhar")
 	}
 }
+
+// TestMesmoLayout_IgnoraOrdem cobre CA05 do PRD 0014 (auditoria 0013).
+func TestMesmoLayout_IgnoraOrdem(t *testing.T) {
+	a := Layout{Fileiras: 3, Colunas: 3, Vaos: []Posicao{{"A", 1}, {"B", 2}}, PCD: []Posicao{{"C", 3}, {"C", 1}}}
+	b := Layout{Fileiras: 3, Colunas: 3, Vaos: []Posicao{{"B", 2}, {"A", 1}}, PCD: []Posicao{{"C", 1}, {"C", 3}}}
+	if !mesmoLayout(a, b) {
+		t.Error("mesmo layout em outra ordem deveria ser igual")
+	}
+	c := Layout{Fileiras: 3, Colunas: 3, Vaos: []Posicao{{"A", 1}}, PCD: []Posicao{{"C", 3}, {"C", 1}}}
+	if mesmoLayout(a, c) {
+		t.Error("layout com vão diferente não pode ser igual")
+	}
+	if len(a.Vaos) != 2 || a.Vaos[0].Fileira != "A" {
+		t.Error("normalização não pode alterar o layout original")
+	}
+}

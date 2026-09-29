@@ -20,6 +20,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
+	"github.com/redis/go-redis/v9"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"go.uber.org/zap"
@@ -27,6 +28,7 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/mclovin137/morfeu/internal/autenticacao"
+	"github.com/mclovin137/morfeu/internal/cache"
 	"github.com/mclovin137/morfeu/internal/catalogo"
 	catalogodb "github.com/mclovin137/morfeu/internal/catalogo/db"
 	"github.com/mclovin137/morfeu/internal/sessao/db"
@@ -35,7 +37,10 @@ import (
 // Suíte do módulo sessao pelas rotas reais (PRD 0013): PG com as migrations
 // reais (001 seeds, 002 outbox, 007 filmes, 008 salas/sessoes — EXCLUDE de
 // verdade) e o catálogo REAL como porta de duração (ADR 0003: main injeta).
-var pool *pgxpool.Pool
+var (
+	pool     *pgxpool.Pool
+	redisCli *redis.Client
+)
 
 var segredoTeste = []byte("segredo-de-teste-sessao-32-bytes!!!")
 
@@ -54,7 +59,24 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, "postgres:", err)
 		os.Exit(1)
 	}
+	rd, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: testcontainers.ContainerRequest{
+			Image:        "redis:7-alpine",
+			ExposedPorts: []string{"6379/tcp"},
+			WaitingFor:   wait.ForLog("Ready to accept connections").WithStartupTimeout(90 * time.Second),
+		},
+		Started: true,
+	})
+	if err != nil {
+		_ = pg.Terminate(ctx)
+		fmt.Fprintln(os.Stderr, "redis:", err)
+		os.Exit(1)
+	}
 	code := func() int {
+		rh, _ := rd.Host(ctx)
+		rp, _ := rd.MappedPort(ctx, "6379/tcp")
+		redisCli = redis.NewClient(&redis.Options{Addr: rh + ":" + rp.Port()})
+		defer func() { _ = redisCli.Close() }()
 		host, _ := pg.Host(ctx)
 		porta, _ := pg.MappedPort(ctx, "5432/tcp")
 		pool, err = pgxpool.New(ctx, fmt.Sprintf("postgres://postgres:postgres@%s:%s/sessao?sslmode=disable", host, porta.Port()))
@@ -76,6 +98,7 @@ func TestMain(m *testing.M) {
 		return m.Run()
 	}()
 	_ = pg.Terminate(ctx)
+	_ = rd.Terminate(ctx)
 	os.Exit(code)
 }
 
@@ -88,6 +111,13 @@ type ambiente struct {
 
 func novoAmbiente(t *testing.T) *ambiente {
 	t.Helper()
+	return montarAmbiente(t, time.Now)
+}
+
+// montarAmbiente permite fixar o relógio do serviço (sessões "que começam"
+// durante o TTL do cache, mapa de sessão já iniciada).
+func montarAmbiente(t *testing.T, agora func() time.Time) *ambiente {
+	t.Helper()
 	emissor, err := autenticacao.NovoEmissor(autenticacao.ConfigJWT{Segredo: segredoTeste, Kid: "k1", TTL: autenticacao.TTLAccessPadrao})
 	if err != nil {
 		t.Fatalf("emissor: %v", err)
@@ -97,11 +127,13 @@ func novoAmbiente(t *testing.T) *ambiente {
 	// zaptest: logs do serviço/handler aparecem na saída do teste que falhar
 	// (diagnóstico do SQLSTATE em erro inesperado — CI do PR #38).
 	logTeste := zaptest.NewLogger(t, zaptest.Level(zapcore.WarnLevel))
-	s, err := NovoServico(db.New(pool), Config{Filmes: filmes, AoConflito: func(context.Context) { conflitos.Add(1) }}, logTeste)
+	s, err := NovoServico(db.New(pool), Config{Filmes: filmes, AoConflito: func(context.Context) { conflitos.Add(1) },
+		Agora: agora, Cache: cache.NewRedisCache(redisCli, zap.NewNop())}, logTeste)
 	if err != nil {
 		t.Fatalf("serviço: %v", err)
 	}
 	e := echo.New()
+	NovoHandler(s, logTeste).RegistrarRotasPublicas(e)
 	NovoHandler(s, logTeste).RegistrarRotasBackoffice(e, autenticacao.Exigir(emissor, autenticacao.PapelOperador),
 		func(c echo.Context) string { id, _ := autenticacao.UsuarioID(c); return id.String() })
 	op, _, _ := emissor.Emitir(uuid.New(), autenticacao.PapelOperador)
@@ -321,5 +353,148 @@ func TestSessao_MatrizAutorizacao(t *testing.T) {
 	}
 	if code, _ := a.req(t, http.MethodPost, "/backoffice/sessoes/999999/cancelar", a.operador, nil); code != http.StatusNotFound {
 		t.Errorf("cancelar inexistente: %d", code)
+	}
+}
+
+func sessaoCriada(t *testing.T, a *ambiente, filme, sala int64, inicio time.Time) Sessao {
+	t.Helper()
+	code, corpo := a.criarSessao(t, filme, sala, inicio)
+	if code != http.StatusCreated {
+		t.Fatalf("criar sessão: %d %s", code, corpo)
+	}
+	var s Sessao
+	_ = json.Unmarshal([]byte(corpo), &s)
+	return s
+}
+
+// TestPublico_SessoesDoFilmeECache cobre CA01/CA02 do PRD 0014.
+func TestPublico_SessoesDoFilmeECache(t *testing.T) {
+	a := novoAmbiente(t)
+	sala := a.novaSala(t)
+	const filme = 5
+	dia := time.Date(2099, 7, 1, 0, 0, 0, 0, time.UTC)
+	s1 := sessaoCriada(t, a, filme, sala, dia.Add(10*time.Hour))
+	s2 := sessaoCriada(t, a, filme, sala, dia.Add(18*time.Hour))
+	outroFilme := sessaoCriada(t, a, 6, sala, dia.Add(14*time.Hour))
+	chave := chaveCacheFilme(filme)
+	ctx := context.Background()
+
+	code, corpo := a.req(t, http.MethodGet, fmt.Sprintf("/filmes/%d/sessoes", filme), "", nil)
+	if code != http.StatusOK {
+		t.Fatalf("público: %d %s", code, corpo)
+	}
+	var lista []SessaoPublica
+	_ = json.Unmarshal([]byte(corpo), &lista)
+	if len(lista) != 2 || lista[0].ID != s1.ID || lista[1].ID != s2.ID || lista[0].SalaNome == "" {
+		t.Fatalf("esperava [s1, s2] em ordem, veio %+v", lista)
+	}
+	if strings.Contains(corpo, "titulo") || strings.Contains(corpo, "filme_id") || strings.Contains(corpo, fmt.Sprint(outroFilme.ID)+",") {
+		t.Errorf("contrato público vazou campo de filme ou sessão de outro filme: %s", corpo)
+	}
+	if n, _ := redisCli.Exists(ctx, chave).Result(); n != 1 {
+		t.Fatal("leitura deveria popular o cache")
+	}
+
+	// Cancelar invalida; a cancelada some.
+	a.req(t, http.MethodPost, fmt.Sprintf("/backoffice/sessoes/%d/cancelar", s1.ID), a.operador, nil)
+	if n, _ := redisCli.Exists(ctx, chave).Result(); n != 0 {
+		t.Error("cancelar deveria invalidar o cache do filme")
+	}
+	_, corpo = a.req(t, http.MethodGet, fmt.Sprintf("/filmes/%d/sessoes", filme), "", nil)
+	if strings.Contains(corpo, fmt.Sprintf(`"id":%d,`, s1.ID)) {
+		t.Error("sessão cancelada não pode aparecer")
+	}
+	// Criar invalida.
+	sessaoCriada(t, a, filme, sala, dia.Add(22*time.Hour))
+	if n, _ := redisCli.Exists(ctx, chave).Result(); n != 0 {
+		t.Error("criar deveria invalidar o cache do filme")
+	}
+
+	// Sessão que "começa" durante o TTL: o relógio avança para depois de s2
+	// e a resposta, servida do cache, já não a mostra.
+	a.req(t, http.MethodGet, fmt.Sprintf("/filmes/%d/sessoes", filme), "", nil) // repopula
+	depois := montarAmbiente(t, func() time.Time { return s2.Inicio.Add(time.Minute) })
+	_, corpo = depois.req(t, http.MethodGet, fmt.Sprintf("/filmes/%d/sessoes", filme), "", nil)
+	if strings.Contains(corpo, fmt.Sprintf(`"id":%d,`, s2.ID)) {
+		t.Errorf("sessão já iniciada não pode vir do cache: %s", corpo)
+	}
+
+	if code, corpo := a.req(t, http.MethodGet, "/filmes/999999/sessoes", "", nil); code != http.StatusOK || corpo != "[]" {
+		t.Errorf("filme sem sessões deveria devolver []: %d %s", code, corpo)
+	}
+}
+
+// TestPublico_Mapa cobre CA03.
+func TestPublico_Mapa(t *testing.T) {
+	a := novoAmbiente(t)
+	sala := a.novaSala(t) // layoutPadrao: 5×8, vão C4, PCD A1
+	s := sessaoCriada(t, a, 7, sala, time.Date(2099, 8, 1, 15, 0, 0, 0, time.UTC))
+
+	code, corpo := a.req(t, http.MethodGet, fmt.Sprintf("/sessoes/%d/mapa", s.ID), "", nil)
+	if code != http.StatusOK {
+		t.Fatalf("mapa: %d %s", code, corpo)
+	}
+	var m MapaSessao
+	_ = json.Unmarshal([]byte(corpo), &m)
+	if m.Fileiras != 5 || m.Colunas != 8 || len(m.Assentos) != 39 || m.Assentos[0].Codigo != "A1" || !m.Assentos[0].PCD {
+		t.Fatalf("mapa inesperado: fileiras=%d colunas=%d assentos=%d primeiro=%+v", m.Fileiras, m.Colunas, len(m.Assentos), m.Assentos[0])
+	}
+	if strings.Contains(corpo, `"C4"`) {
+		t.Error("vão não pode virar assento")
+	}
+
+	depois := montarAmbiente(t, func() time.Time { return s.Inicio.Add(time.Minute) })
+	if code, _ := depois.req(t, http.MethodGet, fmt.Sprintf("/sessoes/%d/mapa", s.ID), "", nil); code != http.StatusNotFound {
+		t.Errorf("mapa de sessão já iniciada deveria ser 404: %d", code)
+	}
+	a.req(t, http.MethodPost, fmt.Sprintf("/backoffice/sessoes/%d/cancelar", s.ID), a.operador, nil)
+	if code, _ := a.req(t, http.MethodGet, fmt.Sprintf("/sessoes/%d/mapa", s.ID), "", nil); code != http.StatusNotFound {
+		t.Errorf("mapa de cancelada deveria ser 404: %d", code)
+	}
+	if code, _ := a.req(t, http.MethodGet, "/sessoes/999999/mapa", "", nil); code != http.StatusNotFound {
+		t.Errorf("mapa inexistente deveria ser 404: %d", code)
+	}
+}
+
+// TestBackoffice_FiltrosELayoutReordenado cobre CA04/CA05.
+func TestBackoffice_FiltrosELayoutReordenado(t *testing.T) {
+	a := novoAmbiente(t)
+	salaA, salaB := a.novaSala(t), a.novaSala(t)
+	dia := time.Date(2099, 9, 10, 0, 0, 0, 0, time.UTC)
+	sa := sessaoCriada(t, a, 8, salaA, dia.Add(10*time.Hour))
+	sb := sessaoCriada(t, a, 8, salaB, dia.Add(10*time.Hour))
+	outroDia := sessaoCriada(t, a, 8, salaA, dia.AddDate(0, 0, 1).Add(10*time.Hour))
+
+	ids := func(corpo string) map[int64]bool {
+		var l []Sessao
+		_ = json.Unmarshal([]byte(corpo), &l)
+		m := map[int64]bool{}
+		for _, s := range l {
+			m[s.ID] = true
+		}
+		return m
+	}
+	_, corpo := a.req(t, http.MethodGet, fmt.Sprintf("/backoffice/sessoes?sala_id=%d", salaA), a.operador, nil)
+	if m := ids(corpo); !m[sa.ID] || !m[outroDia.ID] || m[sb.ID] {
+		t.Errorf("filtro por sala: %v", m)
+	}
+	_, corpo = a.req(t, http.MethodGet, "/backoffice/sessoes?data=2099-09-10", a.operador, nil)
+	if m := ids(corpo); !m[sa.ID] || !m[sb.ID] || m[outroDia.ID] {
+		t.Errorf("filtro por dia: %v", m)
+	}
+	_, corpo = a.req(t, http.MethodGet, fmt.Sprintf("/backoffice/sessoes?data=2099-09-10&sala_id=%d", salaB), a.operador, nil)
+	if m := ids(corpo); len(m) != 1 || !m[sb.ID] {
+		t.Errorf("filtros combinados: %v", m)
+	}
+	for _, q := range []string{"?data=10/09/2099", "?sala_id=abc", "?sala_id=0"} {
+		if code, _ := a.req(t, http.MethodGet, "/backoffice/sessoes"+q, a.operador, nil); code != http.StatusBadRequest {
+			t.Errorf("filtro inválido %s deveria ser 400: %d", q, code)
+		}
+	}
+
+	// Layout reordenado (salaA tem sessões futuras) não é mudança.
+	reordenado := `{"nome":"Reordenada ` + uuid.NewString()[:6] + `","layout":{"fileiras":5,"colunas":8,"pcd":[{"fileira":"A","coluna":1}],"vaos":[{"fileira":"C","coluna":4}]}}`
+	if code, corpo := a.req(t, http.MethodPut, fmt.Sprintf("/backoffice/salas/%d", salaA), a.operador, reordenado); code != http.StatusOK {
+		t.Errorf("layout igual (outra ordem) deveria ser aceito: %d %s", code, corpo)
 	}
 }

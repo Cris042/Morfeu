@@ -1,7 +1,7 @@
 # Task 0013 — Sessões e salas: escrita, layout e regra de não-conflito (E3, T1)
 
 - **Data:** 2026-09-29
-- **Status:** em andamento
+- **Status:** concluída
 - **Branch:** `feature/0013-sessoes-salas-escrita` (da main `1514361`, pós-E2)
 - **PRD:** docs/prd/0013-sessoes-salas-escrita.md
 - **Item do roadmap:** E3 — Sessões e salas (task 1/2). Refinamento: `docs/refinamentos/E3-sessoes-salas.md` §T1 (limpeza 20 min; só API).

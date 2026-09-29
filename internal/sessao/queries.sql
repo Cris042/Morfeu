@@ -35,11 +35,35 @@ ORDER BY inicio
 LIMIT 1;
 
 -- name: ListarSessoesBackoffice :many
+-- Filtros opcionais (PRD 0014 RF05): sala e intervalo [desde, ate).
 SELECT id, filme_id, sala_id, inicio, duracao_min, fim, preco_centavos, status
 FROM sessoes
+WHERE (sqlc.narg(sala_id)::bigint IS NULL OR sala_id = sqlc.narg(sala_id)::bigint)
+  AND (sqlc.narg(desde)::timestamptz IS NULL OR inicio >= sqlc.narg(desde)::timestamptz)
+  AND (sqlc.narg(ate)::timestamptz IS NULL OR inicio < sqlc.narg(ate)::timestamptz)
 ORDER BY inicio DESC
 LIMIT 200;
 
--- name: CancelarSessao :execrows
--- Idempotente; 0 linhas = inexistente. A cancelada sai da EXCLUDE.
-UPDATE sessoes SET status = 'cancelada', atualizado_em = now() WHERE id = $1;
+-- name: ListarSessoesFuturasDoFilme :many
+-- Leitura pública (PRD 0014 RF01): índice parcial (filme_id, inicio) da 008.
+-- Sem nenhum campo de filme (fronteira ADR 0003) — só sessão e sala.
+SELECT s.id, s.sala_id, sa.nome AS sala_nome, s.inicio, s.fim, s.preco_centavos
+FROM sessoes s
+JOIN salas sa ON sa.id = s.sala_id
+WHERE s.filme_id = $1 AND s.status = 'agendada' AND s.inicio > $2
+ORDER BY s.inicio
+LIMIT 100;
+
+-- name: BuscarMapaDaSessao :many
+-- Mapa público (PRD 0014 RF04): só sessão agendada que ainda não começou.
+SELECT s.id, s.sala_id, sa.nome AS sala_nome, sa.layout
+FROM sessoes s
+JOIN salas sa ON sa.id = s.sala_id
+WHERE s.id = $1 AND s.status = 'agendada' AND s.inicio > $2
+LIMIT 1;
+
+-- name: CancelarSessao :many
+-- Idempotente; vazio = inexistente. A cancelada sai da EXCLUDE. Devolve o
+-- filme_id p/ invalidar o cache público do filme (PRD 0014 RF03).
+UPDATE sessoes SET status = 'cancelada', atualizado_em = now() WHERE id = $1
+RETURNING filme_id;

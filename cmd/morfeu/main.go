@@ -161,7 +161,7 @@ func runServer(mode string) {
 	registrarMetricasMensageria(tel, dbPool, brokerClient, log)
 
 	e := setupRouter(log, tel, healthHandler)
-	registrarRotasDeDominio(e, mode, cfg, dbPool, redisClient, catalogoServico, catalogoHandler, log)
+	registrarRotasDeDominio(e, mode, cfg, dbPool, redisClient, cacheLayer, catalogoServico, catalogoHandler, log)
 
 	go func() {
 		if err := e.Start(":" + cfg.AppPort); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -271,8 +271,10 @@ func conectarTMDB(s *catalogo.Servico, cfg *config.Config, log *logger.Logger) {
 // registrarRotasDeDominio monta as rotas dos módulos. Cartaz público sempre;
 // /auth/* e o backoffice só onde o processo serve a API (api|all), pois
 // exigem JWT_SEGREDO (PRD 0009) e o papel operador (PRD 0011).
-func registrarRotasDeDominio(e *echo.Echo, mode string, cfg *config.Config, dbPool *pgxpool.Pool, redisClient redis.Cmdable, catalogoServico *catalogo.Servico, catalogoHandler *catalogo.Handler, log *logger.Logger) {
+func registrarRotasDeDominio(e *echo.Echo, mode string, cfg *config.Config, dbPool *pgxpool.Pool, redisClient redis.Cmdable, cacheLayer cache.Cache, catalogoServico *catalogo.Servico, catalogoHandler *catalogo.Handler, log *logger.Logger) {
 	catalogoHandler.RegistrarRotasPublicas(e)
+	sessaoHandler := montarSessao(dbPool, catalogoServico, cacheLayer, log)
+	sessaoHandler.RegistrarRotasPublicas(e)
 	if mode == modeWorker {
 		return
 	}
@@ -280,7 +282,7 @@ func registrarRotasDeDominio(e *echo.Echo, mode string, cfg *config.Config, dbPo
 	identidadeHandler.RegistrarRotas(e)
 	exigirOperador := autenticacao.Exigir(emissor, autenticacao.PapelOperador)
 	catalogoHandler.RegistrarRotasBackoffice(e, exigirOperador)
-	montarSessao(dbPool, catalogoServico, log).RegistrarRotasBackoffice(e, exigirOperador, operadorDaRequisicao)
+	sessaoHandler.RegistrarRotasBackoffice(e, exigirOperador, operadorDaRequisicao)
 }
 
 // operadorDaRequisicao identifica o operador para o log de auditoria mínima
@@ -292,7 +294,7 @@ func operadorDaRequisicao(c echo.Context) string {
 
 // montarSessao liga o módulo sessao: porta de filmes = catálogo (ADR 0003),
 // métrica de conflitos criada aqui (o domínio não conhece OTel).
-func montarSessao(dbPool *pgxpool.Pool, filmes sessao.FonteFilmes, log *logger.Logger) *sessao.Handler {
+func montarSessao(dbPool *pgxpool.Pool, filmes sessao.FonteFilmes, c cache.Cache, log *logger.Logger) *sessao.Handler {
 	conflitos, err := otel.Meter("morfeu/sessao").Int64Counter("sessao_conflitos_total",
 		metric.WithDescription("Tentativas de sessão rejeitadas por conflito de horário na sala."))
 	if err != nil {
@@ -302,6 +304,7 @@ func montarSessao(dbPool *pgxpool.Pool, filmes sessao.FonteFilmes, log *logger.L
 	servico, err := sessao.NovoServico(sessaodb.New(dbPool), sessao.Config{
 		Filmes:     filmes,
 		AoConflito: func(ctx context.Context) { conflitos.Add(ctx, 1) },
+		Cache:      c,
 	}, log.Logger)
 	if err != nil {
 		log.ErrorMsg("serviço de sessões", zap.Error(err))

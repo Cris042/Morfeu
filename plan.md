@@ -4,9 +4,21 @@
 
 ## Estado corrente (2026-09-29)
 
-**Task 0013 — Sessões e salas: escrita e não-conflito (E3 T1): IMPLEMENTAÇÃO COMPLETA e validada (2026-09-29); gate → PR** (branch `feature/0013-sessoes-salas-escrita`, da main `1514361`). **E2 concluído** (M2). E3 refinado.
+**Task 0014 — Sessões: leitura pública, mapa e cache (E3 T2): IMPLEMENTAÇÃO COMPLETA e validada (2026-09-29); gate → PR** (branch `feature/0014-sessoes-leitura-publica`, da main `c5478a2`).
 
-### Plano da task 0013
+### Plano da task 0014
+
+1. ~~Queries~~ — `ListarSessoesFuturasDoFilme` (JOIN salas, índice parcial da 008), `BuscarMapaDaSessao`, `ListarSessoesBackoffice` com `sqlc.narg` (sala, [desde, ate)), `CancelarSessao` devolvendo `filme_id`.
+2. ~~Service~~ — `ListarSessoesPublicas` (cache `sessao:filme:{id}:futuras` TTL 60 s; o que vem do cache é refiltrado por `inicio > agora`), `Mapa` (layout + `Assentos()`), `invalidarFilme` em criar/cancelar, `FiltroSessoes`, `mesmoLayout` normalizado (ordena vaos/pcd — auditoria 0013).
+3. ~~Handler/wiring~~ — `GET /filmes/:id/sessoes` (Cache-Control 30 s) e `GET /sessoes/:id/mapa` públicos, registrados em todos os modos; filtros do backoffice com 400 para inválidos; `montarSessao` recebe o cache; depguard `sessao-domain` + `internal/cache`.
+4. ~~Testes~~ — unit `mesmoLayout` (ordem ignorada, diferença real detectada, original intacto); integração (PG + Redis): lista pública em ordem sem campos de filme, cache populado/invalidado em cancelar e criar, **sessão que começa durante o TTL some da resposta servida do cache** (relógio injetado), filme sem sessões `[]`; mapa 5×8 − vão = 39 assentos com PCD, 404 p/ iniciada/cancelada/inexistente; filtros por sala/dia/combinados e 3 inválidos → 400; layout reordenado aceito com sessões futuras. Suíte completa `-race` verde; lint 0 issues; `sqlc diff` limpo.
+
+---
+
+### Task 0013 — Sessões e salas (escrita): CONCLUÍDA e MERGEADA (PR #38, `c5478a2`)
+
+Auditoria APROVADA (2026-09-29, `qa`); não-bloqueantes: tipo `Filme` gerado sem uso no `sessao/db` (efeito do schema 001/007 p/ resolver a FK — aceito); `mesmoLayout` sensível à ordem (**corrigido na 0014**); `UPDATE` direto no seed num teste (frágil a reordenação — registrado). **CI do PR revelou 500** em 1 de 2 criações concorrentes conflitantes (runner ARM64; não reproduziu em 75 corridas locais) → hipótese deadlock 40P01 da EXCLUDE: serviço repete o INSERT só em 40P01 (até 3×), erro inesperado loga SQLSTATE, teste roda 20 rodadas com logs via zaptest. CI verde depois; o caminho de retry não apareceu no log (zaptest só imprime em falha) — **diagnóstico não confirmado**, registrado.
+
 
 1. ~~PRD 0013~~ — lista fechada de 29 arquivos (fechamento de status da 0012 adiado p/ a 0014).
 2. ~~Migration 008~~ — btree_gist; `salas` (nome único, layout jsonb); `sessoes` (FK filmes/salas, snapshot `duracao_min`, `fim`, `preco_centavos` 100–100000, status) com **`EXCLUDE USING gist (sala_id =, tstzrange(inicio,fim,'[)') &&) WHERE status='agendada'`**; índices `sala_id` e `(filme_id, inicio)` parcial. Validada à mão (encostada às 12:00 aceita; sobreposição → 23P01; up/down/up).

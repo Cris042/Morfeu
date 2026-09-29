@@ -49,6 +49,52 @@ func (q *Queries) AtualizarSala(ctx context.Context, arg AtualizarSalaParams) ([
 	return items, nil
 }
 
+const buscarMapaDaSessao = `-- name: BuscarMapaDaSessao :many
+SELECT s.id, s.sala_id, sa.nome AS sala_nome, sa.layout
+FROM sessoes s
+JOIN salas sa ON sa.id = s.sala_id
+WHERE s.id = $1 AND s.status = 'agendada' AND s.inicio > $2
+LIMIT 1
+`
+
+type BuscarMapaDaSessaoParams struct {
+	ID     int64     `db:"id"`
+	Inicio time.Time `db:"inicio"`
+}
+
+type BuscarMapaDaSessaoRow struct {
+	ID       int64           `db:"id"`
+	SalaID   int64           `db:"sala_id"`
+	SalaNome string          `db:"sala_nome"`
+	Layout   json.RawMessage `db:"layout"`
+}
+
+// Mapa público (PRD 0014 RF04): só sessão agendada que ainda não começou.
+func (q *Queries) BuscarMapaDaSessao(ctx context.Context, arg BuscarMapaDaSessaoParams) ([]BuscarMapaDaSessaoRow, error) {
+	rows, err := q.db.Query(ctx, buscarMapaDaSessao, arg.ID, arg.Inicio)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []BuscarMapaDaSessaoRow
+	for rows.Next() {
+		var i BuscarMapaDaSessaoRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SalaID,
+			&i.SalaNome,
+			&i.Layout,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const buscarSala = `-- name: BuscarSala :many
 SELECT id, nome, layout FROM salas WHERE id = $1 LIMIT 1
 `
@@ -80,17 +126,31 @@ func (q *Queries) BuscarSala(ctx context.Context, id int64) ([]BuscarSalaRow, er
 	return items, nil
 }
 
-const cancelarSessao = `-- name: CancelarSessao :execrows
+const cancelarSessao = `-- name: CancelarSessao :many
 UPDATE sessoes SET status = 'cancelada', atualizado_em = now() WHERE id = $1
+RETURNING filme_id
 `
 
-// Idempotente; 0 linhas = inexistente. A cancelada sai da EXCLUDE.
-func (q *Queries) CancelarSessao(ctx context.Context, id int64) (int64, error) {
-	result, err := q.db.Exec(ctx, cancelarSessao, id)
+// Idempotente; vazio = inexistente. A cancelada sai da EXCLUDE. Devolve o
+// filme_id p/ invalidar o cache público do filme (PRD 0014 RF03).
+func (q *Queries) CancelarSessao(ctx context.Context, id int64) ([]int64, error) {
+	rows, err := q.db.Query(ctx, cancelarSessao, id)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return result.RowsAffected(), nil
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var filme_id int64
+		if err := rows.Scan(&filme_id); err != nil {
+			return nil, err
+		}
+		items = append(items, filme_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const existeSessaoFuturaNaSala = `-- name: ExisteSessaoFuturaNaSala :one
@@ -218,9 +278,18 @@ func (q *Queries) ListarSalas(ctx context.Context) ([]ListarSalasRow, error) {
 const listarSessoesBackoffice = `-- name: ListarSessoesBackoffice :many
 SELECT id, filme_id, sala_id, inicio, duracao_min, fim, preco_centavos, status
 FROM sessoes
+WHERE ($1::bigint IS NULL OR sala_id = $1::bigint)
+  AND ($2::timestamptz IS NULL OR inicio >= $2::timestamptz)
+  AND ($3::timestamptz IS NULL OR inicio < $3::timestamptz)
 ORDER BY inicio DESC
 LIMIT 200
 `
+
+type ListarSessoesBackofficeParams struct {
+	SalaID *int64     `db:"sala_id"`
+	Desde  *time.Time `db:"desde"`
+	Ate    *time.Time `db:"ate"`
+}
 
 type ListarSessoesBackofficeRow struct {
 	ID            int64     `db:"id"`
@@ -233,8 +302,9 @@ type ListarSessoesBackofficeRow struct {
 	Status        string    `db:"status"`
 }
 
-func (q *Queries) ListarSessoesBackoffice(ctx context.Context) ([]ListarSessoesBackofficeRow, error) {
-	rows, err := q.db.Query(ctx, listarSessoesBackoffice)
+// Filtros opcionais (PRD 0014 RF05): sala e intervalo [desde, ate).
+func (q *Queries) ListarSessoesBackoffice(ctx context.Context, arg ListarSessoesBackofficeParams) ([]ListarSessoesBackofficeRow, error) {
+	rows, err := q.db.Query(ctx, listarSessoesBackoffice, arg.SalaID, arg.Desde, arg.Ate)
 	if err != nil {
 		return nil, err
 	}
@@ -251,6 +321,58 @@ func (q *Queries) ListarSessoesBackoffice(ctx context.Context) ([]ListarSessoesB
 			&i.Fim,
 			&i.PrecoCentavos,
 			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listarSessoesFuturasDoFilme = `-- name: ListarSessoesFuturasDoFilme :many
+SELECT s.id, s.sala_id, sa.nome AS sala_nome, s.inicio, s.fim, s.preco_centavos
+FROM sessoes s
+JOIN salas sa ON sa.id = s.sala_id
+WHERE s.filme_id = $1 AND s.status = 'agendada' AND s.inicio > $2
+ORDER BY s.inicio
+LIMIT 100
+`
+
+type ListarSessoesFuturasDoFilmeParams struct {
+	FilmeID int64     `db:"filme_id"`
+	Inicio  time.Time `db:"inicio"`
+}
+
+type ListarSessoesFuturasDoFilmeRow struct {
+	ID            int64     `db:"id"`
+	SalaID        int64     `db:"sala_id"`
+	SalaNome      string    `db:"sala_nome"`
+	Inicio        time.Time `db:"inicio"`
+	Fim           time.Time `db:"fim"`
+	PrecoCentavos int32     `db:"preco_centavos"`
+}
+
+// Leitura pública (PRD 0014 RF01): índice parcial (filme_id, inicio) da 008.
+// Sem nenhum campo de filme (fronteira ADR 0003) — só sessão e sala.
+func (q *Queries) ListarSessoesFuturasDoFilme(ctx context.Context, arg ListarSessoesFuturasDoFilmeParams) ([]ListarSessoesFuturasDoFilmeRow, error) {
+	rows, err := q.db.Query(ctx, listarSessoesFuturasDoFilme, arg.FilmeID, arg.Inicio)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListarSessoesFuturasDoFilmeRow
+	for rows.Next() {
+		var i ListarSessoesFuturasDoFilmeRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SalaID,
+			&i.SalaNome,
+			&i.Inicio,
+			&i.Fim,
+			&i.PrecoCentavos,
 		); err != nil {
 			return nil, err
 		}

@@ -42,6 +42,38 @@ func (h *Handler) RegistrarRotasBackoffice(e *echo.Echo, exigirOperador echo.Mid
 	sessoes.POST("/:id/cancelar", func(c echo.Context) error { return h.cancelarSessao(c, operadorDe(c)) })
 }
 
+// RegistrarRotasPublicas monta a leitura pública (PRD 0014): sessões futuras
+// de um filme e o mapa de assentos de uma sessão. Sem autenticação.
+func (h *Handler) RegistrarRotasPublicas(e *echo.Echo) {
+	e.GET("/filmes/:id/sessoes", h.sessoesDoFilme)
+	e.GET("/sessoes/:id/mapa", h.mapa)
+}
+
+func (h *Handler) sessoesDoFilme(c echo.Context) error {
+	id, ok := idDaRota(c)
+	if !ok {
+		return naoEncontrado(c)
+	}
+	lista, err := h.servico.ListarSessoesPublicas(c.Request().Context(), id)
+	if err != nil {
+		return h.responderErro(c, err)
+	}
+	c.Response().Header().Set(echo.HeaderCacheControl, "public, max-age=30")
+	return c.JSON(http.StatusOK, lista)
+}
+
+func (h *Handler) mapa(c echo.Context) error {
+	id, ok := idDaRota(c)
+	if !ok {
+		return naoEncontrado(c)
+	}
+	m, err := h.servico.Mapa(c.Request().Context(), id)
+	if err != nil {
+		return h.responderErro(c, err)
+	}
+	return c.JSON(http.StatusOK, m)
+}
+
 type salaDTO struct {
 	Nome   string          `json:"nome"`
 	Layout json.RawMessage `json:"layout"`
@@ -115,7 +147,28 @@ func (h *Handler) criarSessao(c echo.Context, operador string) error {
 }
 
 func (h *Handler) listarSessoes(c echo.Context) error {
-	sessoes, err := h.servico.ListarSessoesBackoffice(c.Request().Context())
+	var f FiltroSessoes
+	var campos []string
+	if v := c.QueryParam("sala_id"); v != "" {
+		id, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || id <= 0 {
+			campos = append(campos, "sala_id")
+		} else {
+			f.SalaID = &id
+		}
+	}
+	if v := c.QueryParam("data"); v != "" {
+		dia, err := time.Parse("2006-01-02", v)
+		if err != nil {
+			campos = append(campos, "data")
+		} else {
+			f.Dia = &dia
+		}
+	}
+	if len(campos) > 0 {
+		return h.responderErro(c, &ErroValidacao{Campos: campos})
+	}
+	sessoes, err := h.servico.ListarSessoesBackoffice(c.Request().Context(), f)
 	if err != nil {
 		return h.responderErro(c, err)
 	}
