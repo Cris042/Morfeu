@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0015-reserva-trava.md
 - **Branch:** feature/0015-reserva-trava
 - **Data:** 2026-09-29
-- **Status:** ativo
+- **Status:** concluído
 
 ## Objetivo
 

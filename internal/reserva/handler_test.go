@@ -27,6 +27,7 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/mclovin137/morfeu/internal/autenticacao"
+	"github.com/mclovin137/morfeu/internal/cache"
 	"github.com/mclovin137/morfeu/internal/catalogo"
 	catalogodb "github.com/mclovin137/morfeu/internal/catalogo/db"
 	"github.com/mclovin137/morfeu/internal/sessao"
@@ -157,6 +158,7 @@ func montarAmbiente(t *testing.T, lim limites) *ambiente {
 	}
 	s, err := NovoServico(pool, Config{
 		Sessoes: sessoes, LimiteIP: limitador("ip", lim.ip), LimiteDono: limitador("dono", lim.dono), Agora: rel.agora,
+		Cache: cache.NewRedisCache(redisCli, zap.NewNop()),
 	}, logTeste)
 	if err != nil {
 		t.Fatalf("serviço: %v", err)
@@ -197,9 +199,10 @@ func novoDono(t *testing.T) string {
 }
 
 type resposta struct {
-	code   int
-	corpo  string
-	cookie *http.Cookie
+	code      int
+	corpo     string
+	cookie    *http.Cookie
+	cabecalho http.Header
 }
 
 func (a *ambiente) req(metodo, caminho, dono string, corpo any, csrf bool) resposta {
@@ -221,7 +224,7 @@ func (a *ambiente) req(metodo, caminho, dono string, corpo any, csrf bool) respo
 	}
 	rec := httptest.NewRecorder()
 	a.e.ServeHTTP(rec, r)
-	out := resposta{code: rec.Code, corpo: strings.TrimSpace(rec.Body.String())}
+	out := resposta{code: rec.Code, corpo: strings.TrimSpace(rec.Body.String()), cabecalho: rec.Header()}
 	for _, ck := range rec.Result().Cookies() {
 		if ck.Name == cookieCarrinho {
 			out.cookie = ck
@@ -625,5 +628,95 @@ func TestSweeper(t *testing.T) {
 		if n, _ := vivos(t, sessaoID, assento, a.rel.agora()); n != 1 {
 			t.Fatalf("rodada %d: %d vivos", rodada, n)
 		}
+	}
+}
+
+// ocupacao lê a ocupação pública e devolve os códigos ocupados.
+func (a *ambiente) ocupacao(t *testing.T, sessaoID int64) (resposta, []string) {
+	t.Helper()
+	r := a.req(http.MethodGet, fmt.Sprintf("/sessoes/%d/ocupacao", sessaoID), "", nil, false)
+	var o Ocupacao
+	if r.code == http.StatusOK {
+		if err := json.Unmarshal([]byte(r.corpo), &o); err != nil {
+			t.Fatalf("corpo %q: %v", r.corpo, err)
+		}
+	}
+	return r, o.Ocupados
+}
+
+// expirarCache simula o fim do TTL de 3 s sem esperar (ADR 0006: sem sleep).
+func expirarCache(t *testing.T, sessaoID int64) {
+	t.Helper()
+	if err := redisCli.Del(context.Background(), chaveOcupacao(sessaoID)).Err(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestOcupacao cobre CA01–CA05 do PRD 0016.
+func TestOcupacao(t *testing.T) {
+	a := novoAmbiente(t)
+	sessaoID := novaSessao(t)
+	dono := novoDono(t)
+	liberado := holdsDe(t, a.travar(sessaoID, dono, "A2", "B7"))
+	if r := a.req(http.MethodDelete, "/holds/"+liberado[0].ID.String(), dono, nil, true); r.code != http.StatusNoContent {
+		t.Fatalf("liberar: %d", r.code)
+	}
+
+	r, ocupados := a.ocupacao(t, sessaoID)
+	if r.code != http.StatusOK || strings.Join(ocupados, ",") != "B7" {
+		t.Fatalf("ocupação: %d %s", r.code, r.corpo)
+	}
+	var campos map[string]any
+	_ = json.Unmarshal([]byte(r.corpo), &campos)
+	if len(campos) != 2 || strings.Contains(r.corpo, liberado[1].ID.String()) || strings.Contains(r.corpo, "expira") {
+		t.Errorf("contrato vaza dados do hold: %s", r.corpo)
+	}
+	ttl, err := redisCli.PTTL(context.Background(), chaveOcupacao(sessaoID)).Result()
+	if err != nil || ttl <= 0 || ttl > ttlOcupacao {
+		t.Fatalf("TTL do cache = %v (%v)", ttl, err)
+	}
+
+	// Com o cache valendo, um hold novo ainda não aparece (sem invalidação ativa).
+	if r := a.travar(sessaoID, novoDono(t), "A1"); r.code != http.StatusCreated {
+		t.Fatalf("trava: %d", r.code)
+	}
+	if _, ocupados := a.ocupacao(t, sessaoID); strings.Join(ocupados, ",") != "B7" {
+		t.Fatalf("cache ignorado: %v", ocupados)
+	}
+	expirarCache(t, sessaoID)
+	if _, ocupados := a.ocupacao(t, sessaoID); strings.Join(ocupados, ",") != "A1,B7" {
+		t.Fatalf("depois do TTL: %v", ocupados)
+	}
+
+	// Vencido (sweeper ainda não passou) conta como livre.
+	a.rel.avancar(TTLHold)
+	expirarCache(t, sessaoID)
+	if r, ocupados := a.ocupacao(t, sessaoID); r.corpo != `{"sessao_id":`+fmt.Sprint(sessaoID)+`,"ocupados":[]}` || len(ocupados) != 0 {
+		t.Fatalf("vencidos contados: %s", r.corpo)
+	}
+}
+
+// TestOcupacao_SessaoIndisponivel cobre CA04 e CA05.
+func TestOcupacao_SessaoIndisponivel(t *testing.T) {
+	a := novoAmbiente(t)
+	aberta := novaSessao(t)
+	r := a.req(http.MethodGet, fmt.Sprintf("/sessoes/%d/ocupacao", aberta), "", nil, false)
+	if r.code != http.StatusOK || r.cabecalho.Get(echo.HeaderCacheControl) != "public, max-age=2" {
+		t.Fatalf("aberta: %d, Cache-Control %q", r.code, r.cabecalho.Get(echo.HeaderCacheControl))
+	}
+	cancelada := novaSessao(t)
+	_, _ = pool.Exec(context.Background(), `UPDATE sessoes SET status = 'cancelada' WHERE id = $1`, cancelada)
+	for nome, id := range map[string]int64{"inexistente": 999999, "cancelada": cancelada} {
+		if r, _ := a.ocupacao(t, id); r.code != http.StatusNotFound {
+			t.Errorf("%s: %d", nome, r.code)
+		}
+		if n, _ := redisCli.Exists(context.Background(), chaveOcupacao(id)).Result(); n != 0 {
+			t.Errorf("%s: 404 foi cacheado", nome)
+		}
+	}
+	iniciada := novaSessao(t)
+	a.rel.avancar(time.Date(2099, 1, 1, 20, 0, 0, 0, time.UTC).Sub(a.rel.agora()))
+	if r, _ := a.ocupacao(t, iniciada); r.code != http.StatusNotFound {
+		t.Errorf("iniciada: %d", r.code)
 	}
 }

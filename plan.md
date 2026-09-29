@@ -4,7 +4,20 @@
 
 ## Estado corrente (2026-09-29)
 
-**Task 0015 — Reserva: trava de assento + sweeper (E4 T1): IMPLEMENTAÇÃO COMPLETA e validada; gate → PR** (branch `feature/0015-reserva-trava`, da main `1f7c594`). Refinamento do E4 e ADR 0008 mergeados antes (PR #40; auditoria reprovou 1× por faltar "Impacto esperado" no ADR → corrigido e revalidado).
+**Task 0016 — Reserva: ocupação pública, cache e alertas (E4 T2): IMPLEMENTAÇÃO COMPLETA e validada; gate → PR** (branch `feature/0016-reserva-ocupacao`, da main `36613c3`). Fecha o E4.
+
+### Plano da task 0016
+
+1. ~~Query~~ — `OcupadosDaSessao` (só códigos de holds vivos, pelo índice único parcial).
+2. ~~Serviço/rota~~ — `ocupacao.go`: cache `reserva:ocupacao:{id}` TTL 3 s sem invalidação; no hit nem a porta é consultada; no miss, sessão indisponível → 404 e nada é cacheado; falha do cache cai no banco. `GET /sessoes/:id/ocupacao` com `Cache-Control: public, max-age=2`. `Config.Cache` injetado no `main`; depguard `reserva-domain` + `internal/cache`.
+3. ~~Alertas~~ — "Recusas de trava anormais" (> 60 em 5 min) e "Sweeper de holds parado" (sem passada em 10 min com a API no ar); teste da stack: 9 regras.
+4. ~~Testes~~ — contrato só `sessao_id`+`ocupados`; liberado e vencido não contam; TTL no Redis em (0, 3 s]; hold novo invisível enquanto o cache vale e visível após a expiração da chave; inexistente/cancelada/iniciada → 404 sem cachear; `Cache-Control`. Suíte completa `-race` verde (inclui a stack de observabilidade); lint 0 issues; `sqlc diff` limpo.
+
+---
+
+### Task 0015 — Reserva: trava de assento + sweeper: CONCLUÍDA e MERGEADA (PR #41, `36613c3`)
+
+Auditoria APROVADA (2026-09-29, `security`); informativo: a chave do advisory lock por dono usa 32 bits do hash (colisão só serializa dois donos — inofensivo).
 
 ### Plano da task 0015
 

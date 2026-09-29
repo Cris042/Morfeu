@@ -284,7 +284,7 @@ func registrarRotasDeDominio(e *echo.Echo, mode string, cfg *config.Config, dbPo
 	exigirOperador := autenticacao.Exigir(emissor, autenticacao.PapelOperador)
 	catalogoHandler.RegistrarRotasBackoffice(e, exigirOperador)
 	sessaoHandler.RegistrarRotasBackoffice(e, exigirOperador, operadorDaRequisicao)
-	montarReserva(dbPool, sessaoServico, redisClient, log).RegistrarRotas(e)
+	montarReserva(dbPool, sessaoServico, redisClient, cacheLayer, log).RegistrarRotas(e)
 }
 
 // operadorDaRequisicao identifica o operador para o log de auditoria mínima
@@ -323,8 +323,9 @@ const (
 )
 
 // montarReserva liga o módulo reserva: porta de assentos = sessao (ADR 0003),
-// limitadores do E1 (Redis + fallback em memória) e métricas (PRD 0015).
-func montarReserva(dbPool *pgxpool.Pool, sessoes reserva.FonteSessoes, redisClient redis.Cmdable, log *logger.Logger) *reserva.Handler {
+// limitadores do E1 (Redis + fallback em memória), métricas (PRD 0015) e o
+// cache da ocupação (PRD 0016).
+func montarReserva(dbPool *pgxpool.Pool, sessoes reserva.FonteSessoes, redisClient redis.Cmdable, c cache.Cache, log *logger.Logger) *reserva.Handler {
 	fatal := func(msg string, err error) {
 		log.ErrorMsg(msg, zap.Error(err))
 		os.Exit(1)
@@ -343,6 +344,7 @@ func montarReserva(dbPool *pgxpool.Pool, sessoes reserva.FonteSessoes, redisClie
 		LimiteIP:   novoLimitador("trava-ip", limiteTravasIP),
 		LimiteDono: novoLimitador("trava-dono", limiteTravasDono),
 		Metricas:   metricasReserva(log),
+		Cache:      c,
 	}, log.Logger)
 	if err != nil {
 		fatal("serviço de reserva", err)

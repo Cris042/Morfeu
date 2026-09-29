@@ -205,6 +205,40 @@ func (q *Queries) LiberarHold(ctx context.Context, arg LiberarHoldParams) (int64
 	return result.RowsAffected(), nil
 }
 
+const ocupadosDaSessao = `-- name: OcupadosDaSessao :many
+SELECT assento_codigo
+FROM holds
+WHERE sessao_id = $1 AND status = 'ativo' AND expires_at > $2
+ORDER BY assento_codigo
+`
+
+type OcupadosDaSessaoParams struct {
+	SessaoID int64     `db:"sessao_id"`
+	Agora    time.Time `db:"agora"`
+}
+
+// Ocupação pública (PRD 0016): só códigos de holds vivos, pelo índice único
+// parcial holds_assento_ativo.
+func (q *Queries) OcupadosDaSessao(ctx context.Context, arg OcupadosDaSessaoParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, ocupadosDaSessao, arg.SessaoID, arg.Agora)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var assento_codigo string
+		if err := rows.Scan(&assento_codigo); err != nil {
+			return nil, err
+		}
+		items = append(items, assento_codigo)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const tentarTravaSweeper = `-- name: TentarTravaSweeper :one
 SELECT pg_try_advisory_xact_lock($1::int, $2::int) AS obtido
 `
