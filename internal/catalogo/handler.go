@@ -40,6 +40,37 @@ func (h *Handler) RegistrarRotasBackoffice(e *echo.Echo, exigirOperador echo.Mid
 	g.POST("", h.criar)
 	g.PUT("/:id", h.atualizar)
 	g.POST("/:id/arquivar", h.arquivar)
+	// TMDB (PRD 0012): busca e importação.
+	g.GET("/tmdb", h.buscarTMDB)
+	g.POST("/importar", h.importarTMDB)
+}
+
+type importarDTO struct {
+	TmdbID int64 `json:"tmdb_id"`
+}
+
+func (h *Handler) buscarTMDB(c echo.Context) error {
+	resultados, err := h.servico.BuscarNoTMDB(c.Request().Context(), c.QueryParam("q"))
+	if err != nil {
+		return h.responderErro(c, err)
+	}
+	return c.JSON(http.StatusOK, map[string]any{"resultados": resultados, "atribuicao": AtribuicaoTMDB})
+}
+
+func (h *Handler) importarTMDB(c echo.Context) error {
+	var in importarDTO
+	if err := json.NewDecoder(c.Request().Body).Decode(&in); err != nil {
+		return requisicaoInvalida(c)
+	}
+	filme, criado, err := h.servico.ImportarDoTMDB(c.Request().Context(), in.TmdbID)
+	if err != nil {
+		return h.responderErro(c, err)
+	}
+	status := http.StatusOK
+	if criado {
+		status = http.StatusCreated
+	}
+	return c.JSON(status, map[string]any{"filme": filme, "criado": criado, "atribuicao": AtribuicaoTMDB})
 }
 
 // filmeDTO é a entrada do backoffice. Não aceita id/tmdb_id/arquivado_em.
@@ -127,6 +158,15 @@ func (h *Handler) responderErro(c echo.Context, err error) error {
 		return c.JSON(http.StatusBadRequest, map[string]any{"erro": "dados_invalidos", "campos": ev.Campos})
 	case errors.Is(err, ErrFilmeNaoEncontrado):
 		return naoEncontrado(c)
+	case errors.Is(err, ErrTMDBSemDuracao):
+		return c.JSON(http.StatusUnprocessableEntity, map[string]string{"erro": "tmdb_sem_duracao",
+			"orientacao": "o TMDB não informa a duração deste filme — cadastre-o manualmente"})
+	case errors.Is(err, ErrTMDBNaoEncontrado):
+		return c.JSON(http.StatusNotFound, map[string]string{"erro": "tmdb_nao_encontrado"})
+	case errors.Is(err, ErrTMDBNaoConfigurado):
+		return c.JSON(http.StatusServiceUnavailable, map[string]string{"erro": "tmdb_nao_configurado"})
+	case errors.Is(err, ErrTMDBIndisponivel):
+		return c.JSON(http.StatusServiceUnavailable, map[string]string{"erro": "tmdb_indisponivel"})
 	default:
 		h.logger.Error("catalogo: erro inesperado", zap.Error(err))
 		return c.JSON(http.StatusInternalServerError, map[string]string{"erro": "erro_interno"})

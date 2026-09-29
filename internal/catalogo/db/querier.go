@@ -27,6 +27,10 @@ type Querier interface {
 	// wrapper de dedup (outbox.ProcessarUmaVez): com dedup correto o conflito
 	// nunca ocorre; se ocorrer, aplicacoes > 1 denuncia a falha (prova de RN01).
 	UpsertFilmeProjetado(ctx context.Context, arg UpsertFilmeProjetadoParams) error
+	// Importação do TMDB (PRD 0012 RF03): idempotente por tmdb_id (UNIQUE da
+	// 007). Reimportar atualiza os dados mas NÃO desarquiva. inserido = true só
+	// na criação (xmax = 0 na linha nova) — o evento só é emitido nesse caso.
+	UpsertFilmeTMDB(ctx context.Context, arg UpsertFilmeTMDBParams) (UpsertFilmeTMDBRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

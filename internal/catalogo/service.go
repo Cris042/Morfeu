@@ -81,6 +81,7 @@ type Servico struct {
 	pool   outbox.Pool
 	cache  cache.Cache // nil na CLI (sem cartaz a invalidar/servir)
 	logger *zap.Logger
+	tmdb   FonteTMDB // opcional (PRD 0012): nil sem TMDB_API_TOKEN
 }
 
 // NovoServico cria o serviço. pool abre as transações via outbox.WithTx

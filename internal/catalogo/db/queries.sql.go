@@ -332,3 +332,67 @@ func (q *Queries) UpsertFilmeProjetado(ctx context.Context, arg UpsertFilmeProje
 	_, err := q.db.Exec(ctx, upsertFilmeProjetado, arg.FilmID, arg.Titulo, arg.Ano)
 	return err
 }
+
+const upsertFilmeTMDB = `-- name: UpsertFilmeTMDB :one
+INSERT INTO filmes (tmdb_id, titulo, sinopse, duracao_min, ano, poster_url, imdb_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (tmdb_id) DO UPDATE
+SET titulo = EXCLUDED.titulo,
+    sinopse = EXCLUDED.sinopse,
+    duracao_min = EXCLUDED.duracao_min,
+    ano = EXCLUDED.ano,
+    poster_url = EXCLUDED.poster_url,
+    imdb_id = EXCLUDED.imdb_id,
+    atualizado_em = now()
+RETURNING id, titulo, sinopse, duracao_min, ano, poster_url, imdb_id, tmdb_id, (xmax = 0) AS inserido
+`
+
+type UpsertFilmeTMDBParams struct {
+	TmdbID     *int64  `db:"tmdb_id"`
+	Titulo     string  `db:"titulo"`
+	Sinopse    *string `db:"sinopse"`
+	DuracaoMin *int32  `db:"duracao_min"`
+	Ano        *int32  `db:"ano"`
+	PosterUrl  *string `db:"poster_url"`
+	ImdbID     *string `db:"imdb_id"`
+}
+
+type UpsertFilmeTMDBRow struct {
+	ID         int64   `db:"id"`
+	Titulo     string  `db:"titulo"`
+	Sinopse    *string `db:"sinopse"`
+	DuracaoMin *int32  `db:"duracao_min"`
+	Ano        *int32  `db:"ano"`
+	PosterUrl  *string `db:"poster_url"`
+	ImdbID     *string `db:"imdb_id"`
+	TmdbID     *int64  `db:"tmdb_id"`
+	Inserido   bool    `db:"inserido"`
+}
+
+// Importação do TMDB (PRD 0012 RF03): idempotente por tmdb_id (UNIQUE da
+// 007). Reimportar atualiza os dados mas NÃO desarquiva. inserido = true só
+// na criação (xmax = 0 na linha nova) — o evento só é emitido nesse caso.
+func (q *Queries) UpsertFilmeTMDB(ctx context.Context, arg UpsertFilmeTMDBParams) (UpsertFilmeTMDBRow, error) {
+	row := q.db.QueryRow(ctx, upsertFilmeTMDB,
+		arg.TmdbID,
+		arg.Titulo,
+		arg.Sinopse,
+		arg.DuracaoMin,
+		arg.Ano,
+		arg.PosterUrl,
+		arg.ImdbID,
+	)
+	var i UpsertFilmeTMDBRow
+	err := row.Scan(
+		&i.ID,
+		&i.Titulo,
+		&i.Sinopse,
+		&i.DuracaoMin,
+		&i.Ano,
+		&i.PosterUrl,
+		&i.ImdbID,
+		&i.TmdbID,
+		&i.Inserido,
+	)
+	return i, err
+}

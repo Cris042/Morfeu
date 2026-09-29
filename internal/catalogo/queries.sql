@@ -57,3 +57,19 @@ SET titulo       = EXCLUDED.titulo,
 SELECT film_id, titulo, ano, aplicacoes, projetado_em
 FROM catalogo_filmes_projetados
 WHERE film_id = $1;
+
+-- name: UpsertFilmeTMDB :one
+-- Importação do TMDB (PRD 0012 RF03): idempotente por tmdb_id (UNIQUE da
+-- 007). Reimportar atualiza os dados mas NÃO desarquiva. inserido = true só
+-- na criação (xmax = 0 na linha nova) — o evento só é emitido nesse caso.
+INSERT INTO filmes (tmdb_id, titulo, sinopse, duracao_min, ano, poster_url, imdb_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (tmdb_id) DO UPDATE
+SET titulo = EXCLUDED.titulo,
+    sinopse = EXCLUDED.sinopse,
+    duracao_min = EXCLUDED.duracao_min,
+    ano = EXCLUDED.ano,
+    poster_url = EXCLUDED.poster_url,
+    imdb_id = EXCLUDED.imdb_id,
+    atualizado_em = now()
+RETURNING id, titulo, sinopse, duracao_min, ano, poster_url, imdb_id, tmdb_id, (xmax = 0) AS inserido;
