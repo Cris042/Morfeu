@@ -4,7 +4,20 @@
 
 ## Estado corrente (2026-09-29)
 
-**Task 0007 — Stack de observabilidade (E0d, parte 2/2): IMPLEMENTAÇÃO COMPLETA e validada localmente (2026-09-29); gate → PR** (branch `chore/0007-stack-observabilidade`, criada da main pós-0006 `02831dc`; task `docs/tasks/0007-stack-observabilidade.md`). Com ela o E0 fecha, exceto a E0c-CD (VM Oracle).
+**Task 0008 — Identidade: registro/login + JWT + RBAC + seed (E1 T1): ABERTA; PRD a criar** (branch `feature/0008-identidade-registro-login`, empilhada sobre a 0007 enquanto o PR #31 aguarda autorização de merge). E1 refinado: `docs/refinamentos/E1-identidade.md`.
+
+### Plano da task 0008
+
+1. PRD 0008 (consome refinamento E1 §T1; deps jwt/v5 + x/crypto no lib.md).
+2. Migration 005 `usuario` + sqlc.
+3. `internal/autenticacao` (JWT, claims, middleware, exigência de papel).
+4. `internal/identidade` (registro, login, anti-enumeração, rate limit c/ fallback, semáforo) + métricas.
+5. CLI `seed-operador`, wiring, depguard.
+6. Testes (unit + integração PG/Redis), lint, -race, gate.
+
+---
+
+### Task 0007 — Stack de observabilidade (E0d 2/2): EM PR #31 (auditoria APROVADA, CI verde; merge aguardando autorização)
 
 ### Plano da task 0007
 
