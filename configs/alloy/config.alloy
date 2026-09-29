@@ -1,0 +1,47 @@
+// Alloy → Loki (task 0007, RF04): logs dos containers do projeto Morfeu.
+// Labels só de baixa cardinalidade (container, service); campos do JSON
+// (trace_id, message_id...) ficam no corpo — consultáveis com `| json`.
+
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "morfeu" {
+  targets = discovery.docker.containers.targets
+
+  // Só containers de projetos compose "morfeu*" (dev, verificação, prod na VM).
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    regex         = "(?i)morfeu.*"
+    action        = "keep"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+}
+
+loki.source.docker "containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.morfeu.output
+  forward_to = [loki.process.containers.receiver]
+}
+
+loki.process "containers" {
+  stage.docker { }
+
+  forward_to = [loki.write.loki.receiver]
+}
+
+loki.write "loki" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
