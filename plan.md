@@ -2,11 +2,30 @@
 
 > Este arquivo é o plano vivo da task corrente **do projeto** — não confundir com o *plan mode* do Claude Code (que grava em `~/.claude/plans/`). Atualizado durante a implementação; reflete o estado real (regras em `roles.md` §6.11).
 
-## Estado corrente (2026-07-13)
+## Estado corrente (2026-09-29)
+
+**Task 0006 — Instrumentação da app: OTel + /metrics + logs correlacionados (E0d, parte 1/2): IMPLEMENTAÇÃO COMPLETA e validada localmente (2026-09-29); gate → PR** (branch `feature/0006-instrumentacao-otel-metricas`, criada da main pós-0005 `c35957d`; task `docs/tasks/0006-instrumentacao-otel-metricas.md`). E0d dividida (§6.3): 0006 = app Go, 0007 = stack de observabilidade. E0c-CD bloqueada pela VM Oracle (confirmado pelo usuário 2026-09-29).
+
+### Plano da task 0006
+
+1. ~~PRD 0006~~ — `8c58a5a` `docs/prd/0006-instrumentacao-otel-metricas.md` + lib.md (OTel core/SDK 1.46.0, exporter Prometheus 0.68.0, client_golang 1.24.1, otelecho **0.70.0** — 0.71 depreca o módulo em favor de `echo-otel/v4` v4.0.0 de 1 dia; débito registrado —, otelpgx 0.12.0; echo 4.15.0→4.15.4 por arrasto). Desvio registrado: "100% erros" exige tail sampling → fica p/ o collector/Tempo (E6/E10).
+2. ~~`internal/telemetria`~~ — `db802f8`: TracerProvider `ParentBased(TraceIDRatio 0.1)` + `ExporterDescarte`; MeterProvider → exporter Prometheus em registry dedicado (sem scope/target info); **view com allowlist de atributos** (`http.route`, método, status, `fila`) — cardinalidade garantida no SDK, não só no teste; `MiddlewareHTTP` (otelecho, skip `/metrics` e `/health`); gauges `morfeu_outbox_pendentes`, `morfeu_outbox_lag_segundos`, `morfeu_dlq_mensagens{fila}` no scrape.
+3. ~~Logger~~ — `a446262`: core de redação (substring p/ senha/password/token/authorization/secret/cartao/card; `pan` só exato — senão redigiria `span_id`) + `ComTrace`.
+4. ~~Broker/outbox~~ — `79441f7`: span `consumir <fila>` filho do traceparent; `ProfundidadeFila` (passiva); `LagSegundos` (query sqlc); log do consumer correlacionado.
+5. ~~Wiring~~ — `50cc45f`: `main.go` (telemetria, otelpgx, otelecho primeiro middleware, `/metrics`, request log com trace_id) + integração CA03 (fontes reais PG/RabbitMQ) e CA05 (tracetest).
+6. ~~Validação~~ — suíte completa `-race -tags=integration` verde; golangci-lint 0 issues (refatoração de gocognit em `runServer`/`RegistrarMensageria`); govulncheck (Go 1.25.14) **No vulnerabilities**. Diff: 25 arquivos.
+7. **Auditoria APROVADA (2026-09-29)** — passe único (`security`): itens 1–5, 7, 9–11, 13 conformes; não-bloqueantes registrados no state.md (redação não desce em `zap.Any`/`Object`; `/metrics` na porta pública até a E0c-CD; migração do otelecho) + guard-rail do teste que troca globais OTel adicionado. PR #30.
+8. Gate: CI verde → merge (aguardando autorização do usuário).
+
+---
+
+### Task 0005 — Consumidor idempotente + DLQ (E0b 2/2): CONCLUÍDA e MERGEADA (histórico)
+
+**Merge `c35957d` (PR #29, 2026-09-29).** Auditoria APROVADA; CI verde após bump de segurança (`51e7fc3`: amqp091-go 1.15.0 / x/text 0.39.0 — advisories publicados após a 0002 derrubavam o govulncheck).
 
 **Task 0005 — Consumidor idempotente + DLQ (E0b, parte 2/2): IMPLEMENTAÇÃO COMPLETA e validada localmente (2026-09-29); gate pré-push → PR** (branch `feature/0005-consumidor-idempotente`, criada da main pós-0002 `a1d1924`; task `docs/tasks/0005-consumidor-idempotente.md`). Épico E0 já refinado → PRD 0005 consome o refinamento §"Task E0b" (parte consumidora) + ADR 0007 + contrato de envelope do PRD 0002 (RF05), sem nova rodada de agentes (§6.2.5).
 
-### Plano da task 0005 (status: aberta; PRD é o próximo passo)
+### Plano executado da task 0005
 
 1. ~~PRD 0005~~ — feito, `docs/prd/0005-consumidor-idempotente.md` (skills: `golang-concurrency`, `golang-database`). Decisões de abertura: migrations separadas 003 (plataforma) / 004 (catálogo) p/ isolar blocos sqlc; compose sem mudança (não há serviço de app — `depends_on` vai p/ E0c-CD).
 2. ~~Migrations~~ — `6945020`: 003 `processed_messages` (PK `message_id, consumidor`) + 004 `catalogo_filmes_projetados` (coluna `aplicacoes` = prova de idempotência); blocos sqlc separados por ownership.
@@ -18,6 +37,7 @@
 8. Gate: gitleaks pré-push → push → PR → CI verde → passe único de julgamento → merge (fecha o walking skeleton assíncrono do E0b).
 
 ---
+
 
 ### Task 0002 — Outbox + RabbitMQ: lado produtor (E0b 1/2): CONCLUÍDA e MERGEADA (histórico)
 

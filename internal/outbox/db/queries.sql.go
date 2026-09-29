@@ -22,6 +22,21 @@ func (q *Queries) ContarPendentes(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const idadePendenteMaisAntigo = `-- name: IdadePendenteMaisAntigo :one
+SELECT COALESCE(EXTRACT(EPOCH FROM now() - min(created_at)), 0)::float8 AS idade_segundos
+FROM outbox_events
+WHERE published_at IS NULL
+`
+
+// Lag do relay (RF04 do PRD 0006): idade em segundos do evento pendente mais
+// antigo; 0 quando não há pendentes. Usa o índice parcial de pendentes (002).
+func (q *Queries) IdadePendenteMaisAntigo(ctx context.Context) (float64, error) {
+	row := q.db.QueryRow(ctx, idadePendenteMaisAntigo)
+	var idade_segundos float64
+	err := row.Scan(&idade_segundos)
+	return idade_segundos, err
+}
+
 const insertEvent = `-- name: InsertEvent :one
 INSERT INTO outbox_events (event_type, aggregate_id, occurred_at, payload)
 VALUES ($1, $2, $3, $4)

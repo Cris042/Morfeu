@@ -7,6 +7,10 @@ import (
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -113,15 +117,16 @@ func (c *Client) consumirSessao(ctx context.Context, fila string, h Handler) err
 			if !ok {
 				return fmt.Errorf("broker: canal de entregas da fila %s fechado", fila)
 			}
-			c.processar(ctx, d, h)
+			c.processar(ctx, fila, d, h)
 		}
 	}
 }
 
 // processar roda h sobre a entrega e faz ack/nack (RF02). O handler recebe um
 // ctx desacoplado do cancelamento (RF04): no shutdown a entrega em curso
-// termina e é confirmada, limitada por processamentoTimeout.
-func (c *Client) processar(ctx context.Context, d amqp.Delivery, h Handler) {
+// termina e é confirmada, limitada por processamentoTimeout. O ctx carrega um
+// span "consumir <fila>" filho do traceparent do produtor (RF06 do PRD 0006).
+func (c *Client) processar(ctx context.Context, fila string, d amqp.Delivery, h Handler) {
 	pctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), processamentoTimeout)
 	defer cancel()
 
@@ -139,7 +144,15 @@ func (c *Client) processar(ctx context.Context, d amqp.Delivery, h Handler) {
 		zap.String("message_id", e.MessageID),
 	}
 
+	pctx = otel.GetTextMapPropagator().Extract(pctx, propagation.MapCarrier{"traceparent": e.Traceparent})
+	pctx, span := otel.Tracer("morfeu/broker").Start(pctx, "consumir "+fila, trace.WithSpanKind(trace.SpanKindConsumer))
+	defer span.End()
+
 	err := h(pctx, e)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "entrega não processada")
+	}
 	switch {
 	case err == nil:
 		if ackErr := d.Ack(false); ackErr != nil {

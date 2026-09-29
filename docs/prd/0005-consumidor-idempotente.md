@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0005-consumidor-idempotente.md
 - **Branch:** feature/0005-consumidor-idempotente
 - **Data:** 2026-09-29
-- **Status:** ativo
+- **Status:** concluído
 
 ## Objetivo
 

@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/exaring/otelpgx"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -31,7 +32,12 @@ import (
 	"github.com/mclovin137/morfeu/internal/health"
 	"github.com/mclovin137/morfeu/internal/logger"
 	"github.com/mclovin137/morfeu/internal/outbox"
+	"github.com/mclovin137/morfeu/internal/telemetria"
 )
+
+// versao é sobrescrita no build (-ldflags "-X main.versao=<sha>"); vai para o
+// resource OTel (service.version).
+var versao = "dev"
 
 // modo de execução do binário único (ADR 0001): api serve HTTP e nunca
 // publica (RF04); worker roda só o relay da outbox; all faz as duas coisas
@@ -86,6 +92,9 @@ func runServer(mode string) {
 		zap.String("mode", mode),
 	)
 
+	tel := iniciarTelemetria(log)
+	defer encerrarTelemetria(tel, log)
+
 	dbPool, err := createDBPool(cfg, log)
 	if err != nil {
 		log.ErrorMsg("Failed to create database pool", zap.Error(err))
@@ -132,7 +141,9 @@ func runServer(mode string) {
 		healthHandler = healthHandler.WithBroker(brokerClient)
 	}
 
-	e := setupRouter(log, filmHandler, healthHandler)
+	registrarMetricasMensageria(tel, dbPool, brokerClient, log)
+
+	e := setupRouter(log, tel, filmHandler, healthHandler)
 
 	go func() {
 		if err := e.Start(":" + cfg.AppPort); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -142,6 +153,48 @@ func runServer(mode string) {
 	log.Info("Server started", zap.String("port", cfg.AppPort))
 
 	waitForShutdown(e, log, cancelRelay, &relayWG, brokerClient)
+}
+
+// iniciarTelemetria sobe traces + métricas (RF01/RF02, PRD 0006); falha é
+// fatal — sem providers o processo perderia a observabilidade em silêncio.
+func iniciarTelemetria(log *logger.Logger) *telemetria.Telemetria {
+	tel, err := telemetria.Iniciar(context.Background(), telemetria.Config{
+		Servico:        "morfeu",
+		Versao:         versao,
+		TaxaAmostragem: telemetria.TaxaAmostragemPadrao,
+	})
+	if err != nil {
+		log.ErrorMsg("Failed to start telemetry", zap.Error(err))
+		os.Exit(1)
+	}
+	return tel
+}
+
+func encerrarTelemetria(tel *telemetria.Telemetria, log *logger.Logger) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := tel.Shutdown(ctx); err != nil {
+		log.ErrorMsg("failed to shutdown telemetry", zap.Error(err))
+	}
+}
+
+// registrarMetricasMensageria liga as fontes reais aos gauges de mensageria
+// (RF04, PRD 0006); a DLQ só é medida quando o processo tem broker.
+func registrarMetricasMensageria(tel *telemetria.Telemetria, dbPool *pgxpool.Pool, brokerClient *broker.Client, log *logger.Logger) {
+	fontes := telemetria.FontesMensageria{
+		Pendentes:   func(ctx context.Context) (int64, error) { return outbox.Pendentes(ctx, dbPool) },
+		LagSegundos: func(ctx context.Context) (float64, error) { return outbox.LagSegundos(ctx, dbPool) },
+	}
+	if brokerClient != nil {
+		fontes.FilaDLQ = broker.QueueFilmeCriadoDLQ
+		fontes.ProfundidadeDLQ = func(context.Context) (int, error) {
+			return brokerClient.ProfundidadeFila(broker.QueueFilmeCriadoDLQ)
+		}
+	}
+	if err := tel.RegistrarMensageria(fontes, log.Logger); err != nil {
+		log.ErrorMsg("Failed to register messaging metrics", zap.Error(err))
+		os.Exit(1)
+	}
 }
 
 // startRelay conecta ao broker (declarando a topologia, RF07) e sobe a
@@ -183,8 +236,11 @@ func startConsumer(ctx context.Context, brokerClient *broker.Client, dbPool *pgx
 }
 
 // setupRouter creates the Echo instance, wiring middleware and routes.
-func setupRouter(log *logger.Logger, filmHandler *catalogo.FilmHandler, healthHandler *health.HealthHandler) *echo.Echo {
+func setupRouter(log *logger.Logger, tel *telemetria.Telemetria, filmHandler *catalogo.FilmHandler, healthHandler *health.HealthHandler) *echo.Echo {
 	e := echo.New()
+
+	// Primeiro middleware: o span/métrica cobre recover e logger (RF03, PRD 0006).
+	e.Use(tel.MiddlewareHTTP("morfeu"))
 
 	e.Use(middleware.RecoverWithConfig(middleware.RecoverConfig{
 		StackSize: 1 << 10, // 1 KB
@@ -194,8 +250,8 @@ func setupRouter(log *logger.Logger, filmHandler *catalogo.FilmHandler, healthHa
 		LogURI:     true,
 		LogStatus:  true,
 		LogLatency: true,
-		LogValuesFunc: func(_ echo.Context, v middleware.RequestLoggerValues) error {
-			log.Info("request",
+		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
+			logger.ComTrace(c.Request().Context(), log.Logger).Info("request",
 				zap.String("method", v.Method),
 				zap.String("uri", v.URI),
 				zap.Int("status", v.Status),
@@ -207,6 +263,9 @@ func setupRouter(log *logger.Logger, filmHandler *catalogo.FilmHandler, healthHa
 
 	e.GET("/health", healthHandler.Check)
 	e.GET("/filmes", filmHandler.ListFilms)
+	// /metrics é interno (scrape do Prometheus na rede do compose, task 0007);
+	// o proxy público (E0c-CD) não roteia este path.
+	e.GET("/metrics", echo.WrapHandler(tel.Handler()))
 
 	return e
 }
@@ -332,6 +391,8 @@ func createDBPool(cfg *config.Config, log *logger.Logger) (*pgxpool.Pool, error)
 	poolConfig.MaxConnLifetime = time.Minute * 15
 	poolConfig.MaxConnIdleTime = time.Minute * 5
 	poolConfig.ConnConfig.ConnectTimeout = cfg.PoolTimeout
+	// Span por query (RF05, PRD 0006); sem parâmetros nos atributos (padrão).
+	poolConfig.ConnConfig.Tracer = otelpgx.NewTracer()
 
 	pool, err := pgxpool.NewWithConfig(context.Background(), poolConfig)
 	if err != nil {

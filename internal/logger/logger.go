@@ -42,7 +42,11 @@ func NewLogger(level string) *Logger {
 		ErrorOutputPaths: []string{"stderr"},
 	}
 
-	zapLogger, err := config.Build(zap.AddCaller(), zap.AddStacktrace(zapcore.ErrorLevel))
+	zapLogger, err := config.Build(
+		zap.AddCaller(),
+		zap.AddStacktrace(zapcore.ErrorLevel),
+		zap.WrapCore(NovoCoreRedator),
+	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create logger: %v\n", err)
 		os.Exit(1)

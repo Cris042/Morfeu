@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/mclovin137/morfeu/internal/broker"
+	"github.com/mclovin137/morfeu/internal/logger"
 	"github.com/mclovin137/morfeu/internal/outbox/db"
 )
 
@@ -59,7 +60,7 @@ func ProcessarUmaVez(ctx context.Context, pool Pool, consumidor string, msg Mens
 // NovoHandler adapta um Efeito de domínio ao broker.Handler: valida o
 // envelope, deduplica via ProcessarUmaVez e loga só metadados (RNF03 — nunca
 // o payload). Sem message_id válido não há chave de dedup: ErrPermanente.
-func NovoHandler(pool Pool, consumidor string, efeito Efeito, logger *zap.Logger) broker.Handler {
+func NovoHandler(pool Pool, consumidor string, efeito Efeito, log *zap.Logger) broker.Handler {
 	return func(ctx context.Context, e broker.Entrega) error {
 		id, err := uuid.Parse(e.MessageID)
 		if err != nil {
@@ -71,7 +72,7 @@ func NovoHandler(pool Pool, consumidor string, efeito Efeito, logger *zap.Logger
 		if err != nil {
 			return err
 		}
-		logger.Info("mensagem consumida",
+		logger.ComTrace(ctx, log).Info("mensagem consumida",
 			zap.String("consumidor", consumidor),
 			zap.String("event_type", e.Type),
 			zap.String("aggregate_id", e.AggregateID),

@@ -186,6 +186,30 @@ func (c *Client) PublicarComConfirm(ctx context.Context, msg Message) error {
 	return nil
 }
 
+// ProfundidadeFila devolve quantas mensagens prontas a fila tem (declaração
+// passiva num canal efêmero — não cria nem altera a fila). Fonte do gauge
+// morfeu_dlq_mensagens (RF04 do PRD 0006).
+func (c *Client) ProfundidadeFila(nome string) (int, error) {
+	c.mu.RLock()
+	conn := c.conn
+	c.mu.RUnlock()
+	if conn == nil {
+		return 0, ErrDisconnected
+	}
+
+	ch, err := conn.Channel()
+	if err != nil {
+		return 0, fmt.Errorf("broker: abrir canal de inspeção: %w", err)
+	}
+	defer func() { _ = ch.Close() }()
+
+	q, err := ch.QueueDeclarePassive(nome, true, false, false, false, nil)
+	if err != nil {
+		return 0, fmt.Errorf("broker: inspecionar fila %s: %w", nome, err)
+	}
+	return q.Messages, nil
+}
+
 // connect faz o dial, abre um canal em modo confirm e declara a topologia.
 func (c *Client) connect(_ context.Context) error {
 	conn, err := amqp.DialConfig(c.url, amqp.Config{

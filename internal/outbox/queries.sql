@@ -30,3 +30,10 @@ SELECT count(*) FROM outbox_events WHERE published_at IS NULL;
 INSERT INTO processed_messages (message_id, consumidor)
 VALUES ($1, $2)
 ON CONFLICT (message_id, consumidor) DO NOTHING;
+
+-- name: IdadePendenteMaisAntigo :one
+-- Lag do relay (RF04 do PRD 0006): idade em segundos do evento pendente mais
+-- antigo; 0 quando não há pendentes. Usa o índice parcial de pendentes (002).
+SELECT COALESCE(EXTRACT(EPOCH FROM now() - min(created_at)), 0)::float8 AS idade_segundos
+FROM outbox_events
+WHERE published_at IS NULL;
