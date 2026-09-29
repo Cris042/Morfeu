@@ -4,9 +4,20 @@
 
 ## Estado corrente (2026-09-29)
 
-**Task 0008 — Autenticação (plataforma) (E1 T1 1/2): IMPLEMENTAÇÃO COMPLETA e validada (2026-09-29); gate → PR** (branch `feature/0008-autenticacao-plataforma`, empilhada sobre a 0007 enquanto o PR #31 aguarda autorização de merge). E1 refinado: `docs/refinamentos/E1-identidade.md`.
+**Task 0009 — Identidade: usuário, registro, login, seed (E1 T1 2/2): ABERTA; PRD a criar** (branch `feature/0009-identidade-registro-login`, empilhada sobre 0008 → 0007 enquanto os PRs #31/#32 aguardam autorização de merge).
 
-### Plano da task 0008
+### Plano da task 0009
+
+1. PRD 0009 (refinamento E1 §T1, parte de módulo); x/crypto direta no lib.md.
+2. Migration 005 `usuario` + sqlc (queries sem `pgx.ErrNoRows`: `:execrows`/`:many` — domínio não importa o driver).
+3. `internal/identidade`: Argon2id (PHC), registro, login (anti-enumeração, limitadores conta/IP, semáforo, métricas), `SeedOperador`, handlers `/auth/*`.
+4. Wiring: config JWT/Argon2, `IPExtractor` direto (sem proxy até a E0c-CD), CLI `seed-operador`, smoke do CI com `JWT_SEGREDO`; depguard `identidade`.
+5. Testes (unit + integração PG/Redis); lint; -race; gate.
+
+---
+
+### Task 0008 — Autenticação (plataforma): EM PR #32 (auditoria APROVADA após correção; CI verde; merge aguardando autorização)
+
 
 Divisão da T1 (§6.3 — ~34 arquivos): **0008** plataforma → **0009** `identidade` → **0010** T2.
 
