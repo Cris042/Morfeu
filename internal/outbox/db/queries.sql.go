@@ -71,6 +71,29 @@ func (q *Queries) MarcarPublicado(ctx context.Context, arg MarcarPublicadoParams
 	return err
 }
 
+const registrarProcessada = `-- name: RegistrarProcessada :execrows
+INSERT INTO processed_messages (message_id, consumidor)
+VALUES ($1, $2)
+ON CONFLICT (message_id, consumidor) DO NOTHING
+`
+
+type RegistrarProcessadaParams struct {
+	MessageID  pgtype.UUID `db:"message_id"`
+	Consumidor string      `db:"consumidor"`
+}
+
+// Dedup do consumidor idempotente (RF05, task 0005): executada na MESMA TX do
+// efeito de domínio. 0 linhas afetadas = message_id já processado por este
+// consumidor (duplicata) — o efeito não roda. Uma entrega concorrente com o
+// mesmo message_id bloqueia na PK até a primeira TX terminar.
+func (q *Queries) RegistrarProcessada(ctx context.Context, arg RegistrarProcessadaParams) (int64, error) {
+	result, err := q.db.Exec(ctx, registrarProcessada, arg.MessageID, arg.Consumidor)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const selectPendentesParaPublicar = `-- name: SelectPendentesParaPublicar :many
 SELECT id, event_type, aggregate_id, occurred_at, payload, created_at, published_at
 FROM outbox_events

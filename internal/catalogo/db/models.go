@@ -8,6 +8,14 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type CatalogoFilmesProjetado struct {
+	FilmID      int64              `db:"film_id"`
+	Titulo      string             `db:"titulo"`
+	Ano         *int32             `db:"ano"`
+	Aplicacoes  int32              `db:"aplicacoes"`
+	ProjetadoEm pgtype.Timestamptz `db:"projetado_em"`
+}
+
 type Film struct {
 	ID        int64            `db:"id"`
 	Title     string           `db:"title"`

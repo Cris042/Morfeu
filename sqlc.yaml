@@ -1,6 +1,8 @@
 version: "2"
 sql:
-  - schema: "./migrations/001_initial_schema.up.sql"
+  - schema:
+      - "./migrations/001_initial_schema.up.sql"
+      - "./migrations/004_catalogo_filmes_projetados.up.sql"
     queries: "./internal/catalogo/queries.sql"
     engine: "postgresql"
     gen:
@@ -17,7 +19,10 @@ sql:
   # pertence a nenhum domínio. Schema restrito à sua própria migration para
   # não vazar o modelo Film (de 001) — e vice-versa — entre os dois DAOs
   # gerados (cada bloco só enxerga a tabela que lhe pertence).
-  - schema: "./migrations/002_outbox_events.up.sql"
+  # processed_messages (003, task 0005) tem o mesmo ownership de plataforma.
+  - schema:
+      - "./migrations/002_outbox_events.up.sql"
+      - "./migrations/003_processed_messages.up.sql"
     queries: "./internal/outbox/queries.sql"
     engine: "postgresql"
     gen:

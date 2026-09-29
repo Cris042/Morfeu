@@ -15,12 +15,21 @@ type HealthResponse struct {
 	Status string `json:"status"`
 	DB     string `json:"db"`
 	Redis  string `json:"redis"`
+	// RabbitMQ só aparece quando o binário roda com broker (-mode=worker|all, RF09 do
+	// PRD 0005); em -mode=api o JSON segue idêntico ao contrato da E0a.
+	RabbitMQ string `json:"rabbitmq,omitempty"`
+}
+
+// BrokerChecker é o que o health precisa do broker: saber se há conexão ativa.
+type BrokerChecker interface {
+	Conectado() bool
 }
 
 // HealthHandler handles health check requests
 type HealthHandler struct {
-	db    *pgxpool.Pool
-	redis redis.Cmdable
+	db     *pgxpool.Pool
+	redis  redis.Cmdable
+	broker BrokerChecker
 }
 
 // NewHealthHandler creates a new health handler
@@ -29,6 +38,12 @@ func NewHealthHandler(db *pgxpool.Pool, redis redis.Cmdable) *HealthHandler {
 		db:    db,
 		redis: redis,
 	}
+}
+
+// WithBroker inclui o RabbitMQ no health (RF09 do PRD 0005).
+func (h *HealthHandler) WithBroker(b BrokerChecker) *HealthHandler {
+	h.broker = b
+	return h
 }
 
 // Check handles GET /health request
@@ -40,6 +55,12 @@ func (h *HealthHandler) Check(c echo.Context) error {
 		Status: "ok",
 		DB:     dbStatus,
 		Redis:  redisStatus,
+	}
+	if h.broker != nil {
+		response.RabbitMQ = "error"
+		if h.broker.Conectado() {
+			response.RabbitMQ = "ok"
+		}
 	}
 
 	// Return 200 even if services are degraded

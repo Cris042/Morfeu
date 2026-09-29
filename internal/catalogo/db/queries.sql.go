@@ -9,6 +9,25 @@ import (
 	"context"
 )
 
+const buscarFilmeProjetado = `-- name: BuscarFilmeProjetado :one
+SELECT film_id, titulo, ano, aplicacoes, projetado_em
+FROM catalogo_filmes_projetados
+WHERE film_id = $1
+`
+
+func (q *Queries) BuscarFilmeProjetado(ctx context.Context, filmID int64) (CatalogoFilmesProjetado, error) {
+	row := q.db.QueryRow(ctx, buscarFilmeProjetado, filmID)
+	var i CatalogoFilmesProjetado
+	err := row.Scan(
+		&i.FilmID,
+		&i.Titulo,
+		&i.Ano,
+		&i.Aplicacoes,
+		&i.ProjetadoEm,
+	)
+	return i, err
+}
+
 const getFilm = `-- name: GetFilm :one
 SELECT
     id,
@@ -122,4 +141,28 @@ func (q *Queries) ListFilms(ctx context.Context) ([]Film, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const upsertFilmeProjetado = `-- name: UpsertFilmeProjetado :exec
+INSERT INTO catalogo_filmes_projetados (film_id, titulo, ano)
+VALUES ($1, $2, $3)
+ON CONFLICT (film_id) DO UPDATE
+SET titulo       = EXCLUDED.titulo,
+    ano          = EXCLUDED.ano,
+    aplicacoes   = catalogo_filmes_projetados.aplicacoes + 1,
+    projetado_em = now()
+`
+
+type UpsertFilmeProjetadoParams struct {
+	FilmID int64  `db:"film_id"`
+	Titulo string `db:"titulo"`
+	Ano    *int32 `db:"ano"`
+}
+
+// Projeção de catalogo.filme_criado (RF07, task 0005). Roda dentro da TX do
+// wrapper de dedup (outbox.ProcessarUmaVez): com dedup correto o conflito
+// nunca ocorre; se ocorrer, aplicacoes > 1 denuncia a falha (prova de RN01).
+func (q *Queries) UpsertFilmeProjetado(ctx context.Context, arg UpsertFilmeProjetadoParams) error {
+	_, err := q.db.Exec(ctx, upsertFilmeProjetado, arg.FilmID, arg.Titulo, arg.Ano)
+	return err
 }

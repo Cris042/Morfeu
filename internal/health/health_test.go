@@ -170,6 +170,54 @@ func TestHealthEndpoint_AllOK(t *testing.T) {
 	if resp.Redis != "ok" {
 		t.Errorf("Expected redis 'ok', got '%s'", resp.Redis)
 	}
+
+	// Contrato da E0a (RF09 do PRD 0005): sem broker, nenhum campo novo.
+	var raw map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("Failed to unmarshal raw response: %v", err)
+	}
+	if _, ok := raw["rabbitmq"]; ok {
+		t.Errorf("campo rabbitmq não deveria existir sem broker: %s", rec.Body.String())
+	}
+}
+
+type brokerFake bool
+
+func (b brokerFake) Conectado() bool { return bool(b) }
+
+// TestHealthEndpoint_ComBroker cobre RF09/CA07 do PRD 0005: processo com
+// broker expõe "rabbitmq" (ok/error) e o status HTTP segue 200. PG e Redis
+// apontam para endereços inalcançáveis — só o campo do broker importa aqui.
+func TestHealthEndpoint_ComBroker(t *testing.T) {
+	pool, err := pgxpool.New(context.Background(), "postgres://u:p@127.0.0.1:1/x?connect_timeout=1")
+	if err != nil {
+		t.Fatalf("pool: %v", err)
+	}
+	defer pool.Close()
+	redisClient := redis.NewClient(&redis.Options{Addr: "127.0.0.1:1", DialTimeout: time.Second})
+	defer func() { _ = redisClient.Close() }()
+
+	for _, tc := range []struct {
+		conectado bool
+		esperado  string
+	}{{true, "ok"}, {false, "error"}} {
+		handler := NewHealthHandler(pool, redisClient).WithBroker(brokerFake(tc.conectado))
+		rec := httptest.NewRecorder()
+		c := echo.New().NewContext(httptest.NewRequest(http.MethodGet, "/health", nil), rec)
+		if err := handler.Check(c); err != nil {
+			t.Fatalf("Check: %v", err)
+		}
+		if rec.Code != http.StatusOK {
+			t.Errorf("status esperado 200, recebi %d", rec.Code)
+		}
+		var resp HealthResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if resp.RabbitMQ != tc.esperado {
+			t.Errorf("conectado=%v: rabbitmq esperado %q, recebi %q", tc.conectado, tc.esperado, resp.RabbitMQ)
+		}
+	}
 }
 
 // TestHealthEndpoint_RedisDown validates health endpoint when Redis is unavailable

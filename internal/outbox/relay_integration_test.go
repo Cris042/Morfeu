@@ -16,10 +16,10 @@ import (
 	"testing"
 	"time"
 
-	dockercontainer "github.com/moby/moby/api/types/container"
-	mobynetwork "github.com/moby/moby/api/types/network"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	dockercontainer "github.com/moby/moby/api/types/container"
+	mobynetwork "github.com/moby/moby/api/types/network"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/rabbitmq"
@@ -78,7 +78,7 @@ func TestMain(m *testing.M) {
 }
 
 // setupPostgres sobe um PG efêmero e cria o schema mínimo (films + outbox_events,
-// migrations 001/002) — replica o padrão já usado em internal/integration_test.go.
+// migrations 001/002; 003/004 lidas dos arquivos) — replica o padrão já usado em internal/integration_test.go.
 func setupPostgres(ctx context.Context) (testcontainers.Container, string, error) {
 	req := testcontainers.ContainerRequest{
 		Image:        "postgres:16-alpine",
@@ -143,6 +143,21 @@ func setupPostgres(ctx context.Context) (testcontainers.Container, string, error
 			WHERE published_at IS NULL;
 	`); err != nil {
 		return nil, "", fmt.Errorf("criar schema: %w", err)
+	}
+
+	// Task 0005: dedup do consumidor (003) e projeção do catálogo (004) vêm
+	// direto dos arquivos de migration — o teste exercita o DDL real.
+	for _, arq := range []string{
+		"../../migrations/003_processed_messages.up.sql",
+		"../../migrations/004_catalogo_filmes_projetados.up.sql",
+	} {
+		ddl, err := os.ReadFile(arq)
+		if err != nil {
+			return nil, "", fmt.Errorf("ler %s: %w", arq, err)
+		}
+		if _, err := pool.Exec(ctx, string(ddl)); err != nil {
+			return nil, "", fmt.Errorf("aplicar %s: %w", arq, err)
+		}
 	}
 
 	return container, dsn, nil
