@@ -152,6 +152,7 @@ linters:
             - github.com/labstack/echo/v4
             - github.com/google/uuid
             - go.uber.org/zap
+            - github.com/mclovin137/morfeu/internal/cache
             - github.com/mclovin137/morfeu/internal/outbox
             - github.com/mclovin137/morfeu/internal/reserva/db
 

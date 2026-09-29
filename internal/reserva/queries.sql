@@ -53,3 +53,11 @@ WHERE id IN (
     LIMIT @limite::int
     FOR UPDATE SKIP LOCKED
 );
+
+-- name: OcupadosDaSessao :many
+-- Ocupação pública (PRD 0016): só códigos de holds vivos, pelo índice único
+-- parcial holds_assento_ativo.
+SELECT assento_codigo
+FROM holds
+WHERE sessao_id = @sessao_id AND status = 'ativo' AND expires_at > @agora
+ORDER BY assento_codigo;

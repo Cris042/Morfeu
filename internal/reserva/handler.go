@@ -33,10 +33,11 @@ func NovoHandler(s *Servico, logger *zap.Logger) *Handler {
 	return &Handler{servico: s, logger: logger}
 }
 
-// RegistrarRotas monta as rotas públicas da trava. As que mudam estado
+// RegistrarRotas monta as rotas públicas da trava e da ocupação. As que mudam estado
 // exigem o header anti-CSRF (só JS same-origin consegue enviá-lo).
 func (h *Handler) RegistrarRotas(e *echo.Echo) {
 	e.POST("/sessoes/:id/holds", h.travar, middleware.BodyLimit(limiteCorpo), exigirAntiCSRF)
+	e.GET("/sessoes/:id/ocupacao", h.ocupacao)
 	e.GET("/holds", h.meusHolds)
 	e.POST("/holds/:id/estender", h.estender, exigirAntiCSRF)
 	e.DELETE("/holds/:id", h.liberar, exigirAntiCSRF)
@@ -117,6 +118,20 @@ func (h *Handler) travar(c echo.Context) error {
 		})
 	}
 	return c.JSON(http.StatusCreated, map[string]any{"holds": paraDTOs(holds)})
+}
+
+// ocupacao: leitura pública para o polling do mapa (PRD 0016).
+func (h *Handler) ocupacao(c echo.Context) error {
+	sessaoID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || sessaoID <= 0 {
+		return naoEncontrado(c)
+	}
+	o, err := h.servico.Ocupacao(c.Request().Context(), sessaoID)
+	if err != nil {
+		return h.responderErro(c, err)
+	}
+	c.Response().Header().Set(echo.HeaderCacheControl, "public, max-age=2")
+	return c.JSON(http.StatusOK, o)
 }
 
 func (h *Handler) meusHolds(c echo.Context) error {

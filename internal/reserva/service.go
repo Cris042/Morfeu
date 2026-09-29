@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
+	"github.com/mclovin137/morfeu/internal/cache"
 	"github.com/mclovin137/morfeu/internal/outbox"
 	"github.com/mclovin137/morfeu/internal/reserva/db"
 )
@@ -67,6 +68,7 @@ type Config struct {
 	LimiteDono Limitador // criar/estender: 20/min por dono (RF08)
 	Metricas   Metricas
 	Agora      func() time.Time
+	Cache      cache.Cache // opcional (PRD 0016): ocupação pública, TTL 3 s
 }
 
 // Servico implementa os casos de uso da trava.

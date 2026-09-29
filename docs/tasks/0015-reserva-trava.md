@@ -1,7 +1,7 @@
 # Task 0015 — Reserva: trava de assento (holds) + sweeper (E4, T1)
 
 - **Data:** 2026-09-29
-- **Status:** em andamento
+- **Status:** concluída
 - **Branch:** `feature/0015-reserva-trava` (da main `1f7c594`)
 - **PRD:** docs/prd/0015-reserva-trava.md
 - **Item do roadmap:** E4 — Reserva (task 1/2). Refinamento: `docs/refinamentos/E4-reserva.md` §T1; ADR 0008.

@@ -219,3 +219,58 @@ groups:
         annotations:
           summary: "Reuso de refresh token detectado"
           description: "Token de refresh já usado/revogado foi reapresentado — família revogada; possível roubo de sessão (task 0010). Falso positivo conhecido até o single-flight do SPA (E8): logout numa aba seguido de refresh em outra."
+      - uid: morfeu-trava-recusas
+        title: "Recusas de trava de assento anormais"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'sum(increase(reserva_holds_indisponiveis_total[5m])) or vector(0)'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [60]}
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "Recusas de trava de assento anormais"
+          description: "Mais de 60 travas recusadas (409 assento_indisponivel) em 5 min — disputa real de lançamento ou bot varrendo assentos (PRD 0016). Conferir o rate limit e os logs de trava."
+      - uid: morfeu-sweeper-parado
+        title: "Sweeper de holds parado"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              # 1 = nenhuma passada do sweeper em 10 min com a API no ar.
+              expr: '((sum(increase(reserva_sweeper_execucoes_total[10m])) or vector(0)) < bool 1) and on() (max(up{job="morfeu"}) == 1)'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sweeper de holds parado"
+          description: "Nenhuma passada do sweeper de holds em 10 min. A trava continua correta (o upsert rouba vencidos — ADR 0008), mas a tabela holds acumula 'ativo' vencidos; verificar o worker."
