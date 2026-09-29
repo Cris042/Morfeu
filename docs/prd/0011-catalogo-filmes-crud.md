@@ -102,7 +102,7 @@ Import do TMDB (0012); anti-stampede do cartaz (E5); sessões e FK (E3); auditor
 - `internal/integration_test.go`, `internal/integration_cache_test.go`, `internal/outbox/relay_integration_test.go`, `internal/outbox/consumidor_integration_test.go`
 - `docs/tasks/README.md`, `plan.md`, `state.md`; do fechamento da 0010: `docs/tasks/0010-…`, `docs/prd/0010-…`; já no branch: `docs/refinamentos/E2-catalogo-tmdb.md`, `docs/refinamentos/README.md`
 
-Total previsto: ~31, que passa do teto de 30. **Mitigação:** o fechamento de status da 0010 (2 arquivos) sai desta branch (é revertido aqui e aplicado junto com a 0012), o que deixa ~29.
+Total real: **27** (o fechamento de status da 0010 foi adiado para a 0012; a integração nova ficou no `handler_test.go` existente em vez de arquivo novo).
 
 ## Dependências utilizadas
 
