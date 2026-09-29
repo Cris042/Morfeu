@@ -78,14 +78,16 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 		defer pool.Close()
-		ddl, err := os.ReadFile("../../migrations/005_usuario.up.sql")
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "migration:", err)
-			return 1
-		}
-		if _, err := pool.Exec(ctx, string(ddl)); err != nil {
-			fmt.Fprintln(os.Stderr, "aplicar migration:", err)
-			return 1
+		for _, arq := range []string{"../../migrations/005_usuario.up.sql", "../../migrations/006_refresh_token.up.sql"} {
+			ddl, err := os.ReadFile(arq)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "migration:", err)
+				return 1
+			}
+			if _, err := pool.Exec(ctx, string(ddl)); err != nil {
+				fmt.Fprintln(os.Stderr, "aplicar migration:", arq, err)
+				return 1
+			}
 		}
 		rh, _ := rd.Host(ctx)
 		rp, _ := rd.MappedPort(ctx, "6379/tcp")
@@ -128,7 +130,7 @@ func novoAmbiente(t *testing.T, concorrencia int) *ambiente {
 	if err != nil {
 		t.Fatalf("métricas: %v", err)
 	}
-	s, err := NovoServico(db.New(pool), emissor, Config{
+	s, err := NovoServico(pool, db.New(pool), emissor, Config{
 		Argon2:           parametrosRapidos,
 		HashConcorrencia: concorrencia,
 		LimiteConta:      lim("conta", 5, 5*time.Minute),
@@ -361,7 +363,8 @@ func TestSeedOperador(t *testing.T) {
 	}
 
 	for _, rota := range a.e.Routes() {
-		if rota.Method == http.MethodPost && rota.Path != "/auth/registro" && rota.Path != "/auth/login" {
+		permitidas := map[string]bool{"/auth/registro": true, "/auth/login": true, "/auth/refresh": true, "/auth/refresh/logout": true}
+		if rota.Method == http.MethodPost && !permitidas[rota.Path] {
 			t.Errorf("rota de escrita inesperada no módulo: %s %s", rota.Method, rota.Path)
 		}
 		if strings.Contains(strings.ToLower(rota.Path), "operador") {

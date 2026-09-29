@@ -23,7 +23,7 @@ make obs-down
 | Exporters | compose de observabilidade | node, cAdvisor (`--docker_only`), postgres (usuário `pg_monitor`), redis, `rabbitmq_prometheus` (plugin nativo, `:15692`) |
 | Loki 3.7.8 | `configs/loki/loki.yml` | retenção 14d (compactor) + limites de ingestão; sem retenção por tamanho nativa → teto via alerta de disco |
 | Alloy v1.20.1 | `configs/alloy/config.alloy` | logs dos containers de projetos `morfeu*`; labels `container`/`service`; `trace_id` no corpo (`| json`) |
-| Grafana 13.2.3 | `configs/grafana/` | datasources `prometheus`/`loki`; 3 dashboards (pasta Morfeu); 6 alertas → Discord |
+| Grafana 13.2.3 | `configs/grafana/` | datasources `prometheus`/`loki`; 3 dashboards (pasta Morfeu); 7 alertas → Discord |
 
 Dashboards (lista fechada — "sem mais um painel" sem PRD): **API — golden signals**, **Infra — USE**, **Mensageria — outbox e DLQ**.
 
@@ -37,6 +37,7 @@ Dashboards (lista fechada — "sem mais um painel" sem PRD): **API — golden si
 | DLQ crescendo | `delta(morfeu_dlq_mensagens[15m]) > 0` | warning |
 | Consumidor parado | prontas em `catalogo.filme_criado` > 0 **e** 0 consumidores por 5m | critical |
 | Conexões do PostgreSQL acima de 80% | `pg_stat_activity_count / max_connections` por 5m | warning |
+| Reuso de refresh token detectado (E1, task 0010) | `increase(auth_refresh_reuso_total[15m]) > 0` | critical |
 
 Destino: contact point `discord-morfeu` (`DISCORD_WEBHOOK_URL`). Em dev use o placeholder do `.env.observability.example` — o contact point exige URL válida no boot; o envio falha em log sem bloquear nada.
 
@@ -65,4 +66,4 @@ docker exec -it morfeu-postgres psql -U postgres -d morfeu \
 
 ## Validação automatizada
 
-`test/observabilidade/stack_integration_test.go` (tag `integration`) sobe Prometheus (`promtool check config`), Loki (`/ready`), Alloy (`alloy fmt`) e Grafana reais com as configs do repositório e verifica 3 dashboards, 2 datasources, 6 regras, o contact point e o 401 anônimo; também garante que o compose de observabilidade só publica o Grafana em 127.0.0.1.
+`test/observabilidade/stack_integration_test.go` (tag `integration`) sobe Prometheus (`promtool check config`), Loki (`/ready`), Alloy (`alloy fmt`) e Grafana reais com as configs do repositório e verifica 3 dashboards, 2 datasources, 7 regras, o contact point e o 401 anônimo; também garante que o compose de observabilidade só publica o Grafana em 127.0.0.1.
