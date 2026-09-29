@@ -1,0 +1,15 @@
+# Provider de dashboards por arquivo (task 0007, RF05): os 3 dashboards
+# versionados em configs/grafana/dashboards/ — sem edição pela UI.
+apiVersion: 1
+
+providers:
+  - name: morfeu
+    orgId: 1
+    folder: Morfeu
+    folderUid: morfeu
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 60
+    options:
+      path: /var/lib/grafana/dashboards
