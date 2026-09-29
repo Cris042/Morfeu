@@ -107,6 +107,10 @@ func TestMetricas_MensageriaComFontesReais(t *testing.T) {
 
 // TestConsumidor_ContinuaTraceDoProdutor cobre CA05/RF06: o span da entrega
 // pertence ao trace do traceparent publicado pelo produtor.
+//
+// Guard-rail (auditoria 0006): troca o TracerProvider/propagator GLOBAIS e
+// restaura no Cleanup — seguro só porque o pacote não usa t.Parallel() nem
+// -shuffle. Se isso mudar, injete o provider no broker em vez do global.
 func TestConsumidor_ContinuaTraceDoProdutor(t *testing.T) {
 	recorder := tracetest.NewSpanRecorder()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))

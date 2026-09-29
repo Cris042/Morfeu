@@ -14,7 +14,8 @@
 4. ~~Broker/outbox~~ — `79441f7`: span `consumir <fila>` filho do traceparent; `ProfundidadeFila` (passiva); `LagSegundos` (query sqlc); log do consumer correlacionado.
 5. ~~Wiring~~ — `50cc45f`: `main.go` (telemetria, otelpgx, otelecho primeiro middleware, `/metrics`, request log com trace_id) + integração CA03 (fontes reais PG/RabbitMQ) e CA05 (tracetest).
 6. ~~Validação~~ — suíte completa `-race -tags=integration` verde; golangci-lint 0 issues (refatoração de gocognit em `runServer`/`RegistrarMensageria`); govulncheck (Go 1.25.14) **No vulnerabilities**. Diff: 25 arquivos.
-7. Gate: gitleaks → push → PR → CI → passe de julgamento → merge.
+7. **Auditoria APROVADA (2026-09-29)** — passe único (`security`): itens 1–5, 7, 9–11, 13 conformes; não-bloqueantes registrados no state.md (redação não desce em `zap.Any`/`Object`; `/metrics` na porta pública até a E0c-CD; migração do otelecho) + guard-rail do teste que troca globais OTel adicionado. PR #30.
+8. Gate: CI verde → merge (aguardando autorização do usuário).
 
 ---
 
