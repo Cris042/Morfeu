@@ -23,6 +23,8 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/mclovin137/morfeu/internal/autenticacao"
 	"github.com/mclovin137/morfeu/internal/catalogo"
@@ -92,12 +94,15 @@ func novoAmbiente(t *testing.T) *ambiente {
 	}
 	var conflitos atomic.Int32
 	filmes := catalogo.NovoServico(catalogodb.New(pool), pool, nil, zap.NewNop())
-	s, err := NovoServico(db.New(pool), Config{Filmes: filmes, AoConflito: func(context.Context) { conflitos.Add(1) }}, zap.NewNop())
+	// zaptest: logs do serviço/handler aparecem na saída do teste que falhar
+	// (diagnóstico do SQLSTATE em erro inesperado — CI do PR #38).
+	logTeste := zaptest.NewLogger(t, zaptest.Level(zapcore.WarnLevel))
+	s, err := NovoServico(db.New(pool), Config{Filmes: filmes, AoConflito: func(context.Context) { conflitos.Add(1) }}, logTeste)
 	if err != nil {
 		t.Fatalf("serviço: %v", err)
 	}
 	e := echo.New()
-	NovoHandler(s, zap.NewNop()).RegistrarRotasBackoffice(e, autenticacao.Exigir(emissor, autenticacao.PapelOperador),
+	NovoHandler(s, logTeste).RegistrarRotasBackoffice(e, autenticacao.Exigir(emissor, autenticacao.PapelOperador),
 		func(c echo.Context) string { id, _ := autenticacao.UsuarioID(c); return id.String() })
 	op, _, _ := emissor.Emitir(uuid.New(), autenticacao.PapelOperador)
 	cl, _, _ := emissor.Emitir(uuid.New(), autenticacao.PapelCliente)
@@ -207,7 +212,9 @@ func TestSessao_FimSnapshotEBordas(t *testing.T) {
 func TestSessao_ConcorrenciaConflitante(t *testing.T) {
 	a := novoAmbiente(t)
 	sala := a.novaSala(t)
-	for rodada := 0; rodada < 5; rodada++ {
+	// 20 rodadas: o CI ARM64 revelou 500 por deadlock (40P01) na EXCLUDE sob
+	// concorrência — agora repetido pelo serviço; mais rodadas exercitam isso.
+	for rodada := 0; rodada < 20; rodada++ {
 		inicio := base.AddDate(0, 0, rodada+1)
 		largada := make(chan struct{})
 		var wg sync.WaitGroup

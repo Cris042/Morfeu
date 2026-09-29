@@ -201,7 +201,7 @@ func (s *Servico) CriarSessao(ctx context.Context, in EntradaSessao, operador st
 	inicio := in.Inicio.UTC()
 	fim := CalcularFim(inicio, duracao)
 
-	l, err := s.q.InserirSessao(ctx, db.InserirSessaoParams{
+	l, err := s.inserirSessao(ctx, db.InserirSessaoParams{
 		FilmeID: in.FilmeID, SalaID: in.SalaID, Inicio: inicio, DuracaoMin: duracao, Fim: fim, PrecoCentavos: in.PrecoCentavos,
 	})
 	if err != nil {
@@ -209,11 +209,32 @@ func (s *Servico) CriarSessao(ctx context.Context, in EntradaSessao, operador st
 			s.cfg.AoConflito(ctx)
 			return Sessao{}, s.conflito(ctx, in.SalaID, inicio, fim)
 		}
-		return Sessao{}, fmt.Errorf("sessao: inserir sessão: %w", err)
+		return Sessao{}, fmt.Errorf("sessao: inserir sessão (sqlstate %s): %w", db.CodigoSQL(err), err)
 	}
 	s.logger.Info("sessão criada", zap.String("operador_id", operador), zap.Int64("sessao_id", l.ID))
 	return Sessao{ID: l.ID, FilmeID: l.FilmeID, SalaID: l.SalaID, Inicio: l.Inicio, Fim: l.Fim,
 		DuracaoMin: l.DuracaoMin, PrecoCentavos: l.PrecoCentavos, Status: l.Status}, nil
+}
+
+// maxTentativasInsercao: deadlocks da EXCLUDE sob concorrência são raros e
+// se resolvem na tentativa seguinte (a concorrente já commitou).
+const maxTentativasInsercao = 3
+
+// inserirSessao repete o INSERT só em deadlock (40P01); qualquer outro erro
+// (inclusive o 23P01 de conflito) volta na hora.
+func (s *Servico) inserirSessao(ctx context.Context, p db.InserirSessaoParams) (db.InserirSessaoRow, error) {
+	var (
+		l   db.InserirSessaoRow
+		err error
+	)
+	for tentativa := 1; tentativa <= maxTentativasInsercao; tentativa++ {
+		l, err = s.q.InserirSessao(ctx, p)
+		if err == nil || !db.EhImpasse(err) {
+			return l, err
+		}
+		s.logger.Warn("impasse na EXCLUDE de sessões — repetindo", zap.Int("tentativa", tentativa))
+	}
+	return l, err
 }
 
 // conflito reconsulta a sessão que ocupa o intervalo para o 409.
