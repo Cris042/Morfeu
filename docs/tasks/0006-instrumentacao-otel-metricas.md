@@ -1,7 +1,7 @@
 # Task 0006 — Instrumentação da app: OTel + /metrics + logs correlacionados (E0d, parte 1/2)
 
 - **Data:** 2026-09-29
-- **Status:** em andamento
+- **Status:** concluída (merge `02831dc`, PR #30, 2026-09-29)
 - **Branch:** `feature/0006-instrumentacao-otel-metricas`
 - **PRD:** docs/prd/0006-instrumentacao-otel-metricas.md — criar antes de implementar (just-in-time, §6.2.5)
 - **Item do roadmap:** E0d — observabilidade base (parte 1/2). Usuário confirmou em 2026-09-29: VM Oracle ainda não existe → E0c-CD segue bloqueada e a E0d avança (a CD fura a fila quando a VM sair).

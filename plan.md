@@ -4,9 +4,27 @@
 
 ## Estado corrente (2026-09-29)
 
+**Task 0007 — Stack de observabilidade (E0d, parte 2/2): ABERTA; PRD a criar (just-in-time)** (branch `chore/0007-stack-observabilidade`, criada da main pós-0006 `02831dc`; task `docs/tasks/0007-stack-observabilidade.md`). Com ela o E0 fecha, exceto a E0c-CD (VM Oracle).
+
+### Plano da task 0007 (status: aberta; PRD é o próximo passo)
+
+1. PRD 0007 (`criar-prd`) — Context7 p/ Loki (retenção/compactor), Alloy (discovery de containers), Grafana (provisioning de alerting); imagens pinadas no lib.md.
+2. `docker-compose.observability.yml` + app no compose dev (profile `app`, `depends_on: service_healthy`).
+3. Prometheus + exporters (usuário `pg_monitor`, plugin `rabbitmq_prometheus`).
+4. Alloy → Loki (retenção 14d + limites).
+5. Grafana: datasources + 3 dashboards + 6 alertas → Discord (env).
+6. Teste de integração da stack (provisionamento + validade das configs) + runbook `docs/observabilidade.md`.
+7. Gate: gitleaks → push → PR → CI → passe de julgamento → merge.
+
+---
+
 **Task 0006 — Instrumentação da app: OTel + /metrics + logs correlacionados (E0d, parte 1/2): IMPLEMENTAÇÃO COMPLETA e validada localmente (2026-09-29); gate → PR** (branch `feature/0006-instrumentacao-otel-metricas`, criada da main pós-0005 `c35957d`; task `docs/tasks/0006-instrumentacao-otel-metricas.md`). E0d dividida (§6.3): 0006 = app Go, 0007 = stack de observabilidade. E0c-CD bloqueada pela VM Oracle (confirmado pelo usuário 2026-09-29).
 
-### Plano da task 0006
+### Task 0006 — Instrumentação da app (E0d 1/2): CONCLUÍDA e MERGEADA (histórico)
+
+**Merge `02831dc` (PR #30, 2026-09-29).**
+
+#### Plano executado da task 0006
 
 1. ~~PRD 0006~~ — `8c58a5a` `docs/prd/0006-instrumentacao-otel-metricas.md` + lib.md (OTel core/SDK 1.46.0, exporter Prometheus 0.68.0, client_golang 1.24.1, otelecho **0.70.0** — 0.71 depreca o módulo em favor de `echo-otel/v4` v4.0.0 de 1 dia; débito registrado —, otelpgx 0.12.0; echo 4.15.0→4.15.4 por arrasto). Desvio registrado: "100% erros" exige tail sampling → fica p/ o collector/Tempo (E6/E10).
 2. ~~`internal/telemetria`~~ — `db802f8`: TracerProvider `ParentBased(TraceIDRatio 0.1)` + `ExporterDescarte`; MeterProvider → exporter Prometheus em registry dedicado (sem scope/target info); **view com allowlist de atributos** (`http.route`, método, status, `fila`) — cardinalidade garantida no SDK, não só no teste; `MiddlewareHTTP` (otelecho, skip `/metrics` e `/health`); gauges `morfeu_outbox_pendentes`, `morfeu_outbox_lag_segundos`, `morfeu_dlq_mensagens{fila}` no scrape.
