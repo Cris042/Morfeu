@@ -148,8 +148,7 @@ func runServer(mode string) {
 	healthHandler := health.NewHealthHandler(dbPool, redisClient)
 	var brokerClient *broker.Client
 	if mode == modeWorker || mode == modeAll {
-		brokerClient = startRelay(relayCtx, cfg.RabbitMQURL, dbPool, &relayWG, log)
-		startConsumer(relayCtx, brokerClient, dbPool, &relayWG, log)
+		brokerClient = startWorker(relayCtx, cfg, dbPool, &relayWG, log)
 		healthHandler = healthHandler.WithBroker(brokerClient)
 	}
 
@@ -249,6 +248,44 @@ func startConsumer(ctx context.Context, brokerClient *broker.Client, dbPool *pgx
 		}
 	}()
 	log.Info("Consumer de catalogo.filme_criado iniciado")
+}
+
+// startWorker sobe tudo que roda só em -mode=worker|all: relay da outbox,
+// consumer e limpeza de refresh — todos no mesmo WaitGroup do shutdown.
+func startWorker(ctx context.Context, cfg *config.Config, dbPool *pgxpool.Pool, wg *sync.WaitGroup, log *logger.Logger) *broker.Client {
+	brokerClient := startRelay(ctx, cfg.RabbitMQURL, dbPool, wg, log)
+	startConsumer(ctx, brokerClient, dbPool, wg, log)
+	startLimpezaRefresh(ctx, dbPool, wg, log)
+	return brokerClient
+}
+
+// intervaloLimpezaRefresh: refresh vencidos saem da tabela 1×/hora (RF08 do
+// PRD 0010) — volume baixo, sem necessidade de janela especial.
+const intervaloLimpezaRefresh = time.Hour
+
+// startLimpezaRefresh roda a limpeza de refresh expirados no worker (sem
+// serviço novo), registrada no WaitGroup do shutdown ordenado.
+func startLimpezaRefresh(ctx context.Context, dbPool *pgxpool.Pool, wg *sync.WaitGroup, log *logger.Logger) {
+	q := identidadedb.New(dbPool)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ticker := time.NewTicker(intervaloLimpezaRefresh)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				n, err := identidade.LimparRefreshExpirados(ctx, q)
+				if err != nil {
+					log.ErrorMsg("limpeza de refresh expirados falhou", zap.Error(err))
+					continue
+				}
+				log.Info("refresh expirados removidos", zap.Int64("quantidade", n))
+			}
+		}
+	}()
 }
 
 // setupRouter creates the Echo instance, wiring middleware and routes.
@@ -421,7 +458,7 @@ func montarIdentidade(cfg *config.Config, dbPool *pgxpool.Pool, redisClient redi
 	if err != nil {
 		fatal("métricas de autenticação", err)
 	}
-	servico, err := identidade.NovoServico(identidadedb.New(dbPool), emissor, identidade.Config{
+	servico, err := identidade.NovoServico(dbPool, identidadedb.New(dbPool), emissor, identidade.Config{
 		Argon2:           parametrosArgon2(cfg),
 		HashConcorrencia: cfg.HashConcorrencia,
 		LimiteConta:      novoLimitador("conta", limiteFalhasConta, janelaFalhasLogin),
