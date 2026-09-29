@@ -2,11 +2,29 @@
 
 > Este arquivo é o plano vivo da task corrente **do projeto** — não confundir com o *plan mode* do Claude Code (que grava em `~/.claude/plans/`). Atualizado durante a implementação; reflete o estado real (regras em `roles.md` §6.11).
 
-## Estado corrente (2026-07-13)
+## Estado corrente (2026-09-29)
+
+**Task 0006 — Instrumentação da app: OTel + /metrics + logs correlacionados (E0d, parte 1/2): ABERTA; PRD a criar (just-in-time)** (branch `feature/0006-instrumentacao-otel-metricas`, criada da main pós-0005 `c35957d`; task `docs/tasks/0006-instrumentacao-otel-metricas.md`). E0d dividida (§6.3): 0006 = app Go, 0007 = stack de observabilidade. E0c-CD bloqueada pela VM Oracle (confirmado pelo usuário 2026-09-29).
+
+### Plano da task 0006 (status: aberta; PRD é o próximo passo)
+
+1. PRD 0006 (`criar-prd`) — consome refinamento E0 §"Task E0d" (parte app); Context7 p/ OTel SDK/otelecho/otelpgx/exporter Prometheus; registrar deps no lib.md antes do import. Skills candidatas: `golang-observability-opentelemetry`, `golang-testing`.
+2. Plataforma `internal/telemetria` (TracerProvider c/ sampling 10% + erros, exporter noop; MeterProvider + registry Prometheus) + wiring em main (`/metrics`).
+3. otelecho + otelpgx; traceparent do envelope AMQP continuado no consumer.
+4. Métricas de mensageria: outbox_pendentes, lag do relay, profundidade DLQ.
+5. Logger: redação de campos sensíveis + trace_id/span_id.
+6. Testes (golden signals, mensageria, cardinalidade estática, correlação, redação) + regressão.
+7. Gate: gitleaks → push → PR → CI → passe de julgamento → merge.
+
+---
+
+### Task 0005 — Consumidor idempotente + DLQ (E0b 2/2): CONCLUÍDA e MERGEADA (histórico)
+
+**Merge `c35957d` (PR #29, 2026-09-29).** Auditoria APROVADA; CI verde após bump de segurança (`51e7fc3`: amqp091-go 1.15.0 / x/text 0.39.0 — advisories publicados após a 0002 derrubavam o govulncheck).
 
 **Task 0005 — Consumidor idempotente + DLQ (E0b, parte 2/2): IMPLEMENTAÇÃO COMPLETA e validada localmente (2026-09-29); gate pré-push → PR** (branch `feature/0005-consumidor-idempotente`, criada da main pós-0002 `a1d1924`; task `docs/tasks/0005-consumidor-idempotente.md`). Épico E0 já refinado → PRD 0005 consome o refinamento §"Task E0b" (parte consumidora) + ADR 0007 + contrato de envelope do PRD 0002 (RF05), sem nova rodada de agentes (§6.2.5).
 
-### Plano da task 0005 (status: aberta; PRD é o próximo passo)
+### Plano executado da task 0005
 
 1. ~~PRD 0005~~ — feito, `docs/prd/0005-consumidor-idempotente.md` (skills: `golang-concurrency`, `golang-database`). Decisões de abertura: migrations separadas 003 (plataforma) / 004 (catálogo) p/ isolar blocos sqlc; compose sem mudança (não há serviço de app — `depends_on` vai p/ E0c-CD).
 2. ~~Migrations~~ — `6945020`: 003 `processed_messages` (PK `message_id, consumidor`) + 004 `catalogo_filmes_projetados` (coluna `aplicacoes` = prova de idempotência); blocos sqlc separados por ownership.
@@ -18,6 +36,7 @@
 8. Gate: gitleaks pré-push → push → PR → CI verde → passe único de julgamento → merge (fecha o walking skeleton assíncrono do E0b).
 
 ---
+
 
 ### Task 0002 — Outbox + RabbitMQ: lado produtor (E0b 1/2): CONCLUÍDA e MERGEADA (histórico)
 

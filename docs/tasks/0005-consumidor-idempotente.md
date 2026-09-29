@@ -1,7 +1,7 @@
 # Task 0005 — Consumidor idempotente + DLQ (E0b, parte 2/2)
 
 - **Data:** 2026-07-13
-- **Status:** em andamento
+- **Status:** concluída (merge `c35957d`, PR #29, 2026-09-29)
 - **Branch:** `feature/0005-consumidor-idempotente`
 - **PRD:** docs/prd/0005-consumidor-idempotente.md (ativo)
 - **Item do roadmap:** E0b — outbox + RabbitMQ + worker idempotente (parte 2/2; divisão registrada na abertura do PRD 0002, roles.md §6.3)
