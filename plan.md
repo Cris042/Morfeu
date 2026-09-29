@@ -4,9 +4,20 @@
 
 ## Estado corrente (2026-09-29)
 
-**Task 0011 — Catálogo: migração `films`→`filmes` + CRUD do operador (E2 T1): IMPLEMENTAÇÃO COMPLETA e validada (2026-09-29); gate → PR** (branch `feature/0011-catalogo-filmes-crud`, da main `5d2ca7f`). **E1 concluído** (0008/0009/0010 — PRs #33/#34/#35). E2 refinado.
+**Task 0012 — Importação de filmes do TMDB (E2 T2, fecha o M2): IMPLEMENTAÇÃO COMPLETA e validada (2026-09-29); gate → PR** (branch `feature/0012-importacao-tmdb`, da main `dfe0d01`).
 
-### Plano da task 0011
+### Plano da task 0012
+
+1. ~~PRD 0012~~ — Context7 `/websites/developer_themoviedb_reference`.
+2. ~~Catálogo~~ — port `FonteTMDB` (setter `ComFonteTMDB`, evita mexer em todos os chamadores de `NovoServico`); `ImportarDoTMDB` (upsert `ON CONFLICT (tmdb_id)` com `xmax = 0` → evento só na criação; reimport atualiza sem desarquivar; 422 sem duração); `BuscarNoTMDB`; normalização (HTML removido, truncagem, pôster montado por nós só de `poster_path` com formato válido, imdb validado, ano da data); atribuição TMDB nas respostas.
+3. ~~Adapter `internal/catalogo/tmdb`~~ — stdlib, host fixo, bearer, 5 s/tentativa, ≤ 3 tentativas (5xx/rede/429 c/ Retry-After ≤ 5 s; 404/4xx sem retry), corpo ≤ 1 MiB, erros sem token, métricas `tmdb_requisicoes_total{operacao,classe_status}` + duração, span `tmdb.<operacao>`; sem circuit breaker.
+4. ~~Wiring~~ — `TMDB_API_TOKEN` opcional (`conectarTMDB`; ausente → 503 `tmdb_nao_configurado`); allowlist `operacao`/`classe_status`; env examples; lib.md (TMDB implementado).
+5. ~~Testes~~ — adapter com httptest (tentativas por classe, Retry-After e teto, timeout, JSON malformado, header, token fora dos erros, busca com escape e limite 20), guarda-chuva contra o host real em qualquer `_test.go`; normalização hostil (paths `../`, `//host`, query, svg; duração 5000; imdb `javascript:`); integração com fonte fake (2º implementador — o adapter não pode ser importado no pacote por ciclo): cria 201/reimporta 200/1 evento/não desarquiva/cache invalidado, 422/404/503/400, concorrência → 1 filme e 1 evento (um 201 + um 200), matriz. Suíte completa `-race` verde; lint 0 issues; `sqlc diff` limpo.
+
+---
+
+### Task 0011 — Catálogo: CONCLUÍDA e MERGEADA (PR #36, `dfe0d01`)
+
 
 1. ~~PRD 0011~~ — lista fechada (27 arquivos reais; fechamento de status da 0010 adiado p/ a 0012).
 2. ~~Migration 007~~ — renames PT, `criado_em`→TIMESTAMPTZ, `tmdb_id` UNIQUE, `arquivado_em`, `atualizado_em`, CHECKs (título, duração 1–1440), `GENERATED ALWAYS AS IDENTITY` + `setval` acima do maior id; down completo. Validada à mão (up → próximo id 11; down preserva os 11; up → 12) e pelos testes.

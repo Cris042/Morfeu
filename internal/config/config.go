@@ -30,6 +30,10 @@ type Config struct {
 	Argon2Iteracoes   int
 	Argon2Paralelismo int
 	HashConcorrencia  int
+
+	// TMDB (PRD 0012): opcional — sem ele, só as rotas de TMDB respondem 503.
+	// Nunca logado.
+	TMDBToken string
 }
 
 // LoadConfig loads configuration from environment variables with defaults
@@ -53,6 +57,7 @@ func LoadConfig() (*Config, error) {
 		Argon2Iteracoes:   getEnvInt("ARGON2_ITERACOES", 2),
 		Argon2Paralelismo: getEnvInt("ARGON2_PARALELISMO", 1),
 		HashConcorrencia:  getEnvInt("HASH_CONCORRENCIA", runtime.NumCPU()),
+		TMDBToken:         getEnv("TMDB_API_TOKEN", ""),
 	}
 
 	// Parse cache TTL

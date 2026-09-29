@@ -1,7 +1,7 @@
 # Task 0010 — Refresh rotativo com detecção de reuso + deleção por pseudonimização (E1, T2)
 
 - **Data:** 2026-09-29
-- **Status:** em andamento
+- **Status:** concluída
 - **Branch:** `feature/0010-refresh-pseudonimizacao` (da main `3ef3188`, pós-0009)
 - **PRD:** docs/prd/0010-refresh-pseudonimizacao.md
 - **Item do roadmap:** E1 — Identidade (T2 — fecha o épico). Refinamento: `docs/refinamentos/E1-identidade.md` §T2 + respostas do usuário (7 dias, SameSite Strict, sem janela de graça).

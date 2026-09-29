@@ -44,6 +44,9 @@ var LabelsPermitidos = []attribute.Key{
 	// auth (task 0008): valores fechados — resultado do login e escopo do limitador.
 	"resultado",
 	"escopo",
+	// TMDB (task 0012): valores fechados — operação e classe de status.
+	"operacao",
+	"classe_status",
 }
 
 // Config parametriza Iniciar.
