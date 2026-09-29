@@ -91,13 +91,12 @@ Import do TMDB (0012); anti-stampede do cartaz (E5); sessões e FK (E3); auditor
 
 - `migrations/007_filmes.up.sql`, `migrations/007_filmes.down.sql`
 - `internal/catalogo/errors.go`
-- `internal/catalogo/catalogo_integration_test.go`
 - `docs/prd/0011-catalogo-filmes-crud.md`, `docs/tasks/0011-catalogo-filmes-crud.md`
 
 ## Arquivos que serão modificados
 
 - `sqlc.yaml`; `internal/catalogo/queries.sql`, `internal/catalogo/db/{models.go,querier.go,queries.sql.go}`
-- `internal/catalogo/service.go`, `handler.go`, `projecao.go`, `handler_test.go`, `service_test.go`
+- `internal/catalogo/service.go`, `handler.go`, `projecao.go`, `service_test.go` (validação — unit), `handler_test.go` (vira a suíte de integração do CRUD: matriz, concorrência, cache — tag `integration`)
 - `internal/cache/redis.go`
 - `cmd/morfeu/main.go`, `cmd/morfeu/main_test.go`
 - `internal/integration_test.go`, `internal/integration_cache_test.go`, `internal/outbox/relay_integration_test.go`, `internal/outbox/consumidor_integration_test.go`

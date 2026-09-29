@@ -134,7 +134,7 @@ func novoFilmID() int64 {
 }
 
 func payloadFilme(id int64) []byte {
-	return []byte(fmt.Sprintf(`{"id":%d,"title":"Filme %d","year":2024}`, id, id))
+	return []byte(fmt.Sprintf(`{"id":%d,"titulo":"Filme %d","ano":2024,"duracao_min":100}`, id, id))
 }
 
 // aplicacoes lê a coluna de prova de idempotência da projeção (-1 se ausente).
@@ -378,10 +378,11 @@ func TestWalkingSkeleton_CriarFilmeAteProjecao(t *testing.T) {
 		<-consumerDone
 	}()
 
-	svc := catalogo.NewFilmService(catalogodb.New(pool), pool, nil, zap.NewNop())
-	film, err := svc.CreateFilm(context.Background(), catalogo.CreateFilmParams{Title: "Walking skeleton CA05"})
+	svc := catalogo.NovoServico(catalogodb.New(pool), pool, nil, zap.NewNop())
+	duracao := int32(120)
+	film, err := svc.Criar(context.Background(), catalogo.DadosFilme{Titulo: "Walking skeleton CA05", DuracaoMin: &duracao})
 	if err != nil {
-		t.Fatalf("CreateFilm: %v", err)
+		t.Fatalf("Criar: %v", err)
 	}
 
 	if !pollUntil(t, 20*time.Second, func() bool { return aplicacoes(t, pool, film.ID) == 1 }) {

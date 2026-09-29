@@ -5,6 +5,8 @@ package internal
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -91,40 +93,24 @@ func setupTestRedis(t *testing.T, ctx context.Context) (string, testcontainers.C
 	return redisURL, container
 }
 
-// initTestSchema creates the films table
+// initTestSchema aplica os arquivos de migration reais do catálogo (001 cria
+// e semeia os 10 filmes; 007 leva ao modelo em PT) — task 0011: sem DDL
+// duplicado no teste.
 func initTestSchema(ctx context.Context, pool *pgxpool.Pool) error {
-	_, err := pool.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS films (
-			id BIGINT PRIMARY KEY,
-			title VARCHAR(255) NOT NULL,
-			year INTEGER,
-			runtime INTEGER,
-			synopsis TEXT,
-			imdb_id VARCHAR(20),
-			poster_url VARCHAR(500),
-			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-		);
-	`)
-	return err
+	for _, arq := range []string{"001_initial_schema.up.sql", "007_filmes.up.sql"} {
+		ddl, err := os.ReadFile("../migrations/" + arq)
+		if err != nil {
+			return err
+		}
+		if _, err := pool.Exec(ctx, string(ddl)); err != nil {
+			return fmt.Errorf("aplicar %s: %w", arq, err)
+		}
+	}
+	return nil
 }
 
-// seedTestData inserts 10 films into the test database
-func seedTestData(ctx context.Context, pool *pgxpool.Pool) error {
-	_, err := pool.Exec(ctx, `
-		INSERT INTO films (id, title, year, runtime, synopsis, imdb_id, poster_url, created_at) VALUES
-		(1, 'The Shawshank Redemption', 1994, 142, 'Two imprisoned men bond over redemption.', 'tt0111161', 'https://example.com/poster1.jpg', NOW()),
-		(2, 'The Dark Knight', 2008, 152, 'Batman fights the Joker.', 'tt0468569', 'https://example.com/poster2.jpg', NOW()),
-		(3, 'Inception', 2010, 148, 'A thief steals secrets in dreams.', 'tt1375666', 'https://example.com/poster3.jpg', NOW()),
-		(4, 'The Matrix', 1999, 136, 'A hacker learns the truth of reality.', 'tt0133093', 'https://example.com/poster4.jpg', NOW()),
-		(5, 'Pulp Fiction', 1994, 154, 'Intertwined tales of violence and redemption.', 'tt0110912', 'https://example.com/poster5.jpg', NOW()),
-		(6, 'Forrest Gump', 1994, 142, 'A man witnesses historical events.', 'tt0109830', 'https://example.com/poster6.jpg', NOW()),
-		(7, 'Interstellar', 2014, 169, 'Explorers travel through a wormhole.', 'tt0816692', 'https://example.com/poster7.jpg', NOW()),
-		(8, 'The Godfather', 1972, 175, 'An organized crime dynasty transfer control.', 'tt0068646', 'https://example.com/poster8.jpg', NOW()),
-		(9, 'Gladiator', 2000, 155, 'A general seeks vengeance.', 'tt0172495', 'https://example.com/poster9.jpg', NOW()),
-		(10, 'The Lord of the Rings', 2001, 178, 'A hobbit embarks on a quest.', 'tt0120737', 'https://example.com/poster10.jpg', NOW());
-	`)
-	return err
-}
+// seedTestData: os 10 filmes já vêm da migration 001 (initTestSchema).
+func seedTestData(context.Context, *pgxpool.Pool) error { return nil }
 
 // TestDatabaseConnection validates basic PostgreSQL connectivity
 func TestDatabaseConnection(t *testing.T) {
@@ -176,7 +162,7 @@ func TestMigrationsUpDownUpIdempotent(t *testing.T) {
 
 	// Verify films exist
 	queries := db.New(pool)
-	films, err := queries.ListFilms(ctx)
+	films, err := queries.ListarFilmesPublicos(ctx)
 	if err != nil {
 		t.Fatalf("Failed to list films after up: %v", err)
 	}
@@ -185,13 +171,13 @@ func TestMigrationsUpDownUpIdempotent(t *testing.T) {
 	}
 
 	// Simulate "down"
-	if _, err := pool.Exec(ctx, "DROP TABLE IF EXISTS films"); err != nil {
+	if _, err := pool.Exec(ctx, "DROP TABLE IF EXISTS filmes"); err != nil {
 		t.Fatalf("Failed to drop table (down): %v", err)
 	}
 
 	// Verify table is gone
 	var exists bool
-	err = pool.QueryRow(ctx, "SELECT EXISTS(SELECT FROM information_schema.tables WHERE table_name='films')").Scan(&exists)
+	err = pool.QueryRow(ctx, "SELECT EXISTS(SELECT FROM information_schema.tables WHERE table_name='filmes')").Scan(&exists)
 	if err != nil {
 		t.Fatalf("Failed to check table existence: %v", err)
 	}
@@ -209,7 +195,7 @@ func TestMigrationsUpDownUpIdempotent(t *testing.T) {
 	}
 
 	// Verify films exist again
-	films, err = queries.ListFilms(ctx)
+	films, err = queries.ListarFilmesPublicos(ctx)
 	if err != nil {
 		t.Fatalf("Failed to list films after up again: %v", err)
 	}
@@ -255,10 +241,10 @@ func TestCacheHitMissWithRedis(t *testing.T) {
 	defer redisClient.Close()
 
 	cacheLayer := cache.NewRedisCache(redisClient, zap.NewNop())
-	svc := catalogo.NewFilmService(db.New(pool), pool, cacheLayer, zap.NewNop())
+	svc := catalogo.NovoServico(db.New(pool), pool, cacheLayer, zap.NewNop())
 
 	// First request should miss cache and hit database
-	films1, err := svc.ListFilms(ctx)
+	films1, err := svc.ListarPublicos(ctx)
 	if err != nil {
 		t.Fatalf("First ListFilms failed: %v", err)
 	}
@@ -267,7 +253,7 @@ func TestCacheHitMissWithRedis(t *testing.T) {
 	}
 
 	// Second request should hit cache
-	films2, err := svc.ListFilms(ctx)
+	films2, err := svc.ListarPublicos(ctx)
 	if err != nil {
 		t.Fatalf("Second ListFilms failed: %v", err)
 	}
@@ -276,9 +262,9 @@ func TestCacheHitMissWithRedis(t *testing.T) {
 	}
 
 	// Verify cache entry exists
-	cacheVal, err := redisClient.Get(ctx, "films:list").Result()
+	cacheVal, err := redisClient.Get(ctx, "catalogo:filmes:publicos").Result()
 	if err != nil {
-		t.Errorf("Cache miss: key 'films:list' not found: %v", err)
+		t.Errorf("Cache miss: key 'catalogo:filmes:publicos' not found: %v", err)
 	}
 	if cacheVal == "" {
 		t.Error("Cache entry is empty")
@@ -317,10 +303,10 @@ func TestGracefulDegradationRedisUnavailable(t *testing.T) {
 	})
 
 	cacheLayer := cache.NewRedisCache(redisClient, zap.NewNop())
-	svc := catalogo.NewFilmService(db.New(pool), pool, cacheLayer, zap.NewNop())
+	svc := catalogo.NovoServico(db.New(pool), pool, cacheLayer, zap.NewNop())
 
 	// Should fall back to database
-	films, err := svc.ListFilms(ctx)
+	films, err := svc.ListarPublicos(ctx)
 	if err != nil {
 		t.Fatalf("ListFilms failed even with DB fallback: %v", err)
 	}
@@ -366,10 +352,10 @@ func TestListFilmsE2E_FullStack(t *testing.T) {
 	defer redisClient.Close()
 
 	cacheLayer := cache.NewRedisCache(redisClient, zap.NewNop())
-	svc := catalogo.NewFilmService(db.New(pool), pool, cacheLayer, zap.NewNop())
+	svc := catalogo.NovoServico(db.New(pool), pool, cacheLayer, zap.NewNop())
 
 	// Full stack test: cache miss → database
-	films, err := svc.ListFilms(ctx)
+	films, err := svc.ListarPublicos(ctx)
 	if err != nil {
 		t.Fatalf("E2E ListFilms failed: %v", err)
 	}
@@ -378,10 +364,15 @@ func TestListFilmsE2E_FullStack(t *testing.T) {
 	}
 
 	// Verify first film data
-	if films[0].Title != "The Shawshank Redemption" {
-		t.Errorf("Expected first film title 'The Shawshank Redemption', got '%s'", films[0].Title)
+	// Ordem do cartaz agora é definida (criado_em DESC, id DESC — task 0011);
+	// os seeds têm o mesmo criado_em, então o assert é por presença.
+	achou := false
+	for _, f := range films {
+		if f.Titulo == "The Shawshank Redemption" && f.Ano != nil && *f.Ano == 1994 {
+			achou = true
+		}
 	}
-	if films[0].Year == nil || *films[0].Year != 1994 {
-		t.Errorf("Expected first film year 1994, got %v", films[0].Year)
+	if !achou {
+		t.Errorf("Expected 'The Shawshank Redemption' (1994) in the listing, got %+v", films)
 	}
 }

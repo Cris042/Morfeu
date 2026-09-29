@@ -77,7 +77,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// setupPostgres sobe um PG efêmero e cria o schema mínimo (films + outbox_events,
+// setupPostgres sobe um PG efêmero e aplica as migrations (filmes + outbox_events,
 // migrations 001/002; 003/004 lidas dos arquivos) — replica o padrão já usado em internal/integration_test.go.
 func setupPostgres(ctx context.Context) (testcontainers.Container, string, error) {
 	req := testcontainers.ContainerRequest{
@@ -116,40 +116,14 @@ func setupPostgres(ctx context.Context) (testcontainers.Container, string, error
 	}
 	defer pool.Close()
 
-	if _, err := pool.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS films (
-			id BIGINT PRIMARY KEY,
-			title VARCHAR(255) NOT NULL,
-			year INTEGER,
-			runtime INTEGER,
-			synopsis TEXT,
-			imdb_id VARCHAR(20),
-			poster_url VARCHAR(500),
-			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-		);
-
-		CREATE TABLE IF NOT EXISTS outbox_events (
-			id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			event_type   TEXT NOT NULL,
-			aggregate_id TEXT NOT NULL,
-			occurred_at  TIMESTAMPTZ NOT NULL,
-			payload      JSONB NOT NULL,
-			created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-			published_at TIMESTAMPTZ
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_outbox_events_pending
-			ON outbox_events (created_at)
-			WHERE published_at IS NULL;
-	`); err != nil {
-		return nil, "", fmt.Errorf("criar schema: %w", err)
-	}
-
-	// Task 0005: dedup do consumidor (003) e projeção do catálogo (004) vêm
-	// direto dos arquivos de migration — o teste exercita o DDL real.
+	// Schema inteiro pelos arquivos de migration reais (tasks 0005/0011): o
+	// teste exercita o DDL de produção, sem cópia inline.
 	for _, arq := range []string{
+		"../../migrations/001_initial_schema.up.sql",
+		"../../migrations/002_outbox_events.up.sql",
 		"../../migrations/003_processed_messages.up.sql",
 		"../../migrations/004_catalogo_filmes_projetados.up.sql",
+		"../../migrations/007_filmes.up.sql",
 	} {
 		ddl, err := os.ReadFile(arq)
 		if err != nil {
@@ -299,11 +273,12 @@ func TestCreateFilm_FilmEEventoNaMesmaTx(t *testing.T) {
 	pool := newTestPool(t)
 	ctx := context.Background()
 
-	svc := catalogo.NewFilmService(catalogodb.New(pool), pool, nil, zap.NewNop())
+	svc := catalogo.NovoServico(catalogodb.New(pool), pool, nil, zap.NewNop())
 
-	film, err := svc.CreateFilm(ctx, catalogo.CreateFilmParams{Title: "Teste CA01/CA05"})
+	duracao := int32(100)
+	film, err := svc.Criar(ctx, catalogo.DadosFilme{Titulo: "Teste CA01/CA05", DuracaoMin: &duracao})
 	if err != nil {
-		t.Fatalf("CreateFilm falhou: %v", err)
+		t.Fatalf("Criar falhou: %v", err)
 	}
 	if film.ID == 0 {
 		t.Fatal("esperava um id de filme válido")
