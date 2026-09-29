@@ -100,6 +100,7 @@ Replay de DLQ (E6); LISTEN/NOTIFY; limpeza de `outbox_events`/`processed_message
 
 ## Arquivos que serão modificados
 
+- `go.mod`/`go.sum`, `lib.md` — bump de segurança (ver Dependências).
 - `sqlc.yaml` — schema 003 no bloco outbox; 004 no bloco catalogo.
 - `internal/outbox/queries.sql`, `internal/outbox/db/queries.sql.go`, `internal/outbox/db/models.go` — query de dedup (gerado).
 - `internal/catalogo/queries.sql`, `internal/catalogo/db/queries.sql.go`, `internal/catalogo/db/models.go`, `internal/catalogo/db/querier.go` — projeção (gerado).
@@ -112,7 +113,7 @@ Total previsto: 25 (autorais ~14; gerados 5; controle 5). Real ao fechar: ver pl
 
 ## Dependências utilizadas
 
-Nenhuma nova: `amqp091-go`, `pgx/v5`, `uuid`, `zap`, `testcontainers-go` (+ rabbitmq), `goleak` — todas já no `lib.md`.
+Nenhuma nova. **Bump de segurança descoberto no CI (2026-09-29):** `amqp091-go` 1.12.0→1.15.0 (GO-2026-6372) e `golang.org/x/text` 0.37.0→0.39.0 indireta (GO-2026-5970) — advisories publicados após a 0002, afetavam a main; `lib.md` atualizado. Existentes: `amqp091-go`, `pgx/v5`, `uuid`, `zap`, `testcontainers-go` (+ rabbitmq), `goleak` — todas já no `lib.md`.
 
 ## Impactos técnicos
 
