@@ -4,14 +4,14 @@
 
 ## Estado corrente (2026-09-29)
 
-**Task 0014 — Sessões: leitura pública, mapa e cache (E3 T2): ABERTA** (branch `feature/0014-sessoes-leitura-publica`, da main `c5478a2`).
+**Task 0014 — Sessões: leitura pública, mapa e cache (E3 T2): IMPLEMENTAÇÃO COMPLETA e validada (2026-09-29); gate → PR** (branch `feature/0014-sessoes-leitura-publica`, da main `c5478a2`).
 
 ### Plano da task 0014
 
-1. Queries (pública, mapa, filtros, cancelar devolvendo filme_id) + sqlc.
-2. Service: cache `sessao:filme:{id}:futuras` TTL 60 s com refiltragem por horário, invalidação em criar/cancelar, mapa, filtros, `mesmoLayout` normalizado (auditoria 0013).
-3. Handler público + registro em todos os modos + depguard (`internal/cache`).
-4. Testes; gate.
+1. ~~Queries~~ — `ListarSessoesFuturasDoFilme` (JOIN salas, índice parcial da 008), `BuscarMapaDaSessao`, `ListarSessoesBackoffice` com `sqlc.narg` (sala, [desde, ate)), `CancelarSessao` devolvendo `filme_id`.
+2. ~~Service~~ — `ListarSessoesPublicas` (cache `sessao:filme:{id}:futuras` TTL 60 s; o que vem do cache é refiltrado por `inicio > agora`), `Mapa` (layout + `Assentos()`), `invalidarFilme` em criar/cancelar, `FiltroSessoes`, `mesmoLayout` normalizado (ordena vaos/pcd — auditoria 0013).
+3. ~~Handler/wiring~~ — `GET /filmes/:id/sessoes` (Cache-Control 30 s) e `GET /sessoes/:id/mapa` públicos, registrados em todos os modos; filtros do backoffice com 400 para inválidos; `montarSessao` recebe o cache; depguard `sessao-domain` + `internal/cache`.
+4. ~~Testes~~ — unit `mesmoLayout` (ordem ignorada, diferença real detectada, original intacto); integração (PG + Redis): lista pública em ordem sem campos de filme, cache populado/invalidado em cancelar e criar, **sessão que começa durante o TTL some da resposta servida do cache** (relógio injetado), filme sem sessões `[]`; mapa 5×8 − vão = 39 assentos com PCD, 404 p/ iniciada/cancelada/inexistente; filtros por sala/dia/combinados e 3 inválidos → 400; layout reordenado aceito com sessões futuras. Suíte completa `-race` verde; lint 0 issues; `sqlc diff` limpo.
 
 ---
 
