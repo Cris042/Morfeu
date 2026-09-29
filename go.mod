@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/golang-migrate/migrate/v4 v4.18.3
 	github.com/google/uuid v1.6.0
-	github.com/jackc/pgx/v5 v5.9.2
+	github.com/jackc/pgx/v5 v5.10.0
 	github.com/labstack/echo/v4 v4.15.0
 	github.com/moby/moby/api v1.54.2
 	github.com/rabbitmq/amqp091-go v1.15.0
