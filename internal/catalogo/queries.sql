@@ -1,41 +1,45 @@
--- name: ListFilms :many
-SELECT
-    id,
-    title,
-    year,
-    runtime,
-    synopsis,
-    imdb_id,
-    poster_url,
-    created_at
-FROM films
-ORDER BY created_at DESC
+-- name: ListarFilmesPublicos :many
+-- Cartaz público (RF02 do PRD 0011): só não arquivados.
+SELECT id, titulo, sinopse, duracao_min, ano, poster_url, imdb_id, tmdb_id
+FROM filmes
+WHERE arquivado_em IS NULL
+ORDER BY criado_em DESC, id DESC
 LIMIT 100;
 
--- name: GetFilm :one
-SELECT
-    id,
-    title,
-    year,
-    runtime,
-    synopsis,
-    imdb_id,
-    poster_url,
-    created_at
-FROM films
-WHERE id = $1;
+-- name: BuscarFilmePublico :many
+-- :many + LIMIT 1: ausência = vazio (domínio sem pgx.ErrNoRows).
+SELECT id, titulo, sinopse, duracao_min, ano, poster_url, imdb_id, tmdb_id
+FROM filmes
+WHERE id = $1 AND arquivado_em IS NULL
+LIMIT 1;
 
--- name: InsertFilm :one
--- Usada por CreateFilm (RF02/task 0002): o subcomando CLI criar-filme insere o
--- filme e enfileira catalogo.filme_criado na mesma TX via outbox.Enqueue.
--- films.id é BIGINT sem identity/sequence (schema da migration 001); o próximo
--- id é calculado por MAX(id)+1 dentro do próprio statement — simplificação
--- aceitável para uma ferramenta de operador único (CLI, sem concorrência real);
--- colisão eventual é reportada como erro de constraint (exit code != 0 na CLI).
-INSERT INTO films (id, title, year, runtime, synopsis)
-SELECT COALESCE(MAX(id), 0) + 1, $1, $2, $3, $4
-FROM films
-RETURNING id, title, year, runtime, synopsis, imdb_id, poster_url, created_at;
+-- name: ListarFilmesBackoffice :many
+-- Backoffice (RF03): inclui arquivados.
+SELECT id, titulo, sinopse, duracao_min, ano, poster_url, imdb_id, tmdb_id, arquivado_em
+FROM filmes
+ORDER BY criado_em DESC, id DESC
+LIMIT 500;
+
+-- name: InserirFilme :one
+-- id por IDENTITY (migration 007). Usada pelo backoffice e pela CLI na mesma
+-- TX do evento catalogo.filme_criado (outbox).
+INSERT INTO filmes (titulo, sinopse, duracao_min, ano, poster_url, imdb_id)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, titulo, sinopse, duracao_min, ano, poster_url, imdb_id, tmdb_id;
+
+-- name: AtualizarFilme :many
+-- Substitui os campos editáveis (RF03). tmdb_id não é editável à mão.
+UPDATE filmes
+SET titulo = $2, sinopse = $3, duracao_min = $4, ano = $5,
+    poster_url = $6, imdb_id = $7, atualizado_em = now()
+WHERE id = $1
+RETURNING id, titulo, sinopse, duracao_min, ano, poster_url, imdb_id, tmdb_id;
+
+-- name: ArquivarFilme :execrows
+-- Idempotente: reaplicar mantém a data original (COALESCE); 0 linhas = inexistente.
+UPDATE filmes
+SET arquivado_em = COALESCE(arquivado_em, now()), atualizado_em = now()
+WHERE id = $1;
 
 -- name: UpsertFilmeProjetado :exec
 -- Projeção de catalogo.filme_criado (RF07, task 0005). Roda dentro da TX do

@@ -5,24 +5,27 @@
 package db
 
 import (
-	"github.com/jackc/pgx/v5/pgtype"
+	"time"
 )
 
 type CatalogoFilmesProjetado struct {
-	FilmID      int64              `db:"film_id"`
-	Titulo      string             `db:"titulo"`
-	Ano         *int32             `db:"ano"`
-	Aplicacoes  int32              `db:"aplicacoes"`
-	ProjetadoEm pgtype.Timestamptz `db:"projetado_em"`
+	FilmID      int64     `db:"film_id"`
+	Titulo      string    `db:"titulo"`
+	Ano         *int32    `db:"ano"`
+	Aplicacoes  int32     `db:"aplicacoes"`
+	ProjetadoEm time.Time `db:"projetado_em"`
 }
 
-type Film struct {
-	ID        int64            `db:"id"`
-	Title     string           `db:"title"`
-	Year      *int32           `db:"year"`
-	Runtime   *int32           `db:"runtime"`
-	Synopsis  *string          `db:"synopsis"`
-	ImdbID    *string          `db:"imdb_id"`
-	PosterUrl *string          `db:"poster_url"`
-	CreatedAt pgtype.Timestamp `db:"created_at"`
+type Filme struct {
+	ID           int64      `db:"id"`
+	Titulo       string     `db:"titulo"`
+	Ano          *int32     `db:"ano"`
+	DuracaoMin   *int32     `db:"duracao_min"`
+	Sinopse      *string    `db:"sinopse"`
+	ImdbID       *string    `db:"imdb_id"`
+	PosterUrl    *string    `db:"poster_url"`
+	CriadoEm     time.Time  `db:"criado_em"`
+	TmdbID       *int64     `db:"tmdb_id"`
+	ArquivadoEm  *time.Time `db:"arquivado_em"`
+	AtualizadoEm time.Time  `db:"atualizado_em"`
 }

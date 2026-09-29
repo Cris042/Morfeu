@@ -7,7 +7,90 @@ package db
 
 import (
 	"context"
+	"time"
 )
+
+const arquivarFilme = `-- name: ArquivarFilme :execrows
+UPDATE filmes
+SET arquivado_em = COALESCE(arquivado_em, now()), atualizado_em = now()
+WHERE id = $1
+`
+
+// Idempotente: reaplicar mantém a data original (COALESCE); 0 linhas = inexistente.
+func (q *Queries) ArquivarFilme(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.Exec(ctx, arquivarFilme, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const atualizarFilme = `-- name: AtualizarFilme :many
+UPDATE filmes
+SET titulo = $2, sinopse = $3, duracao_min = $4, ano = $5,
+    poster_url = $6, imdb_id = $7, atualizado_em = now()
+WHERE id = $1
+RETURNING id, titulo, sinopse, duracao_min, ano, poster_url, imdb_id, tmdb_id
+`
+
+type AtualizarFilmeParams struct {
+	ID         int64   `db:"id"`
+	Titulo     string  `db:"titulo"`
+	Sinopse    *string `db:"sinopse"`
+	DuracaoMin *int32  `db:"duracao_min"`
+	Ano        *int32  `db:"ano"`
+	PosterUrl  *string `db:"poster_url"`
+	ImdbID     *string `db:"imdb_id"`
+}
+
+type AtualizarFilmeRow struct {
+	ID         int64   `db:"id"`
+	Titulo     string  `db:"titulo"`
+	Sinopse    *string `db:"sinopse"`
+	DuracaoMin *int32  `db:"duracao_min"`
+	Ano        *int32  `db:"ano"`
+	PosterUrl  *string `db:"poster_url"`
+	ImdbID     *string `db:"imdb_id"`
+	TmdbID     *int64  `db:"tmdb_id"`
+}
+
+// Substitui os campos editáveis (RF03). tmdb_id não é editável à mão.
+func (q *Queries) AtualizarFilme(ctx context.Context, arg AtualizarFilmeParams) ([]AtualizarFilmeRow, error) {
+	rows, err := q.db.Query(ctx, atualizarFilme,
+		arg.ID,
+		arg.Titulo,
+		arg.Sinopse,
+		arg.DuracaoMin,
+		arg.Ano,
+		arg.PosterUrl,
+		arg.ImdbID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AtualizarFilmeRow
+	for rows.Next() {
+		var i AtualizarFilmeRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Titulo,
+			&i.Sinopse,
+			&i.DuracaoMin,
+			&i.Ano,
+			&i.PosterUrl,
+			&i.ImdbID,
+			&i.TmdbID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
 
 const buscarFilmeProjetado = `-- name: BuscarFilmeProjetado :one
 SELECT film_id, titulo, ano, aplicacoes, projetado_em
@@ -28,110 +111,193 @@ func (q *Queries) BuscarFilmeProjetado(ctx context.Context, filmID int64) (Catal
 	return i, err
 }
 
-const getFilm = `-- name: GetFilm :one
-SELECT
-    id,
-    title,
-    year,
-    runtime,
-    synopsis,
-    imdb_id,
-    poster_url,
-    created_at
-FROM films
-WHERE id = $1
+const buscarFilmePublico = `-- name: BuscarFilmePublico :many
+SELECT id, titulo, sinopse, duracao_min, ano, poster_url, imdb_id, tmdb_id
+FROM filmes
+WHERE id = $1 AND arquivado_em IS NULL
+LIMIT 1
 `
 
-func (q *Queries) GetFilm(ctx context.Context, id int64) (Film, error) {
-	row := q.db.QueryRow(ctx, getFilm, id)
-	var i Film
-	err := row.Scan(
-		&i.ID,
-		&i.Title,
-		&i.Year,
-		&i.Runtime,
-		&i.Synopsis,
-		&i.ImdbID,
-		&i.PosterUrl,
-		&i.CreatedAt,
-	)
-	return i, err
+type BuscarFilmePublicoRow struct {
+	ID         int64   `db:"id"`
+	Titulo     string  `db:"titulo"`
+	Sinopse    *string `db:"sinopse"`
+	DuracaoMin *int32  `db:"duracao_min"`
+	Ano        *int32  `db:"ano"`
+	PosterUrl  *string `db:"poster_url"`
+	ImdbID     *string `db:"imdb_id"`
+	TmdbID     *int64  `db:"tmdb_id"`
 }
 
-const insertFilm = `-- name: InsertFilm :one
-INSERT INTO films (id, title, year, runtime, synopsis)
-SELECT COALESCE(MAX(id), 0) + 1, $1, $2, $3, $4
-FROM films
-RETURNING id, title, year, runtime, synopsis, imdb_id, poster_url, created_at
-`
-
-type InsertFilmParams struct {
-	Title    string  `db:"title"`
-	Year     *int32  `db:"year"`
-	Runtime  *int32  `db:"runtime"`
-	Synopsis *string `db:"synopsis"`
-}
-
-// Usada por CreateFilm (RF02/task 0002): o subcomando CLI criar-filme insere o
-// filme e enfileira catalogo.filme_criado na mesma TX via outbox.Enqueue.
-// films.id é BIGINT sem identity/sequence (schema da migration 001); o próximo
-// id é calculado por MAX(id)+1 dentro do próprio statement — simplificação
-// aceitável para uma ferramenta de operador único (CLI, sem concorrência real);
-// colisão eventual é reportada como erro de constraint (exit code != 0 na CLI).
-func (q *Queries) InsertFilm(ctx context.Context, arg InsertFilmParams) (Film, error) {
-	row := q.db.QueryRow(ctx, insertFilm,
-		arg.Title,
-		arg.Year,
-		arg.Runtime,
-		arg.Synopsis,
-	)
-	var i Film
-	err := row.Scan(
-		&i.ID,
-		&i.Title,
-		&i.Year,
-		&i.Runtime,
-		&i.Synopsis,
-		&i.ImdbID,
-		&i.PosterUrl,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const listFilms = `-- name: ListFilms :many
-SELECT
-    id,
-    title,
-    year,
-    runtime,
-    synopsis,
-    imdb_id,
-    poster_url,
-    created_at
-FROM films
-ORDER BY created_at DESC
-LIMIT 100
-`
-
-func (q *Queries) ListFilms(ctx context.Context) ([]Film, error) {
-	rows, err := q.db.Query(ctx, listFilms)
+// :many + LIMIT 1: ausência = vazio (domínio sem pgx.ErrNoRows).
+func (q *Queries) BuscarFilmePublico(ctx context.Context, id int64) ([]BuscarFilmePublicoRow, error) {
+	rows, err := q.db.Query(ctx, buscarFilmePublico, id)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Film
+	var items []BuscarFilmePublicoRow
 	for rows.Next() {
-		var i Film
+		var i BuscarFilmePublicoRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.Title,
-			&i.Year,
-			&i.Runtime,
-			&i.Synopsis,
-			&i.ImdbID,
+			&i.Titulo,
+			&i.Sinopse,
+			&i.DuracaoMin,
+			&i.Ano,
 			&i.PosterUrl,
-			&i.CreatedAt,
+			&i.ImdbID,
+			&i.TmdbID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const inserirFilme = `-- name: InserirFilme :one
+INSERT INTO filmes (titulo, sinopse, duracao_min, ano, poster_url, imdb_id)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, titulo, sinopse, duracao_min, ano, poster_url, imdb_id, tmdb_id
+`
+
+type InserirFilmeParams struct {
+	Titulo     string  `db:"titulo"`
+	Sinopse    *string `db:"sinopse"`
+	DuracaoMin *int32  `db:"duracao_min"`
+	Ano        *int32  `db:"ano"`
+	PosterUrl  *string `db:"poster_url"`
+	ImdbID     *string `db:"imdb_id"`
+}
+
+type InserirFilmeRow struct {
+	ID         int64   `db:"id"`
+	Titulo     string  `db:"titulo"`
+	Sinopse    *string `db:"sinopse"`
+	DuracaoMin *int32  `db:"duracao_min"`
+	Ano        *int32  `db:"ano"`
+	PosterUrl  *string `db:"poster_url"`
+	ImdbID     *string `db:"imdb_id"`
+	TmdbID     *int64  `db:"tmdb_id"`
+}
+
+// id por IDENTITY (migration 007). Usada pelo backoffice e pela CLI na mesma
+// TX do evento catalogo.filme_criado (outbox).
+func (q *Queries) InserirFilme(ctx context.Context, arg InserirFilmeParams) (InserirFilmeRow, error) {
+	row := q.db.QueryRow(ctx, inserirFilme,
+		arg.Titulo,
+		arg.Sinopse,
+		arg.DuracaoMin,
+		arg.Ano,
+		arg.PosterUrl,
+		arg.ImdbID,
+	)
+	var i InserirFilmeRow
+	err := row.Scan(
+		&i.ID,
+		&i.Titulo,
+		&i.Sinopse,
+		&i.DuracaoMin,
+		&i.Ano,
+		&i.PosterUrl,
+		&i.ImdbID,
+		&i.TmdbID,
+	)
+	return i, err
+}
+
+const listarFilmesBackoffice = `-- name: ListarFilmesBackoffice :many
+SELECT id, titulo, sinopse, duracao_min, ano, poster_url, imdb_id, tmdb_id, arquivado_em
+FROM filmes
+ORDER BY criado_em DESC, id DESC
+LIMIT 500
+`
+
+type ListarFilmesBackofficeRow struct {
+	ID          int64      `db:"id"`
+	Titulo      string     `db:"titulo"`
+	Sinopse     *string    `db:"sinopse"`
+	DuracaoMin  *int32     `db:"duracao_min"`
+	Ano         *int32     `db:"ano"`
+	PosterUrl   *string    `db:"poster_url"`
+	ImdbID      *string    `db:"imdb_id"`
+	TmdbID      *int64     `db:"tmdb_id"`
+	ArquivadoEm *time.Time `db:"arquivado_em"`
+}
+
+// Backoffice (RF03): inclui arquivados.
+func (q *Queries) ListarFilmesBackoffice(ctx context.Context) ([]ListarFilmesBackofficeRow, error) {
+	rows, err := q.db.Query(ctx, listarFilmesBackoffice)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListarFilmesBackofficeRow
+	for rows.Next() {
+		var i ListarFilmesBackofficeRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Titulo,
+			&i.Sinopse,
+			&i.DuracaoMin,
+			&i.Ano,
+			&i.PosterUrl,
+			&i.ImdbID,
+			&i.TmdbID,
+			&i.ArquivadoEm,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listarFilmesPublicos = `-- name: ListarFilmesPublicos :many
+SELECT id, titulo, sinopse, duracao_min, ano, poster_url, imdb_id, tmdb_id
+FROM filmes
+WHERE arquivado_em IS NULL
+ORDER BY criado_em DESC, id DESC
+LIMIT 100
+`
+
+type ListarFilmesPublicosRow struct {
+	ID         int64   `db:"id"`
+	Titulo     string  `db:"titulo"`
+	Sinopse    *string `db:"sinopse"`
+	DuracaoMin *int32  `db:"duracao_min"`
+	Ano        *int32  `db:"ano"`
+	PosterUrl  *string `db:"poster_url"`
+	ImdbID     *string `db:"imdb_id"`
+	TmdbID     *int64  `db:"tmdb_id"`
+}
+
+// Cartaz público (RF02 do PRD 0011): só não arquivados.
+func (q *Queries) ListarFilmesPublicos(ctx context.Context) ([]ListarFilmesPublicosRow, error) {
+	rows, err := q.db.Query(ctx, listarFilmesPublicos)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListarFilmesPublicosRow
+	for rows.Next() {
+		var i ListarFilmesPublicosRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Titulo,
+			&i.Sinopse,
+			&i.DuracaoMin,
+			&i.Ano,
+			&i.PosterUrl,
+			&i.ImdbID,
+			&i.TmdbID,
 		); err != nil {
 			return nil, err
 		}
