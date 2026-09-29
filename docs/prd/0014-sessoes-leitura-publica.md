@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0014-sessoes-leitura-publica.md
 - **Branch:** feature/0014-sessoes-leitura-publica
 - **Data:** 2026-09-29
-- **Status:** ativo
+- **Status:** concluído
 
 ## Objetivo
 

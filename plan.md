@@ -4,7 +4,13 @@
 
 ## Estado corrente (2026-09-29)
 
-**Task 0014 — Sessões: leitura pública, mapa e cache (E3 T2): IMPLEMENTAÇÃO COMPLETA e validada (2026-09-29); gate → PR** (branch `feature/0014-sessoes-leitura-publica`, da main `c5478a2`).
+**Chore — refinamento do E4 + ADR 0008** (branch `chore/e4-refinamento-adr-0008`, da main `fea38b1`; só documentação — §6.14.6). Registra `docs/refinamentos/E4-reserva.md` (5 pareceres, debate, 3 respostas do usuário), `docs/adr/0008-trava-de-assento.md`, roadmap (E3 ✅, E4 em andamento) e fecha o status da 0014. Próximo: task 0015 (E4 T1 — trava de assento).
+
+---
+
+### Task 0014 — Sessões: leitura pública, mapa e cache: CONCLUÍDA e MERGEADA (PR #39, `fea38b1`)
+
+Auditoria APROVADA (2026-09-29); não-bloqueante: arquivar filme não invalida o cache de sessões públicas (defasagem ≤ 60 s) → E5.
 
 ### Plano da task 0014
 
