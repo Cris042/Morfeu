@@ -4,9 +4,28 @@
 
 ## Estado corrente (2026-09-29)
 
+**Task 0007 — Stack de observabilidade (E0d, parte 2/2): IMPLEMENTAÇÃO COMPLETA e validada localmente (2026-09-29); gate → PR** (branch `chore/0007-stack-observabilidade`, criada da main pós-0006 `02831dc`; task `docs/tasks/0007-stack-observabilidade.md`). Com ela o E0 fecha, exceto a E0c-CD (VM Oracle).
+
+### Plano da task 0007
+
+1. ~~PRD 0007~~ — `76af745` (Context7 `/grafana/loki`, `/grafana/alloy`; imagens pinadas + arm64 verificado no lib.md).
+2. ~~Compose~~ — `8c55094`: `docker-compose.observability.yml` (só Grafana publica, 127.0.0.1; `mem_limit` por serviço); app no compose dev (profile `app`, `depends_on: service_healthy` — exigência herdada da 0005 cumprida); `rabbitmq_prometheus`; init `pg_monitor`; `.env.observability.example`; `make obs-up/obs-down`.
+3. ~~Prometheus/Loki/Alloy~~ — `86986d7`: 8 jobs (incl. `/metrics/detailed` p/ filas); Loki 14d via compactor + limites (sem retenção por tamanho nativa — desvio registrado no PRD); Alloy só projetos `morfeu*`, labels `container`/`service`.
+4. ~~Grafana~~ — `738c49e`: datasources `prometheus`/`loki`, 3 dashboards (API golden signals, Infra USE, Mensageria), 6 alertas (lista fechada) → contact point Discord via env.
+5. ~~Teste + runbook~~ — `aba6e26`: `test/observabilidade` (Prometheus+promtool, Loki ready, Alloy fmt, Grafana provisioning via API: 3 dashboards/2 datasources/6 regras/contact point/401 anônimo; compose só publica Grafana) — **5/5 verdes**; `docs/observabilidade.md`.
+6. ~~Verificação manual (CA05)~~ — stack completa em projeto isolado `morfeu-verif` (override sem portas publicadas: o host já tinha 5432/5672/3000/9090 ocupados por outro projeto do usuário, que não foi tocado; senhas aleatórias descartáveis): **8/8 targets up**; golden signals por rota (`/filmes` 200×3; 404 sem label de path); `criar-filme` → log "mensagem consumida" no Loki com `trace_id`; 3 dashboards; **6 regras avaliando sem erro** (todas inactive). Ajustes descobertos: node-exporter sem `rslave` (WSL), regex do Alloy `morfeu.*`. Stack e volumes de verificação removidos. golangci-lint 0 issues. Diff: 29 arquivos.
+7. **Auditoria APROVADA (2026-09-29)** — passe único (`qa`): itens 1–5, 7, 9, 10, 13 conformes (PromQL dos alertas revisado). Não-bloqueantes aplicados: poll com deadline também p/ alert-rules/contact-points e `t.Parallel()` nos 4 testes de container (suíte 23s com imagens em cache). Registrados: desvio da retenção por tamanho do Loki (PRD RF03); cAdvisor monta `/var/run` inteiro (padrão da imagem — revisar no hardening pós-E0c-CD). PR #31.
+8. Merge após CI verde (aguardando autorização do usuário).
+
+---
+
 **Task 0006 — Instrumentação da app: OTel + /metrics + logs correlacionados (E0d, parte 1/2): IMPLEMENTAÇÃO COMPLETA e validada localmente (2026-09-29); gate → PR** (branch `feature/0006-instrumentacao-otel-metricas`, criada da main pós-0005 `c35957d`; task `docs/tasks/0006-instrumentacao-otel-metricas.md`). E0d dividida (§6.3): 0006 = app Go, 0007 = stack de observabilidade. E0c-CD bloqueada pela VM Oracle (confirmado pelo usuário 2026-09-29).
 
-### Plano da task 0006
+### Task 0006 — Instrumentação da app (E0d 1/2): CONCLUÍDA e MERGEADA (histórico)
+
+**Merge `02831dc` (PR #30, 2026-09-29).**
+
+#### Plano executado da task 0006
 
 1. ~~PRD 0006~~ — `8c58a5a` `docs/prd/0006-instrumentacao-otel-metricas.md` + lib.md (OTel core/SDK 1.46.0, exporter Prometheus 0.68.0, client_golang 1.24.1, otelecho **0.70.0** — 0.71 depreca o módulo em favor de `echo-otel/v4` v4.0.0 de 1 dia; débito registrado —, otelpgx 0.12.0; echo 4.15.0→4.15.4 por arrasto). Desvio registrado: "100% erros" exige tail sampling → fica p/ o collector/Tempo (E6/E10).
 2. ~~`internal/telemetria`~~ — `db802f8`: TracerProvider `ParentBased(TraceIDRatio 0.1)` + `ExporterDescarte`; MeterProvider → exporter Prometheus em registry dedicado (sem scope/target info); **view com allowlist de atributos** (`http.route`, método, status, `fila`) — cardinalidade garantida no SDK, não só no teste; `MiddlewareHTTP` (otelecho, skip `/metrics` e `/health`); gauges `morfeu_outbox_pendentes`, `morfeu_outbox_lag_segundos`, `morfeu_dlq_mensagens{fila}` no scrape.

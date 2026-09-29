@@ -1,0 +1,193 @@
+# Alertas mínimos (task 0007, RF06) — lista FECHADA do refinamento E0d.
+# Grafana-managed; roteados ao Discord. Webhook só via env ($DISCORD_WEBHOOK_URL).
+# Cada regra segue o padrão A (query instantânea) → C (threshold). Nova regra
+# exige atualizar o PRD — a lista é fechada ("sem mais um alerta").
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: discord-morfeu
+    receivers:
+      - uid: discord-morfeu
+        type: discord
+        settings:
+          url: $DISCORD_WEBHOOK_URL
+          use_discord_username: false
+        disableResolveMessage: false
+
+policies:
+  - orgId: 1
+    receiver: discord-morfeu
+    group_by: ["grafana_folder", "alertname"]
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h
+
+groups:
+  - orgId: 1
+    name: morfeu
+    folder: Morfeu
+    interval: 1m
+    rules:
+      - uid: morfeu-disco-80
+        title: "Disco acima de 80%"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 900, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: '1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay",mountpoint="/"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay",mountpoint="/"})'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0.8]}
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disco acima de 80%"
+          description: "Disco da VM acima de 80% — risco nº 1 (Loki/Prometheus/PG no mesmo disco)."
+      - uid: morfeu-api-fora
+        title: "API fora do ar"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 900, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'max(up{job="morfeu"}) or vector(0)'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: lt, params: [1]}
+        for: 2m
+        noDataState: Alerting
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "API fora do ar"
+          description: "Prometheus não consegue raspar o /metrics do app."
+      - uid: morfeu-erro-5xx
+        title: "Taxa de erro 5xx acima de 5%"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 900, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~"5.."}[5m])) / clamp_min(sum(rate(http_server_request_duration_seconds_count[5m])), 1e-9)'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0.05]}
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "Taxa de erro 5xx acima de 5%"
+          description: "Limite provisório até o SLO formal do E10."
+      - uid: morfeu-dlq-crescendo
+        title: "DLQ crescendo"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 900, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'max(delta(morfeu_dlq_mensagens[15m]))'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "DLQ crescendo"
+          description: "Mensagens novas na DLQ nos últimos 15 minutos — investigar (replay só no E6)."
+      - uid: morfeu-consumidor-parado
+        title: "Consumidor parado"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 900, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'max(rabbitmq_detailed_queue_messages_ready{queue="catalogo.filme_criado"}) > 0 and on() max(rabbitmq_detailed_queue_consumers{queue="catalogo.filme_criado"}) == 0'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "Consumidor parado"
+          description: "Há mensagens prontas em catalogo.filme_criado e nenhum consumidor conectado."
+      - uid: morfeu-pg-conexoes
+        title: "Conexões do PostgreSQL acima de 80%"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 900, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'sum(pg_stat_activity_count) / max(pg_settings_max_connections)'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0.8]}
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "Conexões do PostgreSQL acima de 80%"
+          description: "Pool/conexões perto do limite de max_connections."

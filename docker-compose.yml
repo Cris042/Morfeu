@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -11,6 +9,9 @@ services:
       - "5432:5432"
     volumes:
       - morfeu-postgres:/var/lib/postgresql/data
+      # Usuário de leitura mínima do postgres-exporter (task 0007). Só roda em
+      # volume novo — volume existente: ver docs/observabilidade.md.
+      - ./configs/postgres/01-usuario-monitoracao.sh:/docker-entrypoint-initdb.d/01-usuario-monitoracao.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -46,11 +47,36 @@ services:
     volumes:
       - morfeu-rabbitmq:/var/lib/rabbitmq
       - ./configs/rabbitmq.conf:/etc/rabbitmq/conf.d/10-morfeu.conf:ro
+      # management + rabbitmq_prometheus (:15692, só na rede interna — task 0007).
+      - ./configs/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - morfeu-network
+
+  # App no compose (profile "app", task 0007): `docker compose --profile app up`.
+  # Sem profile, `docker compose up` segue subindo só a infra (dev com `go run`).
+  # Sem porta publicada além da 8080 local; /metrics só é raspado pela rede
+  # interna. Imagem scratch não tem shell → sem healthcheck próprio.
+  app:
+    build: .
+    image: morfeu:dev
+    container_name: morfeu-app
+    profiles: ["app"]
+    command: ["-mode=all"]
+    env_file: .env.docker-compose
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks:
       - morfeu-network
 

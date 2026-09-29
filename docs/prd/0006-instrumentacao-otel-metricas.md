@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0006-instrumentacao-otel-metricas.md
 - **Branch:** feature/0006-instrumentacao-otel-metricas
 - **Data:** 2026-09-29
-- **Status:** ativo
+- **Status:** concluído
 
 ## Objetivo
 
