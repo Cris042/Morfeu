@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0007-stack-observabilidade.md
 - **Branch:** chore/0007-stack-observabilidade
 - **Data:** 2026-09-29
-- **Status:** ativo
+- **Status:** concluído
 
 ## Objetivo
 

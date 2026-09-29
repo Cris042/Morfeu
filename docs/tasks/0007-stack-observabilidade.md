@@ -1,7 +1,7 @@
 # Task 0007 — Stack de observabilidade: Prometheus + exporters + Alloy/Loki + Grafana + alertas (E0d, parte 2/2)
 
 - **Data:** 2026-09-29
-- **Status:** em andamento
+- **Status:** concluída (merge `757851f`, PR #31, 2026-09-29)
 - **Branch:** `chore/0007-stack-observabilidade`
 - **PRD:** docs/prd/0007-stack-observabilidade.md — criar antes de implementar (just-in-time, §6.2.5)
 - **Item do roadmap:** E0d — observabilidade base (parte 2/2; divisão registrada na task 0006). Fecha o E0 exceto a E0c-CD (bloqueada pela VM Oracle).

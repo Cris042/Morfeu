@@ -4,15 +4,15 @@
 
 ## Estado corrente (2026-09-29)
 
-**Task 0009 — Identidade: usuário, registro, login, seed (E1 T1 2/2): ABERTA; PRD a criar** (branch `feature/0009-identidade-registro-login`, empilhada sobre 0008 → 0007 enquanto os PRs #31/#32 aguardam autorização de merge).
+**Task 0009 — Identidade: usuário, registro, login, seed (E1 T1 2/2): IMPLEMENTAÇÃO COMPLETA e validada (2026-09-29); gate → PR** (branch `feature/0009-identidade-registro-login`, empilhada sobre a 0008). **0007 mergeada** (PR #31, `757851f`); **0008 em PR #33** (reaberto do #32, fechado automaticamente pelo GitHub quando a branch-base da 0007 foi apagada — lição: retargetar PRs empilhados ANTES de apagar a base).
 
 ### Plano da task 0009
 
-1. PRD 0009 (refinamento E1 §T1, parte de módulo); x/crypto direta no lib.md.
-2. Migration 005 `usuario` + sqlc (queries sem `pgx.ErrNoRows`: `:execrows`/`:many` — domínio não importa o driver).
-3. `internal/identidade`: Argon2id (PHC), registro, login (anti-enumeração, limitadores conta/IP, semáforo, métricas), `SeedOperador`, handlers `/auth/*`.
-4. Wiring: config JWT/Argon2, `IPExtractor` direto (sem proxy até a E0c-CD), CLI `seed-operador`, smoke do CI com `JWT_SEGREDO`; depguard `identidade`.
-5. Testes (unit + integração PG/Redis); lint; -race; gate.
+1. ~~PRD 0009~~ — `docs/prd/0009-identidade-registro-login.md`; `x/crypto` direta **v0.55.0** (a 0.56.0 exige Go 1.26 e subiria o toolchain — revertido ao notar o bump do `go` no go.mod).
+2. ~~Migration 005 + sqlc~~ — `usuario` (UNIQUE + CHECK minúsculo + CHECK papel); queries `:execrows` (ON CONFLICT) e `:many`+LIMIT 1 — domínio sem `pgx.ErrNoRows`; override uuid→`google/uuid`.
+3. ~~Módulo~~ — `senha.go` (Argon2id PHC, parâmetros lidos do hash, comparação constante, senha aleatória sem viés), `service.go` (registro c/ limite por IP + semáforo; login: limitadores conta/IP → semáforo → hash real **ou dummy** → falha idêntica; `SeedOperador` como função de pacote — CLI não precisa de emissor/limitadores), `handler.go` (`/auth/registro|login|eu`, BodyLimit 16K, `Cache-Control: no-store`, JSON malformado sem eco), `errors.go`.
+4. ~~Wiring~~ — `montarIdentidade` (só em api|all; `ValidarAutenticacao` fatal sem `JWT_SEGREDO` ≥ 32 B), `IPExtractor` direto, limitadores `morfeu:auth:{conta,ip,registro}:`, CLI `seed-operador`; config Argon2/HASH_CONCORRENCIA com faixas; smoke do CI com segredo efêmero; env examples; depguard `identidade-domain` (strict) + `identidade-isolada`.
+5. ~~Testes~~ — unit (PHC, malformados, salts, senha aleatória, validação) + integração PG/Redis pelas rotas: registro (papel ignorado, duplicado por caixa, 400 por campo), login + `/auth/eu`, **contrato anti-enumeração** (corpo/headers idênticos + hash nos 2 ramos por contador), limites conta/IP/reset, semáforo, seed idempotente + nenhuma rota cria operador, senha/e-mail nunca nos logs. Suíte completa `-race` verde; golangci-lint 0 issues; `sqlc diff` limpo.
 
 ---
 
