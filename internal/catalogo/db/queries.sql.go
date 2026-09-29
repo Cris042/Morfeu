@@ -92,6 +92,37 @@ func (q *Queries) AtualizarFilme(ctx context.Context, arg AtualizarFilmeParams) 
 	return items, nil
 }
 
+const buscarDuracaoFilme = `-- name: BuscarDuracaoFilme :many
+SELECT duracao_min, arquivado_em FROM filmes WHERE id = $1 LIMIT 1
+`
+
+type BuscarDuracaoFilmeRow struct {
+	DuracaoMin  *int32     `db:"duracao_min"`
+	ArquivadoEm *time.Time `db:"arquivado_em"`
+}
+
+// Porta para o módulo sessao (PRD 0013 RF06): o sessao não lê filmes — o
+// catálogo responde se o filme existe, está ativo e qual a duração.
+func (q *Queries) BuscarDuracaoFilme(ctx context.Context, id int64) ([]BuscarDuracaoFilmeRow, error) {
+	rows, err := q.db.Query(ctx, buscarDuracaoFilme, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []BuscarDuracaoFilmeRow
+	for rows.Next() {
+		var i BuscarDuracaoFilmeRow
+		if err := rows.Scan(&i.DuracaoMin, &i.ArquivadoEm); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const buscarFilmeProjetado = `-- name: BuscarFilmeProjetado :one
 SELECT film_id, titulo, ano, aplicacoes, projetado_em
 FROM catalogo_filmes_projetados

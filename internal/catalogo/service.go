@@ -136,6 +136,20 @@ func (s *Servico) ListarBackoffice(ctx context.Context) ([]Filme, error) {
 	return filmes, nil
 }
 
+// DuracaoFilmeAtivo implementa a porta sessao.FonteFilmes (PRD 0013 RF06):
+// o módulo sessao pergunta a duração de um filme sem ler a tabela filmes.
+// ok=false quando o filme não existe, está arquivado ou não tem duração.
+func (s *Servico) DuracaoFilmeAtivo(ctx context.Context, filmeID int64) (int32, bool, error) {
+	linhas, err := s.q.BuscarDuracaoFilme(ctx, filmeID)
+	if err != nil {
+		return 0, false, fmt.Errorf("catalogo: duração do filme: %w", err)
+	}
+	if len(linhas) == 0 || linhas[0].ArquivadoEm != nil || linhas[0].DuracaoMin == nil || *linhas[0].DuracaoMin <= 0 {
+		return 0, false, nil
+	}
+	return *linhas[0].DuracaoMin, true, nil
+}
+
 // Criar insere o filme e enfileira catalogo.filme_criado na MESMA TX (PRD
 // 0002 RN01) e invalida o cartaz após o commit (RF05).
 func (s *Servico) Criar(ctx context.Context, dados DadosFilme) (Filme, error) {
