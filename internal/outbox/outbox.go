@@ -104,3 +104,14 @@ func Pendentes(ctx context.Context, pool Pool) (int64, error) {
 	}
 	return count, nil
 }
+
+// LagSegundos devolve a idade, em segundos, do evento pendente mais antigo
+// (0 se não há pendentes) — fonte do gauge morfeu_outbox_lag_segundos
+// (RF04 do PRD 0006): mede quanto o relay está atrasado.
+func LagSegundos(ctx context.Context, pool Pool) (float64, error) {
+	idade, err := db.New(pool).IdadePendenteMaisAntigo(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("outbox: idade do pendente mais antigo: %w", err)
+	}
+	return idade, nil
+}
