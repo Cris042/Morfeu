@@ -1,0 +1,143 @@
+# Stack de observabilidade (task 0007, refinamento E0 §"Task E0d").
+# Arquivo separado, incluído sob demanda por cima do compose base:
+#   docker compose -f docker-compose.yml -f docker-compose.observability.yml --profile app up -d
+# (atalho: make obs-up). Segredos só via .env.observability (gitignored).
+#
+# Regra de exposição (doc.md §14.5): SÓ o Grafana publica porta, e em
+# 127.0.0.1. Prometheus, Loki, Alloy e exporters ficam na rede interna.
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    container_name: morfeu-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --storage.tsdb.retention.size=1GB
+    volumes:
+      - ./configs/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - morfeu-prometheus:/prometheus
+    mem_limit: 512m
+    restart: unless-stopped
+    networks:
+      - morfeu-network
+
+  loki:
+    image: grafana/loki:3.7.8
+    container_name: morfeu-loki
+    command: ["-config.file=/etc/loki/loki.yml"]
+    volumes:
+      - ./configs/loki/loki.yml:/etc/loki/loki.yml:ro
+      - morfeu-loki:/loki
+    mem_limit: 384m
+    restart: unless-stopped
+    networks:
+      - morfeu-network
+
+  alloy:
+    image: grafana/alloy:v1.20.1
+    container_name: morfeu-alloy
+    command: ["run", "--storage.path=/var/lib/alloy/data", "/etc/alloy/config.alloy"]
+    volumes:
+      - ./configs/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      # Socket read-only: descoberta e leitura de logs dos containers.
+      # Acesso ao socket ≈ root no host — risco residual aceito (sem porta publicada).
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - loki
+    mem_limit: 256m
+    restart: unless-stopped
+    networks:
+      - morfeu-network
+
+  grafana:
+    image: grafana/grafana:13.2.3
+    container_name: morfeu-grafana
+    env_file: .env.observability
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_DISABLE_LOGIN_FORM: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./configs/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./configs/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - morfeu-grafana:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - loki
+    mem_limit: 256m
+    restart: unless-stopped
+    networks:
+      - morfeu-network
+
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    container_name: morfeu-node-exporter
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run|var/lib/docker/.+)($$|/)
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    mem_limit: 64m
+    restart: unless-stopped
+    networks:
+      - morfeu-network
+
+  cadvisor:
+    image: ghcr.io/google/cadvisor:v0.60.6
+    container_name: morfeu-cadvisor
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=30s
+      - --store_container_labels=false
+      - --disable_metrics=advtcp,cpu_topology,cpuset,hugetlb,memory_numa,percpu,process,referenced_memory,resctrl,sched,tcp,udp
+    privileged: false
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    mem_limit: 192m
+    restart: unless-stopped
+    networks:
+      - morfeu-network
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.20.1
+    container_name: morfeu-postgres-exporter
+    env_file: .env.observability
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 64m
+    restart: unless-stopped
+    networks:
+      - morfeu-network
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.92.1
+    container_name: morfeu-redis-exporter
+    env_file: .env.observability
+    depends_on:
+      redis:
+        condition: service_healthy
+    mem_limit: 64m
+    restart: unless-stopped
+    networks:
+      - morfeu-network
+
+volumes:
+  morfeu-prometheus:
+  morfeu-loki:
+  morfeu-grafana:
