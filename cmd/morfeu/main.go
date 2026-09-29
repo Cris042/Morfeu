@@ -136,8 +136,7 @@ func runServer(mode string) {
 	log.Info("Migrations completed")
 
 	cacheLayer := cache.NewRedisCache(redisClient, log.Logger)
-	filmService := catalogo.NewFilmService(catalogodb.New(dbPool), dbPool, cacheLayer, log.Logger)
-	filmHandler := catalogo.NewFilmHandler(filmService)
+	catalogoHandler := catalogo.NovoHandler(catalogo.NovoServico(catalogodb.New(dbPool), dbPool, cacheLayer, log.Logger), log.Logger)
 	// Relay + consumer ativos só em worker|all (RF04 da 0002, RF08 da 0005) —
 	// api nunca publica nem consome. Sobem antes do HTTP para o health já
 	// refletir o broker (RF09).
@@ -154,11 +153,8 @@ func runServer(mode string) {
 
 	registrarMetricasMensageria(tel, dbPool, brokerClient, log)
 
-	e := setupRouter(log, tel, filmHandler, healthHandler)
-	// /auth/* só onde o processo serve a API (api|all): exige JWT_SEGREDO.
-	if mode != modeWorker {
-		montarIdentidade(cfg, dbPool, redisClient, log).RegistrarRotas(e)
-	}
+	e := setupRouter(log, tel, healthHandler)
+	registrarRotasDeDominio(e, mode, cfg, dbPool, redisClient, catalogoHandler, log)
 
 	go func() {
 		if err := e.Start(":" + cfg.AppPort); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -250,6 +246,19 @@ func startConsumer(ctx context.Context, brokerClient *broker.Client, dbPool *pgx
 	log.Info("Consumer de catalogo.filme_criado iniciado")
 }
 
+// registrarRotasDeDominio monta as rotas dos módulos. Cartaz público sempre;
+// /auth/* e o backoffice só onde o processo serve a API (api|all), pois
+// exigem JWT_SEGREDO (PRD 0009) e o papel operador (PRD 0011).
+func registrarRotasDeDominio(e *echo.Echo, mode string, cfg *config.Config, dbPool *pgxpool.Pool, redisClient redis.Cmdable, catalogoHandler *catalogo.Handler, log *logger.Logger) {
+	catalogoHandler.RegistrarRotasPublicas(e)
+	if mode == modeWorker {
+		return
+	}
+	identidadeHandler, emissor := montarIdentidade(cfg, dbPool, redisClient, log)
+	identidadeHandler.RegistrarRotas(e)
+	catalogoHandler.RegistrarRotasBackoffice(e, autenticacao.Exigir(emissor, autenticacao.PapelOperador))
+}
+
 // startWorker sobe tudo que roda só em -mode=worker|all: relay da outbox,
 // consumer e limpeza de refresh — todos no mesmo WaitGroup do shutdown.
 func startWorker(ctx context.Context, cfg *config.Config, dbPool *pgxpool.Pool, wg *sync.WaitGroup, log *logger.Logger) *broker.Client {
@@ -289,7 +298,7 @@ func startLimpezaRefresh(ctx context.Context, dbPool *pgxpool.Pool, wg *sync.Wai
 }
 
 // setupRouter creates the Echo instance, wiring middleware and routes.
-func setupRouter(log *logger.Logger, tel *telemetria.Telemetria, filmHandler *catalogo.FilmHandler, healthHandler *health.HealthHandler) *echo.Echo {
+func setupRouter(log *logger.Logger, tel *telemetria.Telemetria, healthHandler *health.HealthHandler) *echo.Echo {
 	e := echo.New()
 	// IP do cliente = endereço da conexão (limitador por IP, PRD 0009 RF09):
 	// sem proxy confiável até a E0c-CD, X-Forwarded-For seria forjável.
@@ -318,7 +327,6 @@ func setupRouter(log *logger.Logger, tel *telemetria.Telemetria, filmHandler *ca
 	}))
 
 	e.GET("/health", healthHandler.Check)
-	e.GET("/filmes", filmHandler.ListFilms)
 	// /metrics é interno (scrape do Prometheus na rede do compose, task 0007);
 	// o proxy público (E0c-CD) não roteia este path.
 	e.GET("/metrics", echo.WrapHandler(tel.Handler()))
@@ -364,7 +372,7 @@ func runCriarFilme(args []string) error {
 	fs := flag.NewFlagSet("criar-filme", flag.ContinueOnError)
 	titulo := fs.String("titulo", "", "título do filme (obrigatório)")
 	sinopse := fs.String("sinopse", "", "sinopse do filme")
-	duracao := fs.Int("duracao", -1, "duração em minutos")
+	duracao := fs.Int("duracao", -1, "duração em minutos (obrigatória, 1–1440)")
 	ano := fs.Int("ano", -1, "ano de lançamento")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -388,28 +396,30 @@ func runCriarFilme(args []string) error {
 	}
 	defer pool.Close()
 
-	svc := catalogo.NewFilmService(catalogodb.New(pool), pool, nil, log.Logger)
+	servico := catalogo.NovoServico(catalogodb.New(pool), pool, nil, log.Logger)
 
-	params := catalogo.CreateFilmParams{Title: strings.TrimSpace(*titulo)}
+	dados := catalogo.DadosFilme{Titulo: *titulo}
 	if s := strings.TrimSpace(*sinopse); s != "" {
-		params.Synopsis = &s
+		dados.Sinopse = &s
 	}
 	if *duracao >= 0 {
 		r, convErr := safeIntToInt32("duracao", *duracao)
 		if convErr != nil {
 			return convErr
 		}
-		params.Runtime = &r
+		dados.DuracaoMin = &r
 	}
 	if *ano >= 0 {
 		y, convErr := safeIntToInt32("ano", *ano)
 		if convErr != nil {
 			return convErr
 		}
-		params.Year = &y
+		dados.Ano = &y
 	}
 
-	film, err := svc.CreateFilm(context.Background(), params)
+	// Mesmo caso de uso do backoffice (RF07): mesmas validações — sem
+	// -duracao o filme é recusado (o E3 depende da duração).
+	film, err := servico.Criar(context.Background(), dados)
 	if err != nil {
 		return fmt.Errorf("criar filme: %w", err)
 	}
@@ -431,7 +441,7 @@ const (
 // montarIdentidade monta emissor, limitadores (Redis + fallback em memória),
 // métricas e o serviço de identidade. Falha de config é fatal: a API não sobe
 // sem segredo JWT válido (RF09).
-func montarIdentidade(cfg *config.Config, dbPool *pgxpool.Pool, redisClient redis.Cmdable, log *logger.Logger) *identidade.Handler {
+func montarIdentidade(cfg *config.Config, dbPool *pgxpool.Pool, redisClient redis.Cmdable, log *logger.Logger) (*identidade.Handler, *autenticacao.Emissor) {
 	fatal := func(msg string, err error) {
 		log.ErrorMsg(msg, zap.Error(err))
 		os.Exit(1)
@@ -468,7 +478,7 @@ func montarIdentidade(cfg *config.Config, dbPool *pgxpool.Pool, redisClient redi
 	if err != nil {
 		fatal("serviço de identidade", err)
 	}
-	return identidade.NovoHandler(servico, emissor, log.Logger)
+	return identidade.NovoHandler(servico, emissor, log.Logger), emissor
 }
 
 // parametrosArgon2 converte a config (faixas já validadas em config.Validate).

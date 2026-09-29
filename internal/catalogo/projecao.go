@@ -27,14 +27,14 @@ func ProjetarFilmeCriado(ctx context.Context, tx outbox.Tx, msg outbox.Mensagem)
 	if err := json.Unmarshal(msg.Payload, &p); err != nil {
 		return fmt.Errorf("payload de %s ilegível: %w: %w", eventoFilmeCriado, err, outbox.ErrPermanente)
 	}
-	if p.ID <= 0 || p.Title == "" {
-		return fmt.Errorf("payload de %s sem id/title: %w", eventoFilmeCriado, outbox.ErrPermanente)
+	if p.ID <= 0 || p.Titulo == "" {
+		return fmt.Errorf("payload de %s sem id/titulo: %w", eventoFilmeCriado, outbox.ErrPermanente)
 	}
 
 	if err := db.New(tx).UpsertFilmeProjetado(ctx, db.UpsertFilmeProjetadoParams{
 		FilmID: p.ID,
-		Titulo: p.Title,
-		Ano:    p.Year,
+		Titulo: p.Titulo,
+		Ano:    p.Ano,
 	}); err != nil {
 		return fmt.Errorf("projetar filme %d: %w", p.ID, err)
 	}
