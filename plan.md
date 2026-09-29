@@ -4,7 +4,15 @@
 
 ## Estado corrente (2026-09-29)
 
-**Chore — refinamento do E4 + ADR 0008** (branch `chore/e4-refinamento-adr-0008`, da main `fea38b1`; só documentação — §6.14.6). Registra `docs/refinamentos/E4-reserva.md` (5 pareceres, debate, 3 respostas do usuário), `docs/adr/0008-trava-de-assento.md`, roadmap (E3 ✅, E4 em andamento) e fecha o status da 0014. Próximo: task 0015 (E4 T1 — trava de assento).
+**Task 0015 — Reserva: trava de assento + sweeper (E4 T1): IMPLEMENTAÇÃO COMPLETA e validada; gate → PR** (branch `feature/0015-reserva-trava`, da main `1f7c594`). Refinamento do E4 e ADR 0008 mergeados antes (PR #40; auditoria reprovou 1× por faltar "Impacto esperado" no ADR → corrigido e revalidado).
+
+### Plano da task 0015
+
+1. ~~Migration 009~~ — `holds` com `UNIQUE (sessao_id, assento_codigo) WHERE status='ativo'` + índices parciais de expiração e dono; CHECKs de formato, hash de 32 bytes, status e extensões.
+2. ~~Queries/sqlc~~ — bloco próprio só com a 009 (FK resolvida sem ler `sessoes`); upsert `TravarAssento` com `DO UPDATE ... WHERE holds.expires_at <= @agora` (sem linha = 409); advisory lock por dono/sweeper; extensão e liberação com guarda; `ExpirarVencidos` em lote com `SKIP LOCKED`.
+3. ~~Módulo `reserva`~~ — VOs `AssentoCodigo`/`StatusHold`, aggregate `Hold` (`Vivo`, `Estender`), `Lote` (1–6, sem repetição, ordenado, contido no layout); `Dono` (SHA-256 do token de carrinho de 32 bytes); repository manual; serviço (rate limit, trava tudo-ou-nada com teto sob advisory lock, idempotência do próprio assento, retry em 40P01, métricas pós-commit); `Sweeper` próprio para o worker; handler com cookie HttpOnly/Secure/Strict + `X-Requested-With`, 404 para hold alheio.
+4. ~~Wiring~~ — porta `sessao.AssentosDaSessaoAberta`; `montarReserva` (limitadores `trava-ip` 30/min e `trava-dono` 20/min, 4 contadores sem label); sweeper no `startWorker`; depguard `reserva-domain`.
+5. ~~Testes~~ — unit (código, lote, borda exata do prazo, extensão única, token); integração PG+Redis reais com relógio injetado: corrida canônica 20 donos × 10 rodadas + invariante, roubo de vencido (inclusive sob corrida de 20), lote tudo-ou-nada, lotes cruzados 10 rodadas sem 500, teto 6 (sequencial e paralelo), extensão/liberação/posse → 404, CSRF 403, cookie, hash no banco, 429 na 31ª, porta (inexistente/cancelada/iniciada → 404; vão/fora da grade → 400), sweeper + corrida sweeper × roubo. Módulo 3× seguidas verde com `-race`; suíte completa `-race` verde; lint 0 issues; `sqlc diff` limpo.
 
 ---
 
