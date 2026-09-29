@@ -4,7 +4,21 @@
 
 ## Estado corrente (2026-09-29)
 
-**Task 0007 — Stack de observabilidade (E0d, parte 2/2): IMPLEMENTAÇÃO COMPLETA e validada localmente (2026-09-29); gate → PR** (branch `chore/0007-stack-observabilidade`, criada da main pós-0006 `02831dc`; task `docs/tasks/0007-stack-observabilidade.md`). Com ela o E0 fecha, exceto a E0c-CD (VM Oracle).
+**Task 0008 — Autenticação (plataforma) (E1 T1 1/2): IMPLEMENTAÇÃO COMPLETA e validada (2026-09-29); gate → PR** (branch `feature/0008-autenticacao-plataforma`, empilhada sobre a 0007 enquanto o PR #31 aguarda autorização de merge). E1 refinado: `docs/refinamentos/E1-identidade.md`.
+
+### Plano da task 0008
+
+Divisão da T1 (§6.3 — ~34 arquivos): **0008** plataforma → **0009** `identidade` → **0010** T2.
+
+1. ~~PRD 0008~~ — `docs/prd/0008-autenticacao-plataforma.md`; `golang-jwt/jwt/v5` v5.3.1 no lib.md (echo-jwt não adotado: middleware próprio p/ fail-closed/kid/allowlist).
+2. ~~Emissor + middleware~~ — HS256, `kid` exato, allowlist, `WithExpirationRequired`/`WithIssuedAt`/relógio injetável; claims só `sub`/`papel`/`iat`/`exp`; `Exigir` fail-closed (lista vazia = 403), 401 com `WWW-Authenticate: Bearer`, corpos genéricos.
+3. ~~Limitador + métricas~~ — Redis INCR + `EXPIRE NX` (falha nova não estende a janela), chave = prefixo + SHA-256 (sem e-mail/IP no Redis); Redis fora → memória com teto de 10k entradas (cheio no fallback = bloqueia; bug de bloquear com Redis saudável pego antes do commit); `auth_login_total{resultado}`, `auth_login_duracao_segundos` (sem WithUnit — o exporter anexaria `_seconds`), `auth_ratelimit_bloqueios_total{escopo}`, `auth_refresh_reuso_total`; `resultado`/`escopo` na allowlist.
+4. ~~Testes + depguard~~ — 12 tokens hostis + expirado; matriz 7×4 do middleware; limitador em memória (relógio manual), mapa cheio, Redis real (hash na chave, PTTL real, EXPIRE NX, Limpar) e indisponível (log sem a chave); métricas no registry real. `jwt-boundary` provada com violação proposital (cache → jwt-boundary; catalogo → catalogo-domain), revertida. golangci-lint 0 issues; suíte completa `-race` verde.
+5. **Auditoria (2026-09-29, `security`)**: REPROVADA em 1 item — item 10: `prometheus/client_model` promovida a direta (teste usa `dto.MetricFamily`) sem registro no lib.md → **corrigido** (linha no lib.md, OSV sem vulns); reauditoria escopada ao item 10 (§6.4.4): go.mod × lib.md conferido — as 2 deps diretas novas (`golang-jwt/jwt/v5`, `client_model`) registradas → **APROVADA**. Não-bloqueantes registrados no state.md: TOCTOU marginal entre `Bloqueado`/`RegistrarFalha`; sem `nbf`/`aud`/`iss` (emissor único); teto de 10k fixo; DoS por encher o mapa durante queda do Redis = trade-off aceito pelo usuário ("nunca sem limite").
+
+---
+
+### Task 0007 — Stack de observabilidade (E0d 2/2): EM PR #31 (auditoria APROVADA, CI verde; merge aguardando autorização)
 
 ### Plano da task 0007
 
