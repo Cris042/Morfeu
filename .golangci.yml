@@ -140,6 +140,21 @@ linters:
             - github.com/mclovin137/morfeu/internal/cache
             - github.com/mclovin137/morfeu/internal/sessao/db
 
+        # Módulo reserva (PRD 0015 RNF01): DDD tático sem driver — pgconn só
+        # em internal/reserva/db/erros.go; TX via outbox.WithTx.
+        reserva-domain:
+          files:
+            - "**/internal/reserva/*.go"
+            - "!$test"
+          list-mode: strict
+          allow:
+            - $gostd
+            - github.com/labstack/echo/v4
+            - github.com/google/uuid
+            - go.uber.org/zap
+            - github.com/mclovin137/morfeu/internal/outbox
+            - github.com/mclovin137/morfeu/internal/reserva/db
+
         # Módulo identidade (PRD 0009 RNF01): transaction script sem driver.
         identidade-domain:
           files:

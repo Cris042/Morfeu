@@ -360,6 +360,24 @@ func (s *Servico) Mapa(ctx context.Context, sessaoID int64) (MapaSessao, error) 
 		Fileiras: layout.Fileiras, Colunas: layout.Colunas, Assentos: layout.Assentos()}, nil
 }
 
+// AssentosDaSessaoAberta é a porta do módulo reserva (PRD 0015 RF02):
+// códigos dos assentos de uma sessão agendada que ainda não começou.
+// ok=false quando a sessão não existe, foi cancelada ou já começou.
+func (s *Servico) AssentosDaSessaoAberta(ctx context.Context, sessaoID int64) ([]string, bool, error) {
+	m, err := s.Mapa(ctx, sessaoID)
+	if errors.Is(err, ErrSessaoNaoEncontrada) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	codigos := make([]string, 0, len(m.Assentos))
+	for _, a := range m.Assentos {
+		codigos = append(codigos, a.Codigo)
+	}
+	return codigos, true, nil
+}
+
 func futuras(lista []SessaoPublica, agora time.Time) []SessaoPublica {
 	out := make([]SessaoPublica, 0, len(lista))
 	for _, l := range lista {

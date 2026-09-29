@@ -38,6 +38,7 @@ import (
 	identidadedb "github.com/mclovin137/morfeu/internal/identidade/db"
 	"github.com/mclovin137/morfeu/internal/logger"
 	"github.com/mclovin137/morfeu/internal/outbox"
+	"github.com/mclovin137/morfeu/internal/reserva"
 	"github.com/mclovin137/morfeu/internal/sessao"
 	sessaodb "github.com/mclovin137/morfeu/internal/sessao/db"
 	"github.com/mclovin137/morfeu/internal/telemetria"
@@ -273,7 +274,7 @@ func conectarTMDB(s *catalogo.Servico, cfg *config.Config, log *logger.Logger) {
 // exigem JWT_SEGREDO (PRD 0009) e o papel operador (PRD 0011).
 func registrarRotasDeDominio(e *echo.Echo, mode string, cfg *config.Config, dbPool *pgxpool.Pool, redisClient redis.Cmdable, cacheLayer cache.Cache, catalogoServico *catalogo.Servico, catalogoHandler *catalogo.Handler, log *logger.Logger) {
 	catalogoHandler.RegistrarRotasPublicas(e)
-	sessaoHandler := montarSessao(dbPool, catalogoServico, cacheLayer, log)
+	sessaoHandler, sessaoServico := montarSessao(dbPool, catalogoServico, cacheLayer, log)
 	sessaoHandler.RegistrarRotasPublicas(e)
 	if mode == modeWorker {
 		return
@@ -283,6 +284,7 @@ func registrarRotasDeDominio(e *echo.Echo, mode string, cfg *config.Config, dbPo
 	exigirOperador := autenticacao.Exigir(emissor, autenticacao.PapelOperador)
 	catalogoHandler.RegistrarRotasBackoffice(e, exigirOperador)
 	sessaoHandler.RegistrarRotasBackoffice(e, exigirOperador, operadorDaRequisicao)
+	montarReserva(dbPool, sessaoServico, redisClient, log).RegistrarRotas(e)
 }
 
 // operadorDaRequisicao identifica o operador para o log de auditoria mínima
@@ -294,7 +296,7 @@ func operadorDaRequisicao(c echo.Context) string {
 
 // montarSessao liga o módulo sessao: porta de filmes = catálogo (ADR 0003),
 // métrica de conflitos criada aqui (o domínio não conhece OTel).
-func montarSessao(dbPool *pgxpool.Pool, filmes sessao.FonteFilmes, c cache.Cache, log *logger.Logger) *sessao.Handler {
+func montarSessao(dbPool *pgxpool.Pool, filmes sessao.FonteFilmes, c cache.Cache, log *logger.Logger) (*sessao.Handler, *sessao.Servico) {
 	conflitos, err := otel.Meter("morfeu/sessao").Int64Counter("sessao_conflitos_total",
 		metric.WithDescription("Tentativas de sessão rejeitadas por conflito de horário na sala."))
 	if err != nil {
@@ -310,15 +312,80 @@ func montarSessao(dbPool *pgxpool.Pool, filmes sessao.FonteFilmes, c cache.Cache
 		log.ErrorMsg("serviço de sessões", zap.Error(err))
 		os.Exit(1)
 	}
-	return sessao.NovoHandler(servico, log.Logger)
+	return sessao.NovoHandler(servico, log.Logger), servico
+}
+
+// Rate limit da trava (decisão do usuário no refinamento E4, PRD 0015 RF08).
+const (
+	limiteTravasIP   = 30
+	limiteTravasDono = 20
+	janelaTravas     = time.Minute
+)
+
+// montarReserva liga o módulo reserva: porta de assentos = sessao (ADR 0003),
+// limitadores do E1 (Redis + fallback em memória) e métricas (PRD 0015).
+func montarReserva(dbPool *pgxpool.Pool, sessoes reserva.FonteSessoes, redisClient redis.Cmdable, log *logger.Logger) *reserva.Handler {
+	fatal := func(msg string, err error) {
+		log.ErrorMsg(msg, zap.Error(err))
+		os.Exit(1)
+	}
+	novoLimitador := func(escopo string, maxim int) *autenticacao.Limitador {
+		l, err := autenticacao.NovoLimitador(autenticacao.ConfigLimitador{
+			Redis: redisClient, Prefixo: prefixoLimitadorRdb + escopo + ":", Max: maxim, Janela: janelaTravas,
+		}, log.Logger)
+		if err != nil {
+			fatal("limitador "+escopo, err)
+		}
+		return l
+	}
+	servico, err := reserva.NovoServico(dbPool, reserva.Config{
+		Sessoes:    sessoes,
+		LimiteIP:   novoLimitador("trava-ip", limiteTravasIP),
+		LimiteDono: novoLimitador("trava-dono", limiteTravasDono),
+		Metricas:   metricasReserva(log),
+	}, log.Logger)
+	if err != nil {
+		fatal("serviço de reserva", err)
+	}
+	return reserva.NovoHandler(servico, log.Logger)
+}
+
+// metricasReserva cria os contadores da trava (sem labels — PRD 0015 RF10);
+// o domínio recebe só callbacks.
+func metricasReserva(log *logger.Logger) reserva.Metricas {
+	meter := otel.Meter("morfeu/reserva")
+	contador := func(nome, descricao string) metric.Int64Counter {
+		c, err := meter.Int64Counter(nome, metric.WithDescription(descricao))
+		if err != nil {
+			log.ErrorMsg("métrica "+nome, zap.Error(err))
+			os.Exit(1)
+		}
+		return c
+	}
+	criados := contador("reserva_holds_criados_total", "Holds de assento criados (inclui roubo de vencido).")
+	indisponiveis := contador("reserva_holds_indisponiveis_total", "Travas recusadas porque outro dono segura o assento.")
+	expirados := contador("reserva_holds_expirados_total", "Holds vencidos marcados como expirados pelo sweeper.")
+	varreduras := contador("reserva_sweeper_execucoes_total", "Passadas concluídas do sweeper de holds.")
+	return reserva.Metricas{
+		Criados:       func(ctx context.Context, n int64) { criados.Add(ctx, n) },
+		Indisponiveis: func(ctx context.Context) { indisponiveis.Add(ctx, 1) },
+		Expirados:     func(ctx context.Context, n int64) { expirados.Add(ctx, n) },
+		Varreduras:    func(ctx context.Context) { varreduras.Add(ctx, 1) },
+	}
 }
 
 // startWorker sobe tudo que roda só em -mode=worker|all: relay da outbox,
-// consumer e limpeza de refresh — todos no mesmo WaitGroup do shutdown.
+// consumer, limpeza de refresh e sweeper de holds — todos no mesmo WaitGroup do shutdown.
 func startWorker(ctx context.Context, cfg *config.Config, dbPool *pgxpool.Pool, wg *sync.WaitGroup, log *logger.Logger) *broker.Client {
 	brokerClient := startRelay(ctx, cfg.RabbitMQURL, dbPool, wg, log)
 	startConsumer(ctx, brokerClient, dbPool, wg, log)
 	startLimpezaRefresh(ctx, dbPool, wg, log)
+	sweeper := reserva.NovoSweeper(dbPool, metricasReserva(log), nil, log.Logger)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		sweeper.Rodar(ctx, reserva.IntervaloSweeper)
+	}()
 	return brokerClient
 }
 
