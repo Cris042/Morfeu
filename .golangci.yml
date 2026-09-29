@@ -47,6 +47,11 @@ linters:
         # "conversão" é tokenizado como "convers" (o "ã" quebra a palavra)
         - convers
         - intervalos
+        # task 0008
+        - metricas
+        - instrumentos
+        - validade
+        - invalidas
 
     # Arquivos gerados (sqlc) já são excluídos por linters.exclusions.generated
     # (a antiga chave revive.ignore-generated-header não existe no schema v2 —
@@ -116,6 +121,18 @@ linters:
           deny:
             - pkg: "github.com/rabbitmq/amqp091-go"
               desc: "amqp091-go só é importável em internal/broker (ADR 0003, RNF03 do PRD 0002)"
+
+        # Fronteira do PRD 0008 (RNF02): o JWT só é emitido/validado em
+        # internal/autenticacao — módulos autorizam via autenticacao.Exigir e
+        # nunca manipulam tokens diretamente. Testes de fora podem forjar tokens.
+        jwt-boundary:
+          files:
+            - "!**/internal/autenticacao/*.go"
+            - "!$test"
+          list-mode: lax
+          deny:
+            - pkg: "github.com/golang-jwt/jwt"
+              desc: "golang-jwt só é importável em internal/autenticacao (ADR 0003, PRD 0008)"
 
   exclusions:
     generated: strict
