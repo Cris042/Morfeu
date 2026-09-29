@@ -36,3 +36,20 @@ INSERT INTO films (id, title, year, runtime, synopsis)
 SELECT COALESCE(MAX(id), 0) + 1, $1, $2, $3, $4
 FROM films
 RETURNING id, title, year, runtime, synopsis, imdb_id, poster_url, created_at;
+
+-- name: UpsertFilmeProjetado :exec
+-- Projeção de catalogo.filme_criado (RF07, task 0005). Roda dentro da TX do
+-- wrapper de dedup (outbox.ProcessarUmaVez): com dedup correto o conflito
+-- nunca ocorre; se ocorrer, aplicacoes > 1 denuncia a falha (prova de RN01).
+INSERT INTO catalogo_filmes_projetados (film_id, titulo, ano)
+VALUES ($1, $2, $3)
+ON CONFLICT (film_id) DO UPDATE
+SET titulo       = EXCLUDED.titulo,
+    ano          = EXCLUDED.ano,
+    aplicacoes   = catalogo_filmes_projetados.aplicacoes + 1,
+    projetado_em = now();
+
+-- name: BuscarFilmeProjetado :one
+SELECT film_id, titulo, ano, aplicacoes, projetado_em
+FROM catalogo_filmes_projetados
+WHERE film_id = $1;

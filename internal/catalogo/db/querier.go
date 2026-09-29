@@ -9,6 +9,7 @@ import (
 )
 
 type Querier interface {
+	BuscarFilmeProjetado(ctx context.Context, filmID int64) (CatalogoFilmesProjetado, error)
 	GetFilm(ctx context.Context, id int64) (Film, error)
 	// Usada por CreateFilm (RF02/task 0002): o subcomando CLI criar-filme insere o
 	// filme e enfileira catalogo.filme_criado na mesma TX via outbox.Enqueue.
@@ -18,6 +19,10 @@ type Querier interface {
 	// colisão eventual é reportada como erro de constraint (exit code != 0 na CLI).
 	InsertFilm(ctx context.Context, arg InsertFilmParams) (Film, error)
 	ListFilms(ctx context.Context) ([]Film, error)
+	// Projeção de catalogo.filme_criado (RF07, task 0005). Roda dentro da TX do
+	// wrapper de dedup (outbox.ProcessarUmaVez): com dedup correto o conflito
+	// nunca ocorre; se ocorrer, aplicacoes > 1 denuncia a falha (prova de RN01).
+	UpsertFilmeProjetado(ctx context.Context, arg UpsertFilmeProjetadoParams) error
 }
 
 var _ Querier = (*Queries)(nil)

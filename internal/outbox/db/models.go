@@ -17,3 +17,9 @@ type OutboxEvent struct {
 	CreatedAt   pgtype.Timestamptz `db:"created_at"`
 	PublishedAt pgtype.Timestamptz `db:"published_at"`
 }
+
+type ProcessedMessage struct {
+	MessageID   pgtype.UUID        `db:"message_id"`
+	Consumidor  string             `db:"consumidor"`
+	ProcessedAt pgtype.Timestamptz `db:"processed_at"`
+}
