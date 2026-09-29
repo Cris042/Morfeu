@@ -1,7 +1,7 @@
 # Task 0014 — Sessões: leitura pública, mapa de assentos e cache (E3, T2)
 
 - **Data:** 2026-09-29
-- **Status:** em andamento
+- **Status:** concluída
 - **Branch:** `feature/0014-sessoes-leitura-publica` (da main `c5478a2`, pós-0013)
 - **PRD:** docs/prd/0014-sessoes-leitura-publica.md
 - **Item do roadmap:** E3 — Sessões e salas (task 2/2; fecha o épico). Refinamento: `docs/refinamentos/E3-sessoes-salas.md` §T2.
