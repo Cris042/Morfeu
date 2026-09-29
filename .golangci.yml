@@ -125,6 +125,33 @@ linters:
         # Fronteira do PRD 0008 (RNF02): o JWT só é emitido/validado em
         # internal/autenticacao — módulos autorizam via autenticacao.Exigir e
         # nunca manipulam tokens diretamente. Testes de fora podem forjar tokens.
+        # Módulo identidade (PRD 0009 RNF01): transaction script sem driver.
+        identidade-domain:
+          files:
+            - "**/internal/identidade/*.go"
+            - "!$test"
+          list-mode: strict
+          allow:
+            - $gostd
+            - github.com/labstack/echo/v4
+            - github.com/google/uuid
+            - go.uber.org/zap
+            - golang.org/x/crypto/argon2
+            - github.com/mclovin137/morfeu/internal/autenticacao
+            - github.com/mclovin137/morfeu/internal/identidade/db
+
+        # Ninguém importa o módulo identidade (ADR 0003): outros módulos
+        # autorizam via internal/autenticacao. Só o composition root o monta.
+        identidade-isolada:
+          files:
+            - "!**/internal/identidade/**"
+            - "!**/cmd/morfeu/*.go"
+            - "!$test"
+          list-mode: lax
+          deny:
+            - pkg: "github.com/mclovin137/morfeu/internal/identidade"
+              desc: "módulos não importam identidade — use internal/autenticacao (ADR 0003, PRD 0009)"
+
         jwt-boundary:
           files:
             - "!**/internal/autenticacao/*.go"

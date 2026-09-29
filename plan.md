@@ -4,9 +4,21 @@
 
 ## Estado corrente (2026-09-29)
 
-**Task 0008 — Autenticação (plataforma) (E1 T1 1/2): IMPLEMENTAÇÃO COMPLETA e validada (2026-09-29); gate → PR** (branch `feature/0008-autenticacao-plataforma`, empilhada sobre a 0007 enquanto o PR #31 aguarda autorização de merge). E1 refinado: `docs/refinamentos/E1-identidade.md`.
+**Task 0009 — Identidade: usuário, registro, login, seed (E1 T1 2/2): IMPLEMENTAÇÃO COMPLETA e validada (2026-09-29); gate → PR** (branch `feature/0009-identidade-registro-login`, empilhada sobre a 0008). **0007 mergeada** (PR #31, `757851f`); **0008 em PR #33** (reaberto do #32, fechado automaticamente pelo GitHub quando a branch-base da 0007 foi apagada — lição: retargetar PRs empilhados ANTES de apagar a base).
 
-### Plano da task 0008
+### Plano da task 0009
+
+1. ~~PRD 0009~~ — `docs/prd/0009-identidade-registro-login.md`; `x/crypto` direta **v0.55.0** (a 0.56.0 exige Go 1.26 e subiria o toolchain — revertido ao notar o bump do `go` no go.mod).
+2. ~~Migration 005 + sqlc~~ — `usuario` (UNIQUE + CHECK minúsculo + CHECK papel); queries `:execrows` (ON CONFLICT) e `:many`+LIMIT 1 — domínio sem `pgx.ErrNoRows`; override uuid→`google/uuid`.
+3. ~~Módulo~~ — `senha.go` (Argon2id PHC, parâmetros lidos do hash, comparação constante, senha aleatória sem viés), `service.go` (registro c/ limite por IP + semáforo; login: limitadores conta/IP → semáforo → hash real **ou dummy** → falha idêntica; `SeedOperador` como função de pacote — CLI não precisa de emissor/limitadores), `handler.go` (`/auth/registro|login|eu`, BodyLimit 16K, `Cache-Control: no-store`, JSON malformado sem eco), `errors.go`.
+4. ~~Wiring~~ — `montarIdentidade` (só em api|all; `ValidarAutenticacao` fatal sem `JWT_SEGREDO` ≥ 32 B), `IPExtractor` direto, limitadores `morfeu:auth:{conta,ip,registro}:`, CLI `seed-operador`; config Argon2/HASH_CONCORRENCIA com faixas; smoke do CI com segredo efêmero; env examples; depguard `identidade-domain` (strict) + `identidade-isolada`.
+5. ~~Testes~~ — unit (PHC, malformados, salts, senha aleatória, validação) + integração PG/Redis pelas rotas: registro (papel ignorado, duplicado por caixa, 400 por campo), login + `/auth/eu`, **contrato anti-enumeração** (corpo/headers idênticos + hash nos 2 ramos por contador), limites conta/IP/reset, semáforo, seed idempotente + nenhuma rota cria operador, senha/e-mail nunca nos logs. Suíte completa `-race` verde; golangci-lint 0 issues; `sqlc diff` limpo.
+6. **Auditoria APROVADA (2026-09-29, `security`)** — PR #34. Não-bloqueante nº 1 aplicado: teto nos parâmetros lidos do hash armazenado (m ≤ 1 GiB, t ≤ 10, p ≤ 16 — espelha a config) contra DoS por hash adulterado + 3 casos no teste. Demais: govulncheck do CI confirma x/crypto; boot sem Redis segue o fallback da 0008.
+
+---
+
+### Task 0008 — Autenticação (plataforma): EM PR #32 (auditoria APROVADA após correção; CI verde; merge aguardando autorização)
+
 
 Divisão da T1 (§6.3 — ~34 arquivos): **0008** plataforma → **0009** `identidade` → **0010** T2.
 

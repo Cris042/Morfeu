@@ -214,10 +214,12 @@ jobs:
         # task 0002 o modo default (all) exige RabbitMQ no startup (fail-fast
         # do relay), e o broker não faz parte da infra deste smoke — o caminho
         # do relay é coberto pela suíte de integração no job test.
+        # JWT_SEGREDO (task 0009): a API não sobe sem ele; segredo efêmero por run.
         run: |
           docker run -d --name smoke --network host \
             -e DATABASE_URL="postgres://postgres:postgres@localhost:5432/morfeu?sslmode=disable" \
             -e REDIS_URL="localhost:6379" \
+            -e JWT_SEGREDO="$(openssl rand -hex 32)" \
             "${IMAGE}:sha-${GITHUB_SHA}" -mode=api
           ok=""
           for i in $(seq 1 30); do
