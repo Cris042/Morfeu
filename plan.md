@@ -4,9 +4,20 @@
 
 ## Estado corrente (2026-09-29)
 
-**Task 0010 — Refresh rotativo + detecção de reuso + pseudonimização (E1 T2): IMPLEMENTAÇÃO COMPLETA e validada (2026-09-29); gate → PR** (branch `feature/0010-refresh-pseudonimizacao`, da main `3ef3188`). 0007/0008/0009 mergeadas (PRs #31/#33/#34).
+**Task 0011 — Catálogo: migração `films`→`filmes` + CRUD do operador (E2 T1): ABERTA** (branch `feature/0011-catalogo-filmes-crud`, da main `5d2ca7f`). **E1 concluído** (0008/0009/0010 — PRs #33/#34/#35). E2 refinado.
 
-### Plano da task 0010
+### Plano da task 0011
+
+1. PRD 0011 (refinamento E2 §T1).
+2. Migration 007 (rename PT + IDENTITY c/ setval + tmdb_id UNIQUE + arquivado_em + CHECKs; down completo).
+3. Catálogo em PT: queries/sqlc, service (criar/editar/arquivar/listar + validação + invalidação), handler (público + backoffice via middleware injetado), projeção com payload PT; `cache.Delete`.
+4. Wiring (rotas backoffice com `Exigir(operador)`), CLI `criar-filme` exigindo duração.
+5. Testes E0a/outbox passam a aplicar os arquivos de migration; integração do CRUD (matriz, concorrência, cache); gate.
+
+---
+
+### Task 0010 — Refresh + pseudonimização: CONCLUÍDA e MERGEADA (PR #35, `5d2ca7f`)
+
 
 1. ~~PRD 0010~~ — desvio registrado: logout em `/auth/refresh/logout` (cookie com `Path=/auth/refresh`).
 2. ~~Migration 006 + queries~~ — `refresh_token` (hash BYTEA UNIQUE, índices usuario/familia/expira); `TravarRefreshPorHash` com `FOR UPDATE OF r` + JOIN do papel; revogação por família/hash/usuário; `PseudonimizarUsuario` (só papel cliente); overrides `timestamptz`→`time.Time`/`*time.Time` (domínio sem pgtype).
