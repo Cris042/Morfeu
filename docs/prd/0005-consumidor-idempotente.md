@@ -92,7 +92,7 @@ Replay de DLQ (E6); LISTEN/NOTIFY; limpeza de `outbox_events`/`processed_message
 
 - `migrations/003_processed_messages.up.sql` / `.down.sql` — tabela de dedup (PK `message_id, consumidor`).
 - `migrations/004_catalogo_filmes_projetados.up.sql` / `.down.sql` — projeção do catálogo.
-- `internal/broker/consumer.go` — runtime de consumo.
+- `internal/broker/consumer.go` — runtime de consumo + `Conectado()` (readiness); `client.go` não precisou mudar.
 - `internal/outbox/dedup.go` — wrapper `ProcessarUmaVez`.
 - `internal/catalogo/projecao.go` — projetor do evento.
 - `internal/outbox/consumidor_integration_test.go` — CA01–CA06.
@@ -104,12 +104,11 @@ Replay de DLQ (E6); LISTEN/NOTIFY; limpeza de `outbox_events`/`processed_message
 - `internal/outbox/queries.sql`, `internal/outbox/db/queries.sql.go`, `internal/outbox/db/models.go` — query de dedup (gerado).
 - `internal/catalogo/queries.sql`, `internal/catalogo/db/queries.sql.go`, `internal/catalogo/db/models.go`, `internal/catalogo/db/querier.go` — projeção (gerado).
 - `internal/outbox/relay_integration_test.go` — helper de schema aplica 003/004 (sem mudar asserts).
-- `internal/broker/client.go` — `Conectado()` e acesso à conexão atual para o consumer.
 - `cmd/morfeu/main.go` — wiring do consumer + health com broker.
 - `internal/health/health.go`, `internal/health/health_test.go` — campo `rabbitmq`.
 - `docs/tasks/0005-consumidor-idempotente.md`, `docs/tasks/README.md`, `plan.md`, `state.md` — controle.
 
-Total previsto: 26 (autorais ~15; gerados 5; controle 5).
+Total previsto: 25 (autorais ~14; gerados 5; controle 5). Real ao fechar: ver plan.md.
 
 ## Dependências utilizadas
 

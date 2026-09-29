@@ -4,16 +4,16 @@
 
 ## Estado corrente (2026-07-13)
 
-**Task 0005 — Consumidor idempotente + DLQ (E0b, parte 2/2): PRD ATIVO (2026-09-29), implementação em curso** (branch `feature/0005-consumidor-idempotente`, criada da main pós-0002 `a1d1924`; task `docs/tasks/0005-consumidor-idempotente.md`). Épico E0 já refinado → PRD 0005 consome o refinamento §"Task E0b" (parte consumidora) + ADR 0007 + contrato de envelope do PRD 0002 (RF05), sem nova rodada de agentes (§6.2.5).
+**Task 0005 — Consumidor idempotente + DLQ (E0b, parte 2/2): IMPLEMENTAÇÃO COMPLETA e validada localmente (2026-09-29); gate pré-push → PR** (branch `feature/0005-consumidor-idempotente`, criada da main pós-0002 `a1d1924`; task `docs/tasks/0005-consumidor-idempotente.md`). Épico E0 já refinado → PRD 0005 consome o refinamento §"Task E0b" (parte consumidora) + ADR 0007 + contrato de envelope do PRD 0002 (RF05), sem nova rodada de agentes (§6.2.5).
 
 ### Plano da task 0005 (status: aberta; PRD é o próximo passo)
 
 1. ~~PRD 0005~~ — feito, `docs/prd/0005-consumidor-idempotente.md` (skills: `golang-concurrency`, `golang-database`). Decisões de abertura: migrations separadas 003 (plataforma) / 004 (catálogo) p/ isolar blocos sqlc; compose sem mudança (não há serviço de app — `depends_on` vai p/ E0c-CD).
-2. Migration 003 (`processed_messages` + tabela da projeção) via `criar-migration`.
-3. Runtime do consumer em plataforma (ack/nack, shutdown por ctx, só `-mode=worker|all`) + wrapper de dedup na mesma TX do efeito.
-4. Handler/projeção no domínio catalogo (sem `amqp091-go` — depguard da 0002 já cobre).
-5. DLQ exercitada (payload malformado → `x-delivery-limit=3` → DLQ, processo vivo); readiness com RabbitMQ; compose worker `service_healthy`.
-6. Testes de integração (dedup 2×→1, falha entre efeito e commit, DLQ, shutdown, fim-a-fim CLI→projeção, goleak) — atenção ao achado da auditoria 0002: guard-rail no `TestOutbox_PendentesContagem` se a suíte ganhar `t.Parallel()`.
+2. ~~Migrations~~ — `6945020`: 003 `processed_messages` (PK `message_id, consumidor`) + 004 `catalogo_filmes_projetados` (coluna `aplicacoes` = prova de idempotência); blocos sqlc separados por ownership.
+3. ~~Runtime do consumer~~ — `656c2d4` `internal/broker/consumer.go`: canal próprio, prefetch 1, `ErrPermanente`→nack sem requeue (DLQ), outro erro→requeue (até `x-delivery-limit`), resubscrição após reconexão, handler com `WithoutCancel`+30s no shutdown, `Conectado()`.
+4. ~~Dedup + projeção~~ — `30b557b`: `outbox.ProcessarUmaVez`/`NovoHandler` (dedup e efeito na mesma TX; `message_id` inválido→permanente) + `catalogo.ProjetarFilmeCriado`.
+5. ~~Wiring + health~~ — `8b5809f`: consumer só em `-mode=worker|all`, mesmo WaitGroup do relay; `/health` ganha `rabbitmq` só com broker (`omitempty` — JSON da E0a intacto). Compose sem mudança (sem serviço de app; `depends_on` → E0c-CD).
+6. ~~Testes~~ — `93411cb`: 6 cenários de integração (CA01 dedup 2×→1, CA02 falha antes do commit, CA03 malformado+sem message_id→DLQ com fila viva, CA04 delivery-limit, CA06 shutdown com entrega em curso, CA05 walking skeleton CLI→projeção) + health com/sem broker. Evidência: suíte completa `-race -tags=integration` verde via container; golangci-lint 2.12.2 **0 issues**; `sqlc generate` sem diff + `sqlc vet` limpo. Diff: 25 arquivos (≤30).
 7. Gate: gitleaks pré-push → push → PR → CI verde → passe único de julgamento → merge (fecha o walking skeleton assíncrono do E0b).
 
 ---
