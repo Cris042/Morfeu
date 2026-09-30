@@ -4,7 +4,11 @@
 
 ## Estado corrente (2026-09-30)
 
-**Task 0027 — Replay da DLQ + hardening do worker (E6 T6, fecha o E6): CONCLUÍDA — auditoria APROVADA em 2026-09-30 (`security`), CI verde (PR #56). **E6 CONCLUÍDO.** (branch `feature/0027-replay-dlq-hardening`, da main `cd139d7`).
+**Épico E7 — Notificação: REFINADO** (`docs/refinamentos/E7-notificacao.md`; 3 tasks 0028–0030 no roadmap; sem ADR). Próxima: **task 0028** (núcleo), consumindo as exigências da T1.
+
+---
+
+### Task 0027 — Replay da DLQ + hardening do worker: CONCLUÍDA e MERGEADA (PR #56, `055dbf3`) — **E6 concluído**
 
 ### Plano da task 0027
 
