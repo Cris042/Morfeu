@@ -7,7 +7,7 @@ ON CONFLICT (dono_hash) WHERE status = 'aguardando_pagamento' DO NOTHING
 RETURNING id;
 
 -- name: PendenteDoDono :many
-SELECT id, expira_em
+SELECT id, expira_em, payment_intent_id
 FROM pedidos
 WHERE dono_hash = @dono_hash AND status = 'aguardando_pagamento';
 
@@ -63,3 +63,24 @@ INSERT INTO ingressos (id, pedido_id, sessao_id, assento_codigo, status, versao_
 VALUES (@id, @pedido_id, @sessao_id, @assento_codigo, 'ativo', 1, @agora)
 ON CONFLICT (sessao_id, assento_codigo) WHERE status = 'ativo' DO NOTHING
 RETURNING id;
+
+-- name: PedidosVencidos :many
+-- Reconciliação (PRD 0025): pendentes cujo prazo passou, mais antigos antes.
+SELECT id, payment_intent_id
+FROM pedidos
+WHERE status = 'aguardando_pagamento' AND expira_em <= @agora
+ORDER BY expira_em
+LIMIT @limite::int;
+
+-- name: EstornosPendentes :many
+-- Job de estorno (PRD 0025): o backoff por tentativas é aplicado no serviço.
+SELECT id, payment_intent_id, tentativas_estorno, atualizado_em
+FROM pedidos
+WHERE status = 'estorno_pendente'
+ORDER BY atualizado_em
+LIMIT @limite::int;
+
+-- name: RegistrarFalhaEstorno :execrows
+UPDATE pedidos
+SET tentativas_estorno = tentativas_estorno + 1, atualizado_em = @agora
+WHERE id = @id AND status = 'estorno_pendente';

@@ -37,6 +37,7 @@ const (
 	EtapaPago              = "pago"
 	EtapaPagamentoRecusado = "pagamento_recusado"
 	EtapaEstornoNecessario = "estorno_necessario"
+	EtapaEstornado         = "estornado"
 )
 
 // Pagamento é a confirmação de um pagamento aprovado, venha do webhook ou da

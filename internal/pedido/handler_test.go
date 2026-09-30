@@ -95,7 +95,7 @@ func TestMain(m *testing.M) {
 		defer pool.Close()
 		for _, arq := range []string{"001_initial_schema.up.sql", "002_outbox_events.up.sql", "007_filmes.up.sql",
 			"008_salas_sessoes.up.sql", "009_holds.up.sql", "010_holds_pedido.up.sql", "011_pedidos.up.sql",
-			"012_stripe_eventos.up.sql"} {
+			"012_stripe_eventos.up.sql", "013_pedidos_tarefas.up.sql"} {
 			ddl, err := os.ReadFile("../../migrations/" + arq)
 			if err == nil {
 				_, err = pool.Exec(ctx, string(ddl))
