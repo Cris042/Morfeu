@@ -187,6 +187,7 @@ func (s *Servico) estornarUm(ctx context.Context, id uuid.UUID, intencao *string
 		return err
 	}
 	s.cfg.Funil(ctx, EtapaEstornado)
+	s.cfg.Compensacao(ctx, PassoEstorno)
 	s.logger.Info("pedido: estornado", campos...)
 	return nil
 }

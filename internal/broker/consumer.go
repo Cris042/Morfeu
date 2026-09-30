@@ -41,6 +41,9 @@ type Entrega struct {
 	Traceparent string
 	Body        []byte
 	Redelivered bool
+	// OccurredAt é o instante do evento no produtor (timestamp AMQP, resolução
+	// de segundo) — base de latências fim a fim (PRD 0026).
+	OccurredAt time.Time
 }
 
 // Handler processa uma entrega. nil → ack; erro com ErrPermanente → DLQ;
@@ -137,6 +140,7 @@ func (c *Client) processar(ctx context.Context, fila string, d amqp.Delivery, h 
 		Traceparent: headerString(d.Headers, "traceparent"),
 		Body:        d.Body,
 		Redelivered: d.Redelivered,
+		OccurredAt:  d.Timestamp,
 	}
 	campos := []zap.Field{
 		zap.String("event_type", e.Type),

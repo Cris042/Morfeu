@@ -59,7 +59,9 @@ type Config struct {
 	// contra DoS — o Stripe reenvia o que receber 429).
 	LimiteWebhook Limitador
 	Funil         func(ctx context.Context, etapa string)
-	Agora         func() time.Time
+	// Compensacao conta cada compensação executada (saga_compensacoes_total{passo}).
+	Compensacao func(ctx context.Context, passo string)
+	Agora       func() time.Time
 }
 
 // Servico implementa os casos de uso do pedido.
@@ -82,6 +84,9 @@ func NovoServico(pool outbox.Pool, cfg Config, logger *zap.Logger) (*Servico, er
 	}
 	if cfg.Funil == nil {
 		cfg.Funil = func(context.Context, string) {}
+	}
+	if cfg.Compensacao == nil {
+		cfg.Compensacao = func(context.Context, string) {}
 	}
 	return &Servico{pool: pool, cfg: cfg, logger: logger}, nil
 }
@@ -235,8 +240,13 @@ func (s *Servico) expirar(ctx context.Context, tx outbox.Tx, r repositorio, id u
 	if err != nil {
 		return false, err
 	}
-	_, err = s.cfg.Reserva.LiberarDoPedido(ctx, tx, id)
-	return err == nil, err
+	if _, err = s.cfg.Reserva.LiberarDoPedido(ctx, tx, id); err != nil {
+		return false, err
+	}
+	// Abandono não é compensação: conta só no funil. Dentro da TX de quem
+	// chamou — um rollback raro superestima o contador em 1.
+	s.cfg.Funil(ctx, EtapaExpirado)
+	return true, nil
 }
 
 // prazoPosCobranca limita os passos que seguem a chamada ao gateway.
@@ -276,7 +286,8 @@ func (s *Servico) abrirNaTx(ctx context.Context, tx outbox.Tx, p Pedido, agora t
 // desfazer marca o pedido como falhou e devolve os assentos (a cobrança não
 // existe). Se outro caminho já o transicionou, não há o que desfazer.
 func (s *Servico) desfazer(ctx context.Context, id uuid.UUID) error {
-	return outbox.WithTx(ctx, s.pool, func(tx outbox.Tx) error {
+	desfez := false
+	err := outbox.WithTx(ctx, s.pool, func(tx outbox.Tx) error {
 		r := repositorio{q: db.New(tx)}
 		if _, err := r.transicionar(ctx, id, AguardandoPagamento, CobrancaFalhou, s.cfg.Agora()); err != nil {
 			if errors.Is(err, ErrTransicaoConcorrente) {
@@ -284,9 +295,25 @@ func (s *Servico) desfazer(ctx context.Context, id uuid.UUID) error {
 			}
 			return err
 		}
+		desfez = true
 		_, err := s.cfg.Reserva.LiberarDoPedido(ctx, tx, id)
 		return err
 	})
+	if err == nil && desfez {
+		s.cfg.Compensacao(ctx, PassoCobranca)
+	}
+	return err
+}
+
+// Presos conta os pedidos que a saga deveria ter resolvido (gauge
+// pedidos_presos, PRD 0026): pendentes vencidos além da margem do hold e
+// estornos pendentes.
+func (s *Servico) Presos(ctx context.Context) (aguardandoVencido, estornoPendente int64, err error) {
+	r, err := db.New(s.pool).ContarPresos(ctx, s.cfg.Agora().Add(-MargemHold))
+	if err != nil {
+		return 0, 0, fmt.Errorf("pedido: contar presos: %w", err)
+	}
+	return r.AguardandoVencido, r.EstornoPendente, nil
 }
 
 // Obter devolve o pedido só para o carrinho que o criou (RF06).

@@ -28,6 +28,13 @@ const (
 	QueueFilmeCriadoDLQ   = "catalogo.filme_criado.dlq"
 	RoutingKeyFilmeCriado = "catalogo.filme_criado"
 
+	// Pedido confirmado → notificação (PRD 0026, ADR 0010). DLX própria: a DLX
+	// de filmes é fanout e mandaria as mortas de uma fila para a DLQ da outra.
+	QueuePedidoConfirmado       = "notificacao.pedido_confirmado"
+	QueuePedidoConfirmadoDLQ    = "notificacao.pedido_confirmado.dlq"
+	ExchangePedidoConfirmadoDLX = "notificacao.pedido_confirmado.dlx"
+	RoutingKeyPedidoConfirmado  = "pedido.confirmado"
+
 	filmeCriadoDeliveryLimit = int32(3)
 
 	confirmTimeout = 5 * time.Second
@@ -370,5 +377,31 @@ func declareTopology(ch *amqp.Channel) error {
 		return fmt.Errorf("bind %s -> %s: %w", QueueFilmeCriado, ExchangeEvents, err)
 	}
 
+	return declararFilaComDLQ(ch, QueuePedidoConfirmado, RoutingKeyPedidoConfirmado, ExchangePedidoConfirmadoDLX, QueuePedidoConfirmadoDLQ)
+}
+
+// declararFilaComDLQ declara uma quorum queue ligada à morfeu.events com a
+// própria DLX fanout → DLQ (mesmos parâmetros imutáveis da fila de filmes).
+func declararFilaComDLQ(ch *amqp.Channel, fila, routingKey, dlx, dlq string) error {
+	if err := ch.ExchangeDeclare(dlx, amqp.ExchangeFanout, true, false, false, false, nil); err != nil {
+		return fmt.Errorf("exchange %s: %w", dlx, err)
+	}
+	if _, err := ch.QueueDeclare(dlq, true, false, false, false, nil); err != nil {
+		return fmt.Errorf("fila %s: %w", dlq, err)
+	}
+	if err := ch.QueueBind(dlq, "", dlx, false, nil); err != nil {
+		return fmt.Errorf("bind %s -> %s: %w", dlq, dlx, err)
+	}
+	args := amqp.Table{
+		"x-queue-type":           "quorum",
+		"x-delivery-limit":       filmeCriadoDeliveryLimit,
+		"x-dead-letter-exchange": dlx,
+	}
+	if _, err := ch.QueueDeclare(fila, true, false, false, false, args); err != nil {
+		return fmt.Errorf("fila %s: %w", fila, err)
+	}
+	if err := ch.QueueBind(fila, routingKey, ExchangeEvents, false, nil); err != nil {
+		return fmt.Errorf("bind %s -> %s: %w", fila, ExchangeEvents, err)
+	}
 	return nil
 }

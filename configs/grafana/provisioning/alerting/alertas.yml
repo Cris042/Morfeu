@@ -1,5 +1,6 @@
 # Alertas mínimos (task 0007, RF06) — lista FECHADA do refinamento E0d,
-# + 1 do refinamento E1 (task 0010: reuso de refresh token).
+# + 1 do refinamento E1 (task 0010: reuso de refresh token), + 2 da reserva (E4)
+# + 5 da saga do checkout (refinamento E6, task 0026).
 # Grafana-managed; roteados ao Discord. Webhook só via env ($DISCORD_WEBHOOK_URL).
 # Cada regra segue o padrão A (query instantânea) → C (threshold). Nova regra
 # exige atualizar o PRD — a lista é fechada ("sem mais um alerta").
@@ -274,3 +275,139 @@ groups:
         annotations:
           summary: "Sweeper de holds parado"
           description: "Nenhuma passada do sweeper de holds em 10 min. A trava continua correta (o upsert rouba vencidos — ADR 0008), mas a tabela holds acumula 'ativo' vencidos; verificar o worker."
+      - uid: morfeu-saga-estorno
+        title: "Estorno automático executado"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'sum(increase(saga_compensacoes_total{passo="estorno"}[10m])) or vector(0)'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+        for: 0m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "Estorno automático executado"
+          description: "Um pagamento não pôde virar venda (divergência, pagamento tardio ou assento perdido) e foi estornado (ADR 0010). Isolado é esperado; repetido indica problema no checkout — ver logs do pedido pelo pedido_id."
+      - uid: morfeu-saga-estorno-preso
+        title: "Estorno pendente há mais de 30 min"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'max(pedidos_presos{estado="estorno_pendente"}) or vector(0)'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+        for: 30m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "Estorno pendente há mais de 30 min"
+          description: "Cliente cobrado sem ingresso e o estorno não concluiu (gateway fora, breaker aberto ou erro persistente). Ver os logs ‘estorno falhou’ e o gateway; o job repete com backoff até 1 h."
+      - uid: morfeu-saga-reconciliacao-parada
+        title: "Pedidos vencidos não reconciliados"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'max(pedidos_presos{estado="aguardando_vencido"}) or vector(0)'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "Pedidos vencidos não reconciliados"
+          description: "Há pedidos aguardando pagamento vencidos além da margem do hold: a reconciliação do worker não está rodando ou o gateway recusa as consultas. Assentos presos e pagamentos possivelmente sem webhook."
+      - uid: morfeu-gateway-breaker
+        title: "Circuit breaker do gateway aberto"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'max(gateway_breaker_state) or vector(0)'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+        for: 1m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "Circuit breaker do gateway aberto"
+          description: "5 falhas seguidas no Stripe: novos pedidos recebem 503 e os assentos voltam. Verificar status.stripe.com e a rede da VM."
+      - uid: morfeu-saga-latencia
+        title: "Confirmação → notificação lenta (p95 > 5 s)"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              # SLI do checkout fim a fim (PRD 0026); sem dados = sem compras (OK).
+              expr: 'histogram_quantile(0.95, sum by (le) (rate(checkout_confirmado_ate_notificado_segundos_bucket[10m])))'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [5]}
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "Confirmação → notificação lenta"
+          description: "p95 entre o pagamento confirmado e a notificação processada acima de 5 s (SLI do checkout fim a fim, doc.md §13): relay da outbox lento, broker ou consumidor atrasados."

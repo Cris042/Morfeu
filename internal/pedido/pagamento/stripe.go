@@ -149,8 +149,19 @@ func (s *Stripe) Estornar(ctx context.Context, intencaoID, chave string) error {
 	params.SetIdempotencyKey(chave)
 	return s.chamar(ctx, opEstornar, func(ctx context.Context) error {
 		_, err := s.sc.V1Refunds.Create(ctx, params)
+		if jaEstornado(err) {
+			// A chave de idempotência vale 24 h: depois disso, repetir o estorno
+			// de um pagamento já devolvido responde "já estornado" — é sucesso
+			// (auditoria 0025).
+			return nil
+		}
 		return err
 	})
+}
+
+func jaEstornado(err error) bool {
+	var se *stripe.Error
+	return errors.As(err, &se) && se.Code == stripe.ErrorCodeChargeAlreadyRefunded
 }
 
 // chamar aplica o breaker, o prazo total e as métricas a uma chamada.

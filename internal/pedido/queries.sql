@@ -84,3 +84,12 @@ LIMIT @limite::int;
 UPDATE pedidos
 SET tentativas_estorno = tentativas_estorno + 1, atualizado_em = @agora
 WHERE id = @id AND status = 'estorno_pendente';
+
+-- name: ContarPresos :one
+-- Gauge pedidos_presos (PRD 0026): vencidos além da margem do hold (a
+-- reconciliação deveria tê-los resolvido) e estornos ainda pendentes.
+SELECT
+    count(*) FILTER (WHERE status = 'aguardando_pagamento' AND expira_em <= @limite_vencido)::bigint AS aguardando_vencido,
+    count(*) FILTER (WHERE status = 'estorno_pendente')::bigint AS estorno_pendente
+FROM pedidos
+WHERE status IN ('aguardando_pagamento', 'estorno_pendente');
