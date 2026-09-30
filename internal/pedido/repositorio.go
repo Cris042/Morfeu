@@ -35,6 +35,7 @@ func (r repositorio) inserir(ctx context.Context, p Pedido, agora time.Time) (bo
 type pendente struct {
 	id       uuid.UUID
 	expiraEm time.Time
+	intencao *string
 }
 
 func (r repositorio) pendenteDoDono(ctx context.Context, donoHash []byte) ([]pendente, error) {
@@ -44,7 +45,7 @@ func (r repositorio) pendenteDoDono(ctx context.Context, donoHash []byte) ([]pen
 	}
 	out := make([]pendente, 0, len(linhas))
 	for _, l := range linhas {
-		out = append(out, pendente{id: l.ID, expiraEm: l.ExpiraEm})
+		out = append(out, pendente{id: l.ID, expiraEm: l.ExpiraEm, intencao: l.PaymentIntentID})
 	}
 	return out, nil
 }

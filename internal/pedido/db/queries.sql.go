@@ -127,6 +127,47 @@ func (q *Queries) EmitirIngresso(ctx context.Context, arg EmitirIngressoParams) 
 	return items, nil
 }
 
+const estornosPendentes = `-- name: EstornosPendentes :many
+SELECT id, payment_intent_id, tentativas_estorno, atualizado_em
+FROM pedidos
+WHERE status = 'estorno_pendente'
+ORDER BY atualizado_em
+LIMIT $1::int
+`
+
+type EstornosPendentesRow struct {
+	ID                uuid.UUID `db:"id"`
+	PaymentIntentID   *string   `db:"payment_intent_id"`
+	TentativasEstorno int16     `db:"tentativas_estorno"`
+	AtualizadoEm      time.Time `db:"atualizado_em"`
+}
+
+// Job de estorno (PRD 0025): o backoff por tentativas é aplicado no serviço.
+func (q *Queries) EstornosPendentes(ctx context.Context, limite int32) ([]EstornosPendentesRow, error) {
+	rows, err := q.db.Query(ctx, estornosPendentes, limite)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []EstornosPendentesRow
+	for rows.Next() {
+		var i EstornosPendentesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PaymentIntentID,
+			&i.TentativasEstorno,
+			&i.AtualizadoEm,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const inserirPedido = `-- name: InserirPedido :many
 INSERT INTO pedidos (id, codigo, email, dono_hash, sessao_id, assentos, total_centavos, status, expira_em, criado_em, atualizado_em)
 VALUES ($1, $2, $3, $4, $5, $6::varchar[], $7, 'aguardando_pagamento', $8, $9, $9)
@@ -205,15 +246,55 @@ func (q *Queries) MarcarEstorno(ctx context.Context, arg MarcarEstornoParams) (i
 	return result.RowsAffected(), nil
 }
 
+const pedidosVencidos = `-- name: PedidosVencidos :many
+SELECT id, payment_intent_id
+FROM pedidos
+WHERE status = 'aguardando_pagamento' AND expira_em <= $1
+ORDER BY expira_em
+LIMIT $2::int
+`
+
+type PedidosVencidosParams struct {
+	Agora  time.Time `db:"agora"`
+	Limite int32     `db:"limite"`
+}
+
+type PedidosVencidosRow struct {
+	ID              uuid.UUID `db:"id"`
+	PaymentIntentID *string   `db:"payment_intent_id"`
+}
+
+// Reconciliação (PRD 0025): pendentes cujo prazo passou, mais antigos antes.
+func (q *Queries) PedidosVencidos(ctx context.Context, arg PedidosVencidosParams) ([]PedidosVencidosRow, error) {
+	rows, err := q.db.Query(ctx, pedidosVencidos, arg.Agora, arg.Limite)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PedidosVencidosRow
+	for rows.Next() {
+		var i PedidosVencidosRow
+		if err := rows.Scan(&i.ID, &i.PaymentIntentID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const pendenteDoDono = `-- name: PendenteDoDono :many
-SELECT id, expira_em
+SELECT id, expira_em, payment_intent_id
 FROM pedidos
 WHERE dono_hash = $1 AND status = 'aguardando_pagamento'
 `
 
 type PendenteDoDonoRow struct {
-	ID       uuid.UUID `db:"id"`
-	ExpiraEm time.Time `db:"expira_em"`
+	ID              uuid.UUID `db:"id"`
+	ExpiraEm        time.Time `db:"expira_em"`
+	PaymentIntentID *string   `db:"payment_intent_id"`
 }
 
 func (q *Queries) PendenteDoDono(ctx context.Context, donoHash []byte) ([]PendenteDoDonoRow, error) {
@@ -225,7 +306,7 @@ func (q *Queries) PendenteDoDono(ctx context.Context, donoHash []byte) ([]Penden
 	var items []PendenteDoDonoRow
 	for rows.Next() {
 		var i PendenteDoDonoRow
-		if err := rows.Scan(&i.ID, &i.ExpiraEm); err != nil {
+		if err := rows.Scan(&i.ID, &i.ExpiraEm, &i.PaymentIntentID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -291,6 +372,25 @@ func (q *Queries) RegistrarEventoStripe(ctx context.Context, arg RegistrarEvento
 		return nil, err
 	}
 	return items, nil
+}
+
+const registrarFalhaEstorno = `-- name: RegistrarFalhaEstorno :execrows
+UPDATE pedidos
+SET tentativas_estorno = tentativas_estorno + 1, atualizado_em = $1
+WHERE id = $2 AND status = 'estorno_pendente'
+`
+
+type RegistrarFalhaEstornoParams struct {
+	Agora time.Time `db:"agora"`
+	ID    uuid.UUID `db:"id"`
+}
+
+func (q *Queries) RegistrarFalhaEstorno(ctx context.Context, arg RegistrarFalhaEstornoParams) (int64, error) {
+	result, err := q.db.Exec(ctx, registrarFalhaEstorno, arg.Agora, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const transicionar = `-- name: Transicionar :execrows

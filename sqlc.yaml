@@ -131,6 +131,7 @@ sql:
   - schema:
       - "./migrations/011_pedidos.up.sql"
       - "./migrations/012_stripe_eventos.up.sql"
+      - "./migrations/013_pedidos_tarefas.up.sql"
     queries: "./internal/pedido/queries.sql"
     engine: "postgresql"
     gen:

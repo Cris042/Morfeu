@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -224,5 +225,101 @@ func TestBreaker(t *testing.T) {
 	}
 	if fmt.Sprint(estados) != "[true false]" {
 		t.Fatalf("transições informadas: %v", estados)
+	}
+}
+
+// rotasFalsas imita as rotas de consulta, cancelamento e estorno do Stripe.
+type rotasFalsas struct {
+	mu                      sync.Mutex
+	vistos                  []string
+	chaveEstorno, piEstorno string
+	status                  string
+}
+
+func (f *rotasFalsas) definir(status string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.status = status
+}
+
+func (f *rotasFalsas) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	f.mu.Lock()
+	f.vistos = append(f.vistos, r.Method+" "+r.URL.Path)
+	if r.URL.Path == "/v1/refunds" {
+		f.chaveEstorno, f.piEstorno = r.Header.Get("Idempotency-Key"), r.PostForm.Get("payment_intent")
+	}
+	st := f.status
+	f.mu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	switch {
+	case r.URL.Path == "/v1/refunds":
+		_, _ = fmt.Fprint(w, `{"id":"re_1","object":"refund","status":"succeeded"}`)
+	case strings.HasSuffix(r.URL.Path, "/cancel") && st == "succeeded":
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = fmt.Fprint(w, `{"error":{"type":"invalid_request_error","code":"payment_intent_unexpected_state"}}`)
+	default:
+		_, _ = fmt.Fprintf(w, `{"id":"pi_1","object":"payment_intent","status":%q,"amount":6000,"currency":"brl"}`, st)
+	}
+}
+
+// TestStripe_ConsultarCancelarEstornar cobre a borda da reconciliação e do
+// estorno (PRD 0025): caminho, método, parâmetros e idempotência.
+func TestStripe_ConsultarCancelarEstornar(t *testing.T) {
+	f := &rotasFalsas{}
+	srv := httptest.NewServer(f)
+	t.Cleanup(srv.Close)
+	s, err := NovoStripe(ConfigStripe{Chave: "rk_test_x", URL: srv.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	for st, quer := range map[string]EstadoCobranca{"succeeded": CobrancaAprovada, "canceled": CobrancaCancelada, "requires_payment_method": CobrancaPendente, "processing": CobrancaPendente} {
+		f.definir(st)
+		sit, err := s.ConsultarCobranca(ctx, "pi_1")
+		if err != nil || sit != (Situacao{Estado: quer, ValorCentavos: 6000, Moeda: "brl"}) {
+			t.Errorf("%s: %+v %v", st, sit, err)
+		}
+	}
+	f.definir("succeeded")
+	if err := s.CancelarCobranca(ctx, "pi_1"); !errors.Is(err, ErrIndisponivel) || s.breaker.falhas != 0 {
+		t.Fatalf("cancelar aprovada: %v (a recusa 4xx não conta no breaker: %d)", err, s.breaker.falhas)
+	}
+	f.definir("requires_payment_method")
+	if err := s.CancelarCobranca(ctx, "pi_1"); err != nil {
+		t.Fatalf("cancelar pendente: %v", err)
+	}
+	if err := s.Estornar(ctx, "pi_1", "estorno-abc"); err != nil || f.chaveEstorno != "estorno-abc" || f.piEstorno != "pi_1" {
+		t.Fatalf("estornar: %v chave=%q pi=%q", err, f.chaveEstorno, f.piEstorno)
+	}
+	if !slices.Contains(f.vistos, "GET /v1/payment_intents/pi_1") || !slices.Contains(f.vistos, "POST /v1/payment_intents/pi_1/cancel") {
+		t.Fatalf("rotas: %v", f.vistos)
+	}
+}
+
+func TestFake_EstadoDasCobrancas(t *testing.T) {
+	f := NovoFake()
+	ctx := context.Background()
+	in, _ := f.CriarCobranca(ctx, Cobranca{PedidoID: uuid.New(), ValorCentavos: 3000, Moeda: "brl"})
+	if sit, _ := f.ConsultarCobranca(ctx, in.ID); sit.Estado != CobrancaPendente || sit.ValorCentavos != 3000 {
+		t.Fatalf("nova: %+v", sit)
+	}
+	f.Aprovar(in.ID)
+	if err := f.CancelarCobranca(ctx, in.ID); err == nil {
+		t.Fatal("aprovada não se cancela")
+	}
+	f.FalharEstornos(1)
+	if err := f.Estornar(ctx, in.ID, "k"); !errors.Is(err, ErrIndisponivel) {
+		t.Fatalf("estorno programado para falhar: %v", err)
+	}
+	if err := f.Estornar(ctx, in.ID, "k"); err != nil || fmt.Sprint(f.Estornos()) != "[k k]" {
+		t.Fatalf("estorno: %v %v", err, f.Estornos())
+	}
+	outra, _ := f.CriarCobranca(ctx, Cobranca{PedidoID: uuid.New(), ValorCentavos: 1, Moeda: "brl"})
+	if err := f.CancelarCobranca(ctx, outra.ID); err != nil || f.Cancelamentos()[0] != outra.ID {
+		t.Fatalf("cancelar: %v", err)
+	}
+	if _, err := f.ConsultarCobranca(ctx, "pi_nada"); !errors.Is(err, ErrCobrancaDesconhecida) {
+		t.Fatalf("desconhecida: %v", err)
 	}
 }

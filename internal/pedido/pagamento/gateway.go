@@ -31,7 +31,32 @@ type Intencao struct {
 	SegredoCliente string
 }
 
-// Gateway é a porta do pedido para o meio de pagamento.
+// EstadoCobranca é o que a reconciliação precisa saber de uma cobrança.
+type EstadoCobranca string
+
+// Estados da cobrança no gateway.
+const (
+	CobrancaAprovada  EstadoCobranca = "aprovada"
+	CobrancaPendente  EstadoCobranca = "pendente" // aguarda o cliente (ou está processando)
+	CobrancaCancelada EstadoCobranca = "cancelada"
+)
+
+// Situacao é a cobrança consultada no gateway (reconciliação — task 0025).
+type Situacao struct {
+	Estado        EstadoCobranca
+	ValorCentavos int64
+	Moeda         string
+}
+
+// Gateway é a porta do pedido para o meio de pagamento. Toda escrita leva
+// chave de idempotência: o retry nunca duplica cobrança nem estorno.
 type Gateway interface {
 	CriarCobranca(ctx context.Context, c Cobranca) (Intencao, error)
+	// ConsultarCobranca lê o estado atual (webhook perdido → reconciliação).
+	ConsultarCobranca(ctx context.Context, intencaoID string) (Situacao, error)
+	// CancelarCobranca impede pagamento futuro de um pedido vencido. Cobrança
+	// já aprovada não é cancelada (erro): quem chama reconsulta.
+	CancelarCobranca(ctx context.Context, intencaoID string) error
+	// Estornar devolve o valor integral da cobrança aprovada.
+	Estornar(ctx context.Context, intencaoID, chaveIdempotencia string) error
 }

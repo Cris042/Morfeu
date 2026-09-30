@@ -173,38 +173,70 @@ func (s *Servico) Criar(ctx context.Context, donoHash []byte, in Entrada) (Criad
 // expirarPendenteVencido expira (lazy) o pedido vencido do carrinho e
 // devolve os assentos, numa TX própria: se a abertura do novo pedido falhar
 // (ex.: os holds precisam ser refeitos), o carrinho não volta a ficar preso
-// ao pedido vencido. A reconciliação (task 0025) cancela a cobrança dele.
+// ao pedido vencido. Depois do commit, cancela a cobrança dele no gateway
+// (melhor esforço: se falhar, a reconciliação/estorno cobrem o pagamento).
 func (s *Servico) expirarPendenteVencido(ctx context.Context, donoHash []byte, agora time.Time) error {
-	return outbox.WithTx(ctx, s.pool, func(tx outbox.Tx) error {
-		r := repositorio{q: db.New(tx)}
-		pendentes, err := r.pendenteDoDono(ctx, donoHash)
-		if err != nil {
-			return err
-		}
-		for _, pe := range pendentes {
-			if pe.expiraEm.After(agora) {
-				continue
-			}
-			if err := s.expirar(ctx, tx, r, pe.id, agora); err != nil {
-				return err
-			}
-		}
-		return nil
+	var cancelar []string
+	err := outbox.WithTx(ctx, s.pool, func(tx outbox.Tx) error {
+		var err error
+		cancelar, err = s.expirarVencidosDoDono(ctx, tx, donoHash, agora)
+		return err
 	})
-}
-
-// expirar vence o pedido (CAS) e devolve os assentos na TX recebida. Se outro
-// caminho (webhook/reconciliação) já o transicionou, não há o que fazer.
-func (s *Servico) expirar(ctx context.Context, tx outbox.Tx, r repositorio, id uuid.UUID, agora time.Time) error {
-	_, err := r.transicionar(ctx, id, AguardandoPagamento, PrazoVencido, agora)
-	if errors.Is(err, ErrTransicaoConcorrente) {
-		return nil
-	}
 	if err != nil {
 		return err
 	}
+	for _, id := range cancelar {
+		s.cancelarCobranca(ctx, id)
+	}
+	return nil
+}
+
+// expirarVencidosDoDono expira na TX os pendentes vencidos do carrinho e
+// devolve as cobranças deles, a cancelar depois do commit.
+func (s *Servico) expirarVencidosDoDono(ctx context.Context, tx outbox.Tx, donoHash []byte, agora time.Time) ([]string, error) {
+	r := repositorio{q: db.New(tx)}
+	pendentes, err := r.pendenteDoDono(ctx, donoHash)
+	if err != nil {
+		return nil, err
+	}
+	var cancelar []string
+	for _, pe := range pendentes {
+		if pe.expiraEm.After(agora) {
+			continue
+		}
+		expirou, err := s.expirar(ctx, tx, r, pe.id, agora)
+		if err != nil {
+			return nil, err
+		}
+		if expirou && pe.intencao != nil {
+			cancelar = append(cancelar, *pe.intencao)
+		}
+	}
+	return cancelar, nil
+}
+
+// cancelarCobranca cancela a cobrança de um pedido vencido (melhor esforço).
+func (s *Servico) cancelarCobranca(ctx context.Context, intencaoID string) {
+	ctx, fim := ctxPosCobranca(ctx)
+	defer fim()
+	if err := s.cfg.Gateway.CancelarCobranca(ctx, intencaoID); err != nil {
+		s.logger.Warn("pedido: cancelar cobrança de pedido vencido", zap.Error(err))
+	}
+}
+
+// expirar vence o pedido (CAS) e devolve os assentos na TX recebida. Se outro
+// caminho (webhook/reconciliação) já o transicionou, não há o que fazer
+// (expirou = false).
+func (s *Servico) expirar(ctx context.Context, tx outbox.Tx, r repositorio, id uuid.UUID, agora time.Time) (bool, error) {
+	_, err := r.transicionar(ctx, id, AguardandoPagamento, PrazoVencido, agora)
+	if errors.Is(err, ErrTransicaoConcorrente) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
 	_, err = s.cfg.Reserva.LiberarDoPedido(ctx, tx, id)
-	return err
+	return err == nil, err
 }
 
 // prazoPosCobranca limita os passos que seguem a chamada ao gateway.

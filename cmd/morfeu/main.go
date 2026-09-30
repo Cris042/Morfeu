@@ -166,7 +166,8 @@ func runServer(mode string) {
 	registrarMetricasMensageria(tel, dbPool, brokerClient, log)
 
 	e := setupRouter(log, tel, healthHandler)
-	registrarRotasDeDominio(e, mode, cfg, dbPool, redisClient, cacheLayer, catalogoServico, catalogoHandler, log)
+	pedidoServico := registrarRotasDeDominio(e, mode, cfg, dbPool, redisClient, cacheLayer, catalogoServico, catalogoHandler, log)
+	iniciarTarefasPedido(relayCtx, mode, pedidoServico, &relayWG)
 
 	go func() {
 		if err := e.Start(":" + cfg.AppPort); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -276,21 +277,25 @@ func conectarTMDB(s *catalogo.Servico, cfg *config.Config, log *logger.Logger) {
 // registrarRotasDeDominio monta as rotas dos módulos. Cartaz público sempre;
 // /auth/* e o backoffice só onde o processo serve a API (api|all), pois
 // exigem JWT_SEGREDO (PRD 0009) e o papel operador (PRD 0011).
-func registrarRotasDeDominio(e *echo.Echo, mode string, cfg *config.Config, dbPool *pgxpool.Pool, redisClient redis.Cmdable, cacheLayer cache.Cache, catalogoServico *catalogo.Servico, catalogoHandler *catalogo.Handler, log *logger.Logger) {
+func registrarRotasDeDominio(e *echo.Echo, mode string, cfg *config.Config, dbPool *pgxpool.Pool, redisClient redis.Cmdable, cacheLayer cache.Cache, catalogoServico *catalogo.Servico, catalogoHandler *catalogo.Handler, log *logger.Logger) *pedido.Servico {
 	catalogoHandler.RegistrarRotasPublicas(e)
 	sessaoHandler, sessaoServico := montarSessao(dbPool, catalogoServico, cacheLayer, log)
 	sessaoHandler.RegistrarRotasPublicas(e)
+	// Reserva e pedido também existem no worker: as tarefas da saga (PRD 0025)
+	// usam o serviço do pedido e a porta transacional da reserva.
+	reservaHandler, reservaServico := montarReserva(dbPool, sessaoServico, redisClient, cacheLayer, log)
+	pedidoHandler, pedidoServico := montarPedido(cfg, dbPool, sessaoServico, reservaServico, redisClient, log)
 	if mode == modeWorker {
-		return
+		return pedidoServico
 	}
 	identidadeHandler, emissor := montarIdentidade(cfg, dbPool, redisClient, log)
 	identidadeHandler.RegistrarRotas(e)
 	exigirOperador := autenticacao.Exigir(emissor, autenticacao.PapelOperador)
 	catalogoHandler.RegistrarRotasBackoffice(e, exigirOperador)
 	sessaoHandler.RegistrarRotasBackoffice(e, exigirOperador, operadorDaRequisicao)
-	reservaHandler, reservaServico := montarReserva(dbPool, sessaoServico, redisClient, cacheLayer, log)
 	reservaHandler.RegistrarRotas(e)
-	montarPedido(cfg, dbPool, sessaoServico, reservaServico, redisClient, log).RegistrarRotas(e)
+	pedidoHandler.RegistrarRotas(e)
+	return pedidoServico
 }
 
 // operadorDaRequisicao identifica o operador para o log de auditoria mínima
@@ -358,6 +363,19 @@ func montarReserva(dbPool *pgxpool.Pool, sessoes reserva.FonteSessoes, redisClie
 	return reserva.NovoHandler(servico, log.Logger), servico
 }
 
+// iniciarTarefasPedido roda reconciliação + estornos da saga (PRD 0025) em
+// -mode=worker|all, no mesmo WaitGroup do shutdown gracioso.
+func iniciarTarefasPedido(ctx context.Context, mode string, s *pedido.Servico, wg *sync.WaitGroup) {
+	if mode != modeWorker && mode != modeAll {
+		return
+	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		s.RodarTarefas(ctx, pedido.IntervaloTarefas)
+	}()
+}
+
 // Rate limit da criação de pedido e da rota do webhook (refinamento E6).
 const (
 	limitePedidosIP   = 10
@@ -369,7 +387,7 @@ const (
 // sessao, porta transacional = reserva (ADR 0010), gateway escolhido pela
 // config (fake recusado em produção), verificador do webhook, limitadores do
 // E1, funil e métricas do gateway.
-func montarPedido(cfg *config.Config, dbPool *pgxpool.Pool, sessoes pedido.FonteSessoes, r *reserva.Servico, redisClient redis.Cmdable, log *logger.Logger) *pedido.Handler {
+func montarPedido(cfg *config.Config, dbPool *pgxpool.Pool, sessoes pedido.FonteSessoes, r *reserva.Servico, redisClient redis.Cmdable, log *logger.Logger) (*pedido.Handler, *pedido.Servico) {
 	fatal := func(msg string, err error) {
 		log.ErrorMsg(msg, zap.Error(err))
 		os.Exit(1)
@@ -414,7 +432,7 @@ func montarPedido(cfg *config.Config, dbPool *pgxpool.Pool, sessoes pedido.Fonte
 	if err != nil {
 		fatal("serviço de pedido", err)
 	}
-	return pedido.NovoHandler(servico, log.Logger)
+	return pedido.NovoHandler(servico, log.Logger), servico
 }
 
 // montarGateway escolhe o adapter (ADR 0005 Strategy): Stripe em modo de
