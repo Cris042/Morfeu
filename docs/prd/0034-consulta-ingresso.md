@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0034-consulta-ingresso.md
 - **Branch:** feature/0034-consulta-ingresso
 - **Data:** 2026-09-30
-- **Status:** em andamento
+- **Status:** concluído
 
 ## Objetivo
 
@@ -49,15 +49,15 @@ Rotas, serviço, portas, rate limits, headers, redação e testes.
 
 ## Critérios de aceite
 
-- [ ] CA01 — Consulta com e-mail em outra caixa e código digitado com hífen → pedido + 2 refs válidas; sem dados da cobrança; `no-store`.
-- [ ] CA02 — E-mail errado, código inexistente, malformado e vazio → respostas idênticas; pedido pendente → sem links; sem anti-CSRF → 403.
-- [ ] CA03 — Teto da consulta por e-mail normalizado.
-- [ ] CA04 — Link válido → dados + QR com o link do e-mail; 10 variantes inválidas (token trocado, de outro id, segredo errado, sem ponto, UUID maiúsculo, curto, com padding, lixo, QR errado/inexistente) idênticas ao 404 de id inexistente.
-- [ ] CA05 — Expirado (início + 24 h + 1 s) → 410 com token certo e 404 com token errado; cancelado → 410 (página e QR) e some da consulta.
-- [ ] CA06 — Token da versão 2 valida com o segredo da v2; token da v1 num ingresso v2 → 404.
-- [ ] CA07 — Teto por IP em `/i/*` com os headers.
-- [ ] CA08 — Log e span sem o token (teste de unidade com otelecho real + mutação conferida).
-- [ ] CA09 — Lint, suíte `-race` e CI verdes.
+- [x] CA01 — Consulta com e-mail em outra caixa e código digitado com hífen → pedido + 2 refs válidas; sem dados da cobrança; `no-store`.
+- [x] CA02 — E-mail errado, código inexistente, malformado e vazio → respostas idênticas; pedido pendente → sem links; sem anti-CSRF → 403.
+- [x] CA03 — Teto da consulta por e-mail normalizado.
+- [x] CA04 — Link válido → dados + QR com o link do e-mail; 10 variantes inválidas (token trocado, de outro id, segredo errado, sem ponto, UUID maiúsculo, curto, com padding, lixo, QR errado/inexistente) idênticas ao 404 de id inexistente.
+- [x] CA05 — Expirado (início + 24 h + 1 s) → 410 com token certo e 404 com token errado; cancelado → 410 (página e QR) e some da consulta.
+- [x] CA06 — Token da versão 2 valida com o segredo da v2; token da v1 num ingresso v2 → 404.
+- [x] CA07 — Teto por IP em `/i/*` com os headers.
+- [x] CA08 — Log e span sem o token (teste de unidade com otelecho real + mutação conferida).
+- [x] CA09 — Lint, suíte `-race` e CI verdes.
 
 ## Plano de testes
 

@@ -145,14 +145,14 @@ type confirmacaoView struct {
 	Tickets []ingressoView
 }
 
-// Montar produz o e-mail de confirmação: HTML (html/template, escape
-// automático) + texto puro + um QR PNG inline por ingresso.
 // QR gera o PNG do ingresso (256 px). O mesmo gerador serve a página do
 // ingresso (PRD 0034), injetado no pedido pelo main.
 func QR(conteudo string) ([]byte, error) {
 	return qrcode.Encode(conteudo, qrcode.Medium, tamanhoQR)
 }
 
+// Montar produz o e-mail de confirmação: HTML (html/template, escape
+// automático) + texto puro + um QR PNG inline por ingresso.
 func (e *Entregador) Montar(d DadosEmail) (Mensagem, error) {
 	v := confirmacaoView{
 		Codigo: d.Codigo, Filme: d.Filme, Sala: d.Sala,

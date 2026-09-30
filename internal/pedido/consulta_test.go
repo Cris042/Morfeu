@@ -225,6 +225,13 @@ func TestIngresso_VersaoDoToken(t *testing.T) {
 	if r := a.ingresso("/i/" + id.String() + "." + TokenIngresso(segredoTokenTeste, id)); r.code != http.StatusNotFound {
 		t.Fatalf("token da v1 num ingresso v2: %d", r.code)
 	}
+	// Versão aposentada (sem segredo): 404, nunca 500 (não revela o id).
+	delete(a.servico.cfg.SegredosToken, 2)
+	for _, tok := range []string{TokenIngresso(v2, id), TokenIngresso(segredoTokenTeste, id)} {
+		if r := a.ingresso("/i/" + id.String() + "." + tok); r.code != http.StatusNotFound {
+			t.Fatalf("versão sem segredo: %d %s", r.code, r.corpo)
+		}
+	}
 }
 
 // TestIngresso_Limite cobre CA07: teto por IP na página e no QR.

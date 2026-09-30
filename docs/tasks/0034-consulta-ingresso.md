@@ -1,7 +1,7 @@
 # Task 0034 — Backend: consulta de convidado e página do ingresso (E8, T4)
 
 - **Data:** 2026-09-30
-- **Status:** em andamento
+- **Status:** concluída (auditoria APROVADA em 2026-09-30)
 - **Branch:** `feature/0034-consulta-ingresso` (da main `93b49fd`)
 - **PRD:** docs/prd/0034-consulta-ingresso.md
 - **Item do roadmap:** E8 — SPA checkout + convidado/conta (4ª de 5). Refinamento: `docs/refinamentos/E8-spa-checkout.md` §T4.
@@ -28,9 +28,9 @@ Nenhuma nova (QR reaproveita o `skip2/go-qrcode` da notificação).
 
 ## Critérios de aceite
 
-- [ ] Consulta: acerto com links; todo "não encontrado" idêntico byte a byte; teto por IP e por e-mail.
-- [ ] Ingresso: HMAC sempre calculado + `hmac.Equal`; 404 idêntico; 410 só depois do token válido; versão do token respeitada.
-- [ ] Headers `no-referrer`/`no-store`/`nosniff` em toda resposta de `/i/*`; link fora do log e do span.
+- [x] Consulta: acerto com links; todo "não encontrado" idêntico byte a byte; teto por IP e por e-mail.
+- [x] Ingresso: HMAC sempre calculado + `hmac.Equal`; 404 idêntico; 410 só depois do token válido; versão do token respeitada.
+- [x] Headers `no-referrer`/`no-store`/`nosniff` em toda resposta de `/i/*`; link fora do log e do span.
 
 ## Riscos
 

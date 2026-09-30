@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 
 	"github.com/mclovin137/morfeu/internal/pedido/db"
 )
@@ -204,10 +205,14 @@ func (s *Servico) Ingresso(ctx context.Context, ref string) (IngressoPublico, er
 	}
 	segredo, ok := s.cfg.SegredosToken[versao]
 	if !ok {
-		return IngressoPublico{}, fmt.Errorf("pedido: sem segredo para a versão %d do token", versao)
+		// Versão aposentada/sem segredo: mesmo caminho (HMAC com a v1 → 404),
+		// nunca um 500 que revelaria que o id existe (auditoria 0034).
+		s.logger.Warn("pedido: ingresso com versão de token sem segredo", zap.Int16("versao", versao))
+		segredo = s.cfg.SegredosToken[1]
+		ok = false
 	}
 	esperado := TokenIngresso(segredo, id)
-	if !hmac.Equal([]byte(esperado), []byte(token)) || !formatoOK || len(linhas) != 1 {
+	if !hmac.Equal([]byte(esperado), []byte(token)) || !ok || !formatoOK || len(linhas) != 1 {
 		return IngressoPublico{}, ErrIngressoInvalido
 	}
 	i := linhas[0]
