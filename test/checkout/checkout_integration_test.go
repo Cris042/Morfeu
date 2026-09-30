@@ -171,10 +171,11 @@ func (a reservaDoPedido) ConverterDoPedido(ctx context.Context, tx outbox.Tx, id
 
 // pilha é a aplicação montada como no main, com relay e consumidor rodando.
 type pilha struct {
-	e         *echo.Echo
-	falhar    atomic.Bool // a entrega da notificação falha (e-mail fora)
-	entregues sync.Map    // pedido_id → true
-	latencias atomic.Int64
+	e          *echo.Echo
+	falhar     atomic.Bool // a entrega da notificação falha (e-mail fora)
+	entregues  sync.Map    // pedido_id → true
+	tentativas sync.Map    // pedido_id → *atomic.Int32 (entregas tentadas)
+	latencias  atomic.Int64
 }
 
 func montar(t *testing.T) *pilha {
@@ -193,6 +194,8 @@ func montar(t *testing.T) *pilha {
 	notif := notificacao.NovoConsumidor(notificacao.Config{
 		Latencia: func(context.Context, time.Duration) { p.latencias.Add(1) },
 		Entregar: func(_ context.Context, id uuid.UUID) error {
+			n, _ := p.tentativas.LoadOrStore(id, new(atomic.Int32))
+			n.(*atomic.Int32).Add(1)
 			if p.falhar.Load() {
 				return errors.New("e-mail fora do ar")
 			}
@@ -340,13 +343,15 @@ func TestCheckout_PontaAPonta(t *testing.T) {
 	if st, n := estadoDo(t, id); st != "pago" || n != 2 {
 		t.Fatalf("pivô: %s %d", st, n)
 	}
-	eventualmente(t, 30*time.Second, func() bool { _, ok := p.entregues.Load(id); return ok }, "notificação não processada")
-	var processadas int
-	_ = pool.QueryRow(context.Background(), `SELECT count(*) FROM processed_messages pm JOIN outbox_events oe ON oe.id = pm.message_id
-		WHERE pm.consumidor = $1 AND oe.aggregate_id = $2`, notificacao.Consumidor, id.String()).Scan(&processadas)
-	if processadas != 1 || p.latencias.Load() < 1 {
-		t.Fatalf("dedup/latência: processadas=%d latências=%d", processadas, p.latencias.Load())
-	}
+	// Espera o commit do dedup e a latência (o Store da entrega acontece antes
+	// do commit — ler uma vez só seria uma corrida; auditoria 0026).
+	eventualmente(t, 30*time.Second, func() bool {
+		var processadas int
+		_ = pool.QueryRow(context.Background(), `SELECT count(*) FROM processed_messages pm JOIN outbox_events oe ON oe.id = pm.message_id
+			WHERE pm.consumidor = $1 AND oe.aggregate_id = $2`, notificacao.Consumidor, id.String()).Scan(&processadas)
+		_, entregue := p.entregues.Load(id)
+		return processadas == 1 && entregue && p.latencias.Load() >= 1
+	}, "notificação não processada (dedup + entrega + latência)")
 }
 
 // TestCheckout_NotificacaoNuncaCompensa cobre CA06: a entrega falha sempre →
@@ -364,10 +369,18 @@ func TestCheckout_NotificacaoNuncaCompensa(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A mensagem morta na DLQ é a DESTE pedido, depois das 3 entregas tentadas
+	// (x-delivery-limit) — auditoria 0026.
 	eventualmente(t, 60*time.Second, func() bool {
-		q, err := ch.QueueDeclarePassive(broker.QueuePedidoConfirmadoDLQ, true, false, false, false, nil)
-		return err == nil && q.Messages >= 1
-	}, "mensagem não chegou à DLQ")
+		msg, ok, err := ch.Get(broker.QueuePedidoConfirmadoDLQ, true)
+		if err != nil || !ok {
+			return false
+		}
+		return msg.Headers["aggregate_id"] == id.String()
+	}, "mensagem do pedido não chegou à DLQ")
+	if n, ok := p.tentativas.Load(id); !ok || n.(*atomic.Int32).Load() < 3 {
+		t.Fatalf("esperava ≥ 3 tentativas de entrega antes da DLQ")
+	}
 	if st, n := estadoDo(t, id); st != "pago" || n != 1 {
 		t.Fatalf("a falha da notificação alterou a venda: %s %d", st, n)
 	}

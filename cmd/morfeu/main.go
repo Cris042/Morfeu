@@ -262,7 +262,10 @@ func startConsumer(ctx context.Context, brokerClient *broker.Client, dbPool *pgx
 	// pedido.confirmado → notificação (PRD 0026): stub até o e-mail do E7.
 	latencia, err := otel.Meter("morfeu/notificacao").Float64Histogram("checkout_confirmado_ate_notificado_segundos",
 		// Sem WithUnit: o exporter anexaria "_seconds" ao nome já em PT.
-		metric.WithDescription("Pagamento confirmado → notificação processada (SLI do checkout fim a fim)."))
+		metric.WithDescription("Pagamento confirmado → notificação processada (SLI do checkout fim a fim). "+
+			"O instante do evento tem resolução de segundo: a medida superestima em até 1 s."),
+		// Buckets finos em torno do alvo de 5 s (os padrões do OTel pulam de 0 a 5).
+		metric.WithExplicitBucketBoundaries(0.5, 1, 2, 3, 5, 10, 30, 60))
 	if err != nil {
 		log.ErrorMsg("métrica de latência da notificação", zap.Error(err))
 		os.Exit(1)
@@ -464,6 +467,10 @@ func montarPedido(cfg *config.Config, dbPool *pgxpool.Pool, sessoes pedido.Fonte
 	}
 	if err := registrarPedidosPresos(meter, servico); err != nil {
 		fatal("métrica de pedidos presos", err)
+	}
+	// As séries nascem em 0: sem isso o increase() não enxerga o 1º estorno.
+	for _, passo := range []string{pedido.PassoCobranca, pedido.PassoEstorno} {
+		compensacoes.Add(context.Background(), 0, metric.WithAttributes(attribute.String("passo", passo)))
 	}
 	return pedido.NovoHandler(servico, log.Logger), servico
 }

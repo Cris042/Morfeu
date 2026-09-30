@@ -55,6 +55,7 @@ Métricas, 5 alertas, topologia da fila nova, módulo `notificacao` (stub), test
   - Sem `Entregar` é stub, que só registra e mede a latência. O E7 injeta o e-mail.
 - RF08 — `broker.Entrega` e `outbox.Mensagem` ganham `OccurredAt` (timestamp AMQP já publicado pelo relay).
 - RF09 — Adapter Stripe: `charge_already_refunded` no estorno é **sucesso**. Depois de 24 h a chave de idempotência expira e repetir o estorno de um pagamento já devolvido responde assim (auditoria 0025).
+- RF11 — **Allowlist de labels** (`internal/telemetria`, auditoria 0026): `etapa`, `op`, `passo` e `estado` passam a ser permitidas. A view fechada descartava essas chaves (desde a 0023/0024 no funil e no gateway), então os alertas da saga liam séries sem label. Um teste do `/metrics` cobre a pipeline OTel→Prometheus. As séries de compensação nascem em 0 no boot, para o `increase()` ver o primeiro estorno. O histograma de latência usa buckets finos (0,5…60 s).
 - RF10 — Correção da 0024: `gateway_duration_seconds` sem `WithUnit("s")`. O exporter anexaria `_seconds` ao nome, gerando `_seconds_seconds`.
 
 ## Requisitos não funcionais
@@ -89,6 +90,7 @@ Métricas, 5 alertas, topologia da fila nova, módulo `notificacao` (stub), test
 | Adapter Stripe "já estornado" | unit | CA07 |
 | Compensações e presos com PG real | integração (`pedido`) | CA01, CA02 |
 | Provisionamento do Grafana | integração (stack) | CA03 |
+| Labels da saga no `/metrics` (pipeline OTel→Prometheus) | unit (`telemetria`) | CA01–CA03 (alertas casam) |
 | Jornada da API com PG + Redis + RabbitMQ reais | integração (`test/checkout`) | CA05, CA06 |
 
 ## Plano de implementação
@@ -112,10 +114,11 @@ Métricas, 5 alertas, topologia da fila nova, módulo `notificacao` (stub), test
 
 - `internal/broker/{client.go, consumer.go}`, `internal/outbox/dedup.go`
 - `internal/pedido/{queries.sql, service.go, pivo.go, tarefas.go, handler_test.go, tarefas_test.go}`, `internal/pedido/db/queries.sql.go` (gerado), `internal/pedido/pagamento/{stripe.go, stripe_test.go}`
+- `internal/telemetria/telemetria.go`, `internal/telemetria/telemetria_test.go` (auditoria 0026)
 - `cmd/morfeu/main.go`, `.golangci.yml`, `configs/grafana/provisioning/alerting/alertas.yml`, `test/observabilidade/stack_integration_test.go`
 - `docs/tasks/README.md`, `docs/roadmap.md`, `plan.md`, `state.md`
 
-Total: 25.
+Total: 27.
 
 ## Dependências utilizadas
 

@@ -137,6 +137,37 @@ func TestCardinalidade_SoLabelsPermitidos(t *testing.T) {
 	}
 }
 
+// TestLabelsDaSaga cobre a auditoria 0026: as labels fechadas do checkout
+// chegam ao /metrics — os alertas da saga dependem delas.
+func TestLabelsDaSaga(t *testing.T) {
+	tel := iniciarTeste(t)
+	e := servidorTeste(tel)
+	m := tel.Meter("teste-saga")
+	ctx := context.Background()
+	compensacoes, _ := m.Int64Counter("saga_compensacoes_total")
+	compensacoes.Add(ctx, 1, metric.WithAttributes(attribute.String("passo", "estorno")))
+	funil, _ := m.Int64Counter("checkout_funil_total")
+	funil.Add(ctx, 1, metric.WithAttributes(attribute.String("etapa", "pago")))
+	gw, _ := m.Int64Counter("gateway_requests_total")
+	gw.Add(ctx, 1, metric.WithAttributes(attribute.String("op", "estornar"), attribute.String("resultado", "ok")))
+	presos, _ := m.Int64ObservableGauge("pedidos_presos")
+	_, _ = m.RegisterCallback(func(_ context.Context, o metric.Observer) error {
+		o.ObserveInt64(presos, 2, metric.WithAttributes(attribute.String("estado", "estorno_pendente")))
+		o.ObserveInt64(presos, 0, metric.WithAttributes(attribute.String("estado", "aguardando_vencido")))
+		return nil
+	}, presos)
+	corpo := get(t, e, "/metrics")
+	for _, serie := range []string{
+		`saga_compensacoes_total{passo="estorno"} 1`,
+		`etapa="pago"`, `op="estornar"`,
+		`pedidos_presos{estado="estorno_pendente"`, `pedidos_presos{estado="aguardando_vencido"`,
+	} {
+		if !strings.Contains(corpo, serie) {
+			t.Errorf("série ausente no /metrics: %s", serie)
+		}
+	}
+}
+
 // TestMensageria_GaugesNoScrape cobre RF04: valores das fontes aparecem no
 // scrape; fonte com erro omite só a própria observação.
 func TestMensageria_GaugesNoScrape(t *testing.T) {
