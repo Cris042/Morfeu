@@ -156,6 +156,33 @@ linters:
             - github.com/mclovin137/morfeu/internal/outbox
             - github.com/mclovin137/morfeu/internal/reserva/db
 
+        # Módulo pedido (PRD 0023, ADR 0010): não importa outros módulos (sessao e
+        # reserva chegam por portas ligadas no main) nem driver/SDK de gateway —
+        # só a porta pagamento.Gateway.
+        pedido-domain:
+          files:
+            - "**/internal/pedido/*.go"
+            - "!$test"
+          list-mode: strict
+          allow:
+            - $gostd
+            - github.com/labstack/echo/v4
+            - github.com/google/uuid
+            - go.uber.org/zap
+            - github.com/mclovin137/morfeu/internal/outbox
+            - github.com/mclovin137/morfeu/internal/pedido/db
+            - github.com/mclovin137/morfeu/internal/pedido/pagamento
+
+        # Borda de pagamento (PRD 0023): o SDK do gateway entra só aqui (0024).
+        pedido-pagamento:
+          files:
+            - "**/internal/pedido/pagamento/*.go"
+            - "!$test"
+          list-mode: strict
+          allow:
+            - $gostd
+            - github.com/google/uuid
+
         # Módulo identidade (PRD 0009 RNF01): transaction script sem driver.
         identidade-domain:
           files:

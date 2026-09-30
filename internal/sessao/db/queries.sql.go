@@ -50,7 +50,7 @@ func (q *Queries) AtualizarSala(ctx context.Context, arg AtualizarSalaParams) ([
 }
 
 const buscarMapaDaSessao = `-- name: BuscarMapaDaSessao :many
-SELECT s.id, s.sala_id, sa.nome AS sala_nome, sa.layout
+SELECT s.id, s.sala_id, sa.nome AS sala_nome, sa.layout, s.preco_centavos
 FROM sessoes s
 JOIN salas sa ON sa.id = s.sala_id
 WHERE s.id = $1 AND s.status = 'agendada' AND s.inicio > $2
@@ -63,10 +63,11 @@ type BuscarMapaDaSessaoParams struct {
 }
 
 type BuscarMapaDaSessaoRow struct {
-	ID       int64           `db:"id"`
-	SalaID   int64           `db:"sala_id"`
-	SalaNome string          `db:"sala_nome"`
-	Layout   json.RawMessage `db:"layout"`
+	ID            int64           `db:"id"`
+	SalaID        int64           `db:"sala_id"`
+	SalaNome      string          `db:"sala_nome"`
+	Layout        json.RawMessage `db:"layout"`
+	PrecoCentavos int32           `db:"preco_centavos"`
 }
 
 // Mapa público (PRD 0014 RF04): só sessão agendada que ainda não começou.
@@ -84,6 +85,7 @@ func (q *Queries) BuscarMapaDaSessao(ctx context.Context, arg BuscarMapaDaSessao
 			&i.SalaID,
 			&i.SalaNome,
 			&i.Layout,
+			&i.PrecoCentavos,
 		); err != nil {
 			return nil, err
 		}

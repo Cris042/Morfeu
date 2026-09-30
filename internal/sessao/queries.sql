@@ -56,7 +56,7 @@ LIMIT 100;
 
 -- name: BuscarMapaDaSessao :many
 -- Mapa público (PRD 0014 RF04): só sessão agendada que ainda não começou.
-SELECT s.id, s.sala_id, sa.nome AS sala_nome, sa.layout
+SELECT s.id, s.sala_id, sa.nome AS sala_nome, sa.layout, s.preco_centavos
 FROM sessoes s
 JOIN salas sa ON sa.id = s.sala_id
 WHERE s.id = $1 AND s.status = 'agendada' AND s.inicio > $2

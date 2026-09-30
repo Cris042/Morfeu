@@ -18,11 +18,13 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 
@@ -38,6 +40,8 @@ import (
 	identidadedb "github.com/mclovin137/morfeu/internal/identidade/db"
 	"github.com/mclovin137/morfeu/internal/logger"
 	"github.com/mclovin137/morfeu/internal/outbox"
+	"github.com/mclovin137/morfeu/internal/pedido"
+	"github.com/mclovin137/morfeu/internal/pedido/pagamento"
 	"github.com/mclovin137/morfeu/internal/reserva"
 	"github.com/mclovin137/morfeu/internal/sessao"
 	sessaodb "github.com/mclovin137/morfeu/internal/sessao/db"
@@ -284,7 +288,9 @@ func registrarRotasDeDominio(e *echo.Echo, mode string, cfg *config.Config, dbPo
 	exigirOperador := autenticacao.Exigir(emissor, autenticacao.PapelOperador)
 	catalogoHandler.RegistrarRotasBackoffice(e, exigirOperador)
 	sessaoHandler.RegistrarRotasBackoffice(e, exigirOperador, operadorDaRequisicao)
-	montarReserva(dbPool, sessaoServico, redisClient, cacheLayer, log).RegistrarRotas(e)
+	reservaHandler, reservaServico := montarReserva(dbPool, sessaoServico, redisClient, cacheLayer, log)
+	reservaHandler.RegistrarRotas(e)
+	montarPedido(dbPool, sessaoServico, reservaServico, redisClient, log).RegistrarRotas(e)
 }
 
 // operadorDaRequisicao identifica o operador para o log de auditoria mínima
@@ -325,7 +331,7 @@ const (
 // montarReserva liga o módulo reserva: porta de assentos = sessao (ADR 0003),
 // limitadores do E1 (Redis + fallback em memória), métricas (PRD 0015) e o
 // cache da ocupação (PRD 0016).
-func montarReserva(dbPool *pgxpool.Pool, sessoes reserva.FonteSessoes, redisClient redis.Cmdable, c cache.Cache, log *logger.Logger) *reserva.Handler {
+func montarReserva(dbPool *pgxpool.Pool, sessoes reserva.FonteSessoes, redisClient redis.Cmdable, c cache.Cache, log *logger.Logger) (*reserva.Handler, *reserva.Servico) {
 	fatal := func(msg string, err error) {
 		log.ErrorMsg(msg, zap.Error(err))
 		os.Exit(1)
@@ -349,7 +355,81 @@ func montarReserva(dbPool *pgxpool.Pool, sessoes reserva.FonteSessoes, redisClie
 	if err != nil {
 		fatal("serviço de reserva", err)
 	}
-	return reserva.NovoHandler(servico, log.Logger)
+	return reserva.NovoHandler(servico, log.Logger), servico
+}
+
+// Rate limit da criação de pedido (refinamento E6, security).
+const (
+	limitePedidosIP   = 10
+	limitePedidosDono = 5
+)
+
+// montarPedido liga o módulo pedido (PRD 0023): porta de preço = sessao,
+// porta transacional = reserva (ADR 0010), limitadores do E1 e o funil. O
+// gateway é o fake até a task 0024 trazer o Stripe (e recusar o fake em
+// produção).
+func montarPedido(dbPool *pgxpool.Pool, sessoes pedido.FonteSessoes, r *reserva.Servico, redisClient redis.Cmdable, log *logger.Logger) *pedido.Handler {
+	fatal := func(msg string, err error) {
+		log.ErrorMsg(msg, zap.Error(err))
+		os.Exit(1)
+	}
+	novoLimitador := func(escopo string, maxim int) *autenticacao.Limitador {
+		l, err := autenticacao.NovoLimitador(autenticacao.ConfigLimitador{
+			Redis: redisClient, Prefixo: prefixoLimitadorRdb + escopo + ":", Max: maxim, Janela: time.Minute,
+		}, log.Logger)
+		if err != nil {
+			fatal("limitador "+escopo, err)
+		}
+		return l
+	}
+	funil, err := otel.Meter("morfeu/pedido").Int64Counter("checkout_funil_total",
+		metric.WithDescription("Pedidos por etapa do funil do checkout (etapas fixas)."))
+	if err != nil {
+		fatal("métrica do funil", err)
+	}
+	servico, err := pedido.NovoServico(dbPool, pedido.Config{
+		Sessoes:    sessoes,
+		Reserva:    reservaDoPedido{r},
+		Gateway:    pagamento.NovoFake(),
+		LimiteIP:   novoLimitador("pedido-ip", limitePedidosIP),
+		LimiteDono: novoLimitador("pedido-dono", limitePedidosDono),
+		Funil: func(ctx context.Context, etapa string) {
+			funil.Add(ctx, 1, metric.WithAttributes(attribute.String("etapa", etapa)))
+		},
+	}, log.Logger)
+	if err != nil {
+		fatal("serviço de pedido", err)
+	}
+	return pedido.NovoHandler(servico, log.Logger)
+}
+
+// reservaDoPedido adapta a reserva à porta transacional do pedido (ADR
+// 0010): converte o hash do carrinho em reserva.Dono e traduz os erros da
+// reserva para o vocabulário do pedido — nenhum módulo importa o outro.
+type reservaDoPedido struct{ s *reserva.Servico }
+
+func (a reservaDoPedido) DonoDoToken(token string) ([]byte, bool) {
+	d, ok := reserva.DonoDoToken(token)
+	if !ok {
+		return nil, false
+	}
+	return d.Hash(), true
+}
+
+func (a reservaDoPedido) PrenderParaPedido(ctx context.Context, tx outbox.Tx, donoHash []byte, sessaoID int64, codigos []string, pedidoID uuid.UUID, ate time.Time) error {
+	d, ok := reserva.DonoDoHash(donoHash)
+	if !ok {
+		return pedido.ErrHoldsInvalidos
+	}
+	err := a.s.PrenderParaPedido(ctx, tx, d, sessaoID, codigos, pedidoID, ate)
+	if errors.Is(err, reserva.ErrHoldsDoPedido) || errors.Is(err, reserva.ErrDadosInvalidos) {
+		return pedido.ErrHoldsInvalidos
+	}
+	return err
+}
+
+func (a reservaDoPedido) LiberarDoPedido(ctx context.Context, tx outbox.Tx, pedidoID uuid.UUID) (int64, error) {
+	return a.s.LiberarDoPedido(ctx, tx, pedidoID)
 }
 
 // metricasReserva cria os contadores da trava (sem labels — PRD 0015 RF10);

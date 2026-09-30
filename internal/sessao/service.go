@@ -341,6 +341,9 @@ type MapaSessao struct {
 	Fileiras int       `json:"fileiras"`
 	Colunas  int       `json:"colunas"`
 	Assentos []Assento `json:"assentos"`
+	// PrecoCentavos por assento (o total do pedido é sempre calculado no
+	// servidor a partir dele — doc.md §14.2).
+	PrecoCentavos int64 `json:"preco_centavos"`
 }
 
 // Mapa devolve layout e assentos de uma sessão agendada que não começou.
@@ -357,7 +360,7 @@ func (s *Servico) Mapa(ctx context.Context, sessaoID int64) (MapaSessao, error) 
 		return MapaSessao{}, fmt.Errorf("sessao: layout ilegível: %w", err)
 	}
 	return MapaSessao{SessaoID: linhas[0].ID, SalaID: linhas[0].SalaID, SalaNome: linhas[0].SalaNome,
-		Fileiras: layout.Fileiras, Colunas: layout.Colunas, Assentos: layout.Assentos()}, nil
+		Fileiras: layout.Fileiras, Colunas: layout.Colunas, Assentos: layout.Assentos(), PrecoCentavos: int64(linhas[0].PrecoCentavos)}, nil
 }
 
 // AssentosDaSessaoAberta é a porta do módulo reserva (PRD 0015 RF02):
@@ -376,6 +379,20 @@ func (s *Servico) AssentosDaSessaoAberta(ctx context.Context, sessaoID int64) ([
 		codigos = append(codigos, a.Codigo)
 	}
 	return codigos, true, nil
+}
+
+// PrecoDaSessaoAberta é a porta do módulo pedido (PRD 0023 RF03): preço por
+// assento de uma sessão agendada que ainda não começou. ok=false quando a
+// sessão não existe, foi cancelada ou já começou.
+func (s *Servico) PrecoDaSessaoAberta(ctx context.Context, sessaoID int64) (int64, bool, error) {
+	m, err := s.Mapa(ctx, sessaoID)
+	if errors.Is(err, ErrSessaoNaoEncontrada) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	return m.PrecoCentavos, true, nil
 }
 
 func futuras(lista []SessaoPublica, agora time.Time) []SessaoPublica {
