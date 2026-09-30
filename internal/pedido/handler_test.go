@@ -94,7 +94,8 @@ func TestMain(m *testing.M) {
 		}
 		defer pool.Close()
 		for _, arq := range []string{"001_initial_schema.up.sql", "002_outbox_events.up.sql", "007_filmes.up.sql",
-			"008_salas_sessoes.up.sql", "009_holds.up.sql", "010_holds_pedido.up.sql", "011_pedidos.up.sql"} {
+			"008_salas_sessoes.up.sql", "009_holds.up.sql", "010_holds_pedido.up.sql", "011_pedidos.up.sql",
+			"012_stripe_eventos.up.sql"} {
 			ddl, err := os.ReadFile("../../migrations/" + arq)
 			if err == nil {
 				_, err = pool.Exec(ctx, string(ddl))
@@ -156,6 +157,10 @@ func (a reservaAdapter) LiberarDoPedido(ctx context.Context, tx outbox.Tx, id uu
 	return a.s.LiberarDoPedido(ctx, tx, id)
 }
 
+func (a reservaAdapter) ConverterDoPedido(ctx context.Context, tx outbox.Tx, id uuid.UUID) ([]string, error) {
+	return a.s.ConverterDoPedido(ctx, tx, id)
+}
+
 type ambiente struct {
 	e       *echo.Echo
 	rel     *relogio
@@ -197,9 +202,14 @@ func montarAmbiente(t *testing.T, lim limites) *ambiente {
 	}
 	gw := pagamento.NovoFake()
 	funil := &sync.Map{}
+	wh, err := pagamento.NovoWebhook(segredoWebhookTeste)
+	if err != nil {
+		t.Fatal(err)
+	}
 	s, err := NovoServico(pool, Config{
 		Sessoes: sessoes, Reserva: reservaAdapter{res}, Gateway: gw,
 		LimiteIP: limitador("ip", lim.ip), LimiteDono: limitador("dono", lim.dono), Agora: rel.agora,
+		Webhook: wh, LimiteWebhook: limitador("webhook", 100000),
 		Funil: func(_ context.Context, etapa string) {
 			n, _ := funil.LoadOrStore(etapa, new(int))
 			*(n.(*int))++
@@ -212,6 +222,9 @@ func montarAmbiente(t *testing.T, lim limites) *ambiente {
 	NovoHandler(s, logTeste).RegistrarRotas(e)
 	return &ambiente{e: e, rel: rel, reserva: res, servico: s, gateway: gw, funil: funil}
 }
+
+// segredoWebhookTeste assina os eventos gerados nos testes (sem rede).
+const segredoWebhookTeste = "whsec_teste_da_suite"
 
 const layoutTeste = `{"fileiras":3,"colunas":10,"vaos":[]}`
 

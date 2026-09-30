@@ -4,6 +4,14 @@
 [extend]
 useDefault = true
 
+# Segredo de assinatura de webhook do Stripe (task 0024): as regras default
+# cobrem sk_/rk_ mas não whsec_.
+[[rules]]
+id = "stripe-webhook-secret"
+description = "Segredo de assinatura de webhook do Stripe"
+regex = '''\bwhsec_[a-zA-Z0-9]{24,}\b'''
+keywords = ["whsec_"]
+
 [[allowlists]]
 description = "Exemplo didático de API key em skill vendorizada — falso positivo conhecido, registrado nas auditorias de 2026-07-07 e 2026-07-10"
 paths = ['''\.claude/skills/api-design/SKILL\.md''']

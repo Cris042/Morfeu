@@ -27,6 +27,9 @@ type Reserva interface {
 	DonoDoToken(token string) (donoHash []byte, ok bool)
 	PrenderParaPedido(ctx context.Context, tx outbox.Tx, donoHash []byte, sessaoID int64, codigos []string, pedidoID uuid.UUID, ate time.Time) error
 	LiberarDoPedido(ctx context.Context, tx outbox.Tx, pedidoID uuid.UUID) (int64, error)
+	// ConverterDoPedido marca os holds do pedido como vendidos e devolve os
+	// códigos convertidos (idempotente — PRD 0022 RF04).
+	ConverterDoPedido(ctx context.Context, tx outbox.Tx, pedidoID uuid.UUID) ([]string, error)
 }
 
 // Limitador é o que o serviço usa do limitador da plataforma.
@@ -49,8 +52,14 @@ type Config struct {
 	Gateway    pagamento.Gateway
 	LimiteIP   Limitador // criação: 10/min por IP
 	LimiteDono Limitador // criação: 5/min por carrinho
-	Funil      func(ctx context.Context, etapa string)
-	Agora      func() time.Time
+	// Webhook verifica os eventos do gateway; nil = rota do webhook desligada
+	// (sem segredo configurado).
+	Webhook *pagamento.Webhook
+	// LimiteWebhook é o teto folgado por IP da rota pública do webhook (só
+	// contra DoS — o Stripe reenvia o que receber 429).
+	LimiteWebhook Limitador
+	Funil         func(ctx context.Context, etapa string)
+	Agora         func() time.Time
 }
 
 // Servico implementa os casos de uso do pedido.
@@ -64,6 +73,9 @@ type Servico struct {
 func NovoServico(pool outbox.Pool, cfg Config, logger *zap.Logger) (*Servico, error) {
 	if cfg.Sessoes == nil || cfg.Reserva == nil || cfg.Gateway == nil || cfg.LimiteIP == nil || cfg.LimiteDono == nil {
 		return nil, errors.New("pedido: porta, gateway ou limitador ausente")
+	}
+	if cfg.Webhook != nil && cfg.LimiteWebhook == nil {
+		return nil, errors.New("pedido: webhook sem limitador")
 	}
 	if cfg.Agora == nil {
 		cfg.Agora = time.Now
@@ -85,6 +97,15 @@ func (s *Servico) ContarRequisicao(ctx context.Context, ip string, donoHash []by
 	}
 	s.cfg.LimiteIP.RegistrarFalha(ctx, ip)
 	s.cfg.LimiteDono.RegistrarFalha(ctx, dono)
+	return nil
+}
+
+// ContarWebhook aplica o teto folgado por IP da rota do webhook.
+func (s *Servico) ContarWebhook(ctx context.Context, ip string) error {
+	if s.cfg.LimiteWebhook.Bloqueado(ctx, ip) {
+		return ErrMuitasRequisicoes
+	}
+	s.cfg.LimiteWebhook.RegistrarFalha(ctx, ip)
 	return nil
 }
 

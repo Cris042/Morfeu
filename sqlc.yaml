@@ -130,6 +130,7 @@ sql:
   # Módulo pedido (PRD 0023): só as próprias tabelas (ADR 0003).
   - schema:
       - "./migrations/011_pedidos.up.sql"
+      - "./migrations/012_stripe_eventos.up.sql"
     queries: "./internal/pedido/queries.sql"
     engine: "postgresql"
     gen:

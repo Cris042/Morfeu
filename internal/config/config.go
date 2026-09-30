@@ -5,6 +5,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -34,6 +35,15 @@ type Config struct {
 	// TMDB (PRD 0012): opcional — sem ele, só as rotas de TMDB respondem 503.
 	// Nunca logado.
 	TMDBToken string
+
+	// Ambiente (PRD 0024): "dev" ou "producao" — produção recusa o gateway fake.
+	Ambiente string
+	// Pagamento (PRD 0024, ADR 0010): Gateway "fake" (padrão: CI, dev,
+	// load-test) ou "stripe" (modo de teste). Chaves nunca logadas; sem
+	// StripeWebhookSegredo a rota do webhook fica desligada.
+	Gateway              string
+	StripeChave          string
+	StripeWebhookSegredo string
 }
 
 // LoadConfig loads configuration from environment variables with defaults
@@ -58,6 +68,11 @@ func LoadConfig() (*Config, error) {
 		Argon2Paralelismo: getEnvInt("ARGON2_PARALELISMO", 1),
 		HashConcorrencia:  getEnvInt("HASH_CONCORRENCIA", runtime.NumCPU()),
 		TMDBToken:         getEnv("TMDB_API_TOKEN", ""),
+
+		Ambiente:             getEnv("AMBIENTE", "dev"),
+		Gateway:              getEnv("MORFEU_GATEWAY", "fake"),
+		StripeChave:          getEnv("STRIPE_SECRET_KEY", ""),
+		StripeWebhookSegredo: getEnv("STRIPE_WEBHOOK_SECRET", ""),
 	}
 
 	// Parse cache TTL
@@ -133,6 +148,31 @@ func (c *Config) ValidarAutenticacao() error {
 	}
 	if c.JWTKid == "" {
 		return fmt.Errorf("JWT_KID não pode ser vazio")
+	}
+	return nil
+}
+
+// ValidarPagamento confere a config do checkout — chamado só quando o
+// processo serve HTTP. Recusa: ambiente/gateway desconhecidos, gateway fake em
+// produção, Stripe sem chave e qualquer chave que não seja de modo de teste
+// (o projeto é sandbox — doc.md §10). As mensagens nunca incluem valores.
+func (c *Config) ValidarPagamento() error {
+	if c.Ambiente != "dev" && c.Ambiente != "producao" {
+		return fmt.Errorf("AMBIENTE deve ser dev ou producao")
+	}
+	if c.Gateway != "fake" && c.Gateway != "stripe" {
+		return fmt.Errorf("MORFEU_GATEWAY deve ser fake ou stripe")
+	}
+	if c.Gateway == "fake" && c.Ambiente == "producao" {
+		return fmt.Errorf("MORFEU_GATEWAY=fake é proibido com AMBIENTE=producao")
+	}
+	chaveDeTeste := strings.HasPrefix(c.StripeChave, "sk_test_") || strings.HasPrefix(c.StripeChave, "rk_test_")
+	if c.StripeChave != "" && !chaveDeTeste {
+		return fmt.Errorf("STRIPE_SECRET_KEY precisa ser de modo de teste (sk_test_/rk_test_)")
+	}
+	if c.Gateway == "stripe" && (c.StripeChave == "" || c.StripeWebhookSegredo == "") {
+		// Sem o webhook nenhum pagamento real é confirmado (auditoria 0024).
+		return fmt.Errorf("MORFEU_GATEWAY=stripe exige STRIPE_SECRET_KEY e STRIPE_WEBHOOK_SECRET")
 	}
 	return nil
 }

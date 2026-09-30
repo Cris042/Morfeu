@@ -65,7 +65,7 @@ func (q *Queries) BuscarPedidoDoDono(ctx context.Context, arg BuscarPedidoDoDono
 const definirCobranca = `-- name: DefinirCobranca :execrows
 UPDATE pedidos
 SET payment_intent_id = $1, atualizado_em = $2
-WHERE id = $3 AND status = 'aguardando_pagamento' AND payment_intent_id IS NULL
+WHERE id = $3 AND payment_intent_id IS NULL
 `
 
 type DefinirCobrancaParams struct {
@@ -74,13 +74,57 @@ type DefinirCobrancaParams struct {
 	ID              uuid.UUID `db:"id"`
 }
 
-// Grava o id da cobrança do gateway enquanto o pedido espera pagamento.
+// Grava o id da cobrança uma única vez. Sem filtro de status: o pivô também
+// recupera a cobrança órfã (gateway respondeu, mas a gravação falhou) de um
+// pedido já expirado, que precisa dela para o estorno (auditoria 0023).
 func (q *Queries) DefinirCobranca(ctx context.Context, arg DefinirCobrancaParams) (int64, error) {
 	result, err := q.db.Exec(ctx, definirCobranca, arg.PaymentIntentID, arg.Agora, arg.ID)
 	if err != nil {
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const emitirIngresso = `-- name: EmitirIngresso :many
+INSERT INTO ingressos (id, pedido_id, sessao_id, assento_codigo, status, versao_token, criado_em)
+VALUES ($1, $2, $3, $4, 'ativo', 1, $5)
+ON CONFLICT (sessao_id, assento_codigo) WHERE status = 'ativo' DO NOTHING
+RETURNING id
+`
+
+type EmitirIngressoParams struct {
+	ID            uuid.UUID `db:"id"`
+	PedidoID      uuid.UUID `db:"pedido_id"`
+	SessaoID      int64     `db:"sessao_id"`
+	AssentoCodigo string    `db:"assento_codigo"`
+	Agora         time.Time `db:"agora"`
+}
+
+// Segunda linha de defesa: sem linha = o assento já tem ingresso ativo.
+func (q *Queries) EmitirIngresso(ctx context.Context, arg EmitirIngressoParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, emitirIngresso,
+		arg.ID,
+		arg.PedidoID,
+		arg.SessaoID,
+		arg.AssentoCodigo,
+		arg.Agora,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const inserirPedido = `-- name: InserirPedido :many
@@ -132,6 +176,33 @@ func (q *Queries) InserirPedido(ctx context.Context, arg InserirPedidoParams) ([
 		return nil, err
 	}
 	return items, nil
+}
+
+const marcarEstorno = `-- name: MarcarEstorno :execrows
+UPDATE pedidos
+SET status = 'estorno_pendente', motivo_estorno = $1, atualizado_em = $2
+WHERE id = $3 AND status = $4
+`
+
+type MarcarEstornoParams struct {
+	Motivo *string   `db:"motivo"`
+	Agora  time.Time `db:"agora"`
+	ID     uuid.UUID `db:"id"`
+	De     string    `db:"de"`
+}
+
+// CAS para estorno_pendente, registrando o motivo (divergencia|tardio|emissao).
+func (q *Queries) MarcarEstorno(ctx context.Context, arg MarcarEstornoParams) (int64, error) {
+	result, err := q.db.Exec(ctx, marcarEstorno,
+		arg.Motivo,
+		arg.Agora,
+		arg.ID,
+		arg.De,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const pendenteDoDono = `-- name: PendenteDoDono :many
@@ -188,6 +259,40 @@ func (q *Queries) RegistrarEvento(ctx context.Context, arg RegistrarEventoParams
 	return err
 }
 
+const registrarEventoStripe = `-- name: RegistrarEventoStripe :many
+INSERT INTO stripe_eventos (event_id, tipo, recebido_em)
+VALUES ($1, $2, $3)
+ON CONFLICT (event_id) DO NOTHING
+RETURNING event_id
+`
+
+type RegistrarEventoStripeParams struct {
+	EventID string    `db:"event_id"`
+	Tipo    string    `db:"tipo"`
+	Agora   time.Time `db:"agora"`
+}
+
+// Dedup do webhook na TX do efeito: sem linha no RETURNING = já processado.
+func (q *Queries) RegistrarEventoStripe(ctx context.Context, arg RegistrarEventoStripeParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, registrarEventoStripe, arg.EventID, arg.Tipo, arg.Agora)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var event_id string
+		if err := rows.Scan(&event_id); err != nil {
+			return nil, err
+		}
+		items = append(items, event_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const transicionar = `-- name: Transicionar :execrows
 UPDATE pedidos
 SET status = $1, atualizado_em = $2
@@ -214,4 +319,48 @@ func (q *Queries) Transicionar(ctx context.Context, arg TransicionarParams) (int
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const travarPedido = `-- name: TravarPedido :many
+SELECT id, sessao_id, assentos::text[] AS assentos, total_centavos, status, payment_intent_id
+FROM pedidos
+WHERE id = $1
+FOR UPDATE
+`
+
+type TravarPedidoRow struct {
+	ID              uuid.UUID `db:"id"`
+	SessaoID        int64     `db:"sessao_id"`
+	Assentos        []string  `db:"assentos"`
+	TotalCentavos   int64     `db:"total_centavos"`
+	Status          string    `db:"status"`
+	PaymentIntentID *string   `db:"payment_intent_id"`
+}
+
+// Pivô (ADR 0010): a linha do pedido fica travada até o fim da TX.
+func (q *Queries) TravarPedido(ctx context.Context, id uuid.UUID) ([]TravarPedidoRow, error) {
+	rows, err := q.db.Query(ctx, travarPedido, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TravarPedidoRow
+	for rows.Next() {
+		var i TravarPedidoRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SessaoID,
+			&i.Assentos,
+			&i.TotalCentavos,
+			&i.Status,
+			&i.PaymentIntentID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
