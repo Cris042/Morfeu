@@ -1,0 +1,89 @@
+.filme {
+  display: grid;
+  grid-template-columns: minmax(180px, 300px) 1fr;
+  gap: var(--espaco-8);
+  align-items: start;
+}
+
+.corpo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+}
+
+.titulo {
+  margin: 0;
+  font-size: var(--texto-2xl);
+  line-height: 1.1;
+}
+
+.meta {
+  margin: 0;
+  font-family: var(--fonte-mono);
+  font-size: var(--texto-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--nevoa);
+}
+
+.sinopse {
+  margin: 0;
+  color: var(--tela);
+}
+
+.sessoes {
+  margin-top: var(--espaco-6);
+}
+
+.subtitulo {
+  margin: 0 0 var(--espaco-4);
+  font-size: var(--texto-lg);
+}
+
+.dias {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+}
+
+.rotulo {
+  margin: 0 0 var(--espaco-2);
+  font-family: var(--fonte-mono);
+  font-size: var(--texto-xs);
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--nevoa);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  display: inline-block;
+  padding: 7px 13px;
+  font-family: var(--fonte-mono);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--tela);
+  text-decoration: none;
+  border: 1px solid var(--veludo);
+  border-radius: var(--raio-chip);
+  transition: border-color var(--transicao), box-shadow var(--transicao);
+}
+
+.chip:hover {
+  border-color: var(--tungstenio);
+  box-shadow: 0 0 14px rgb(233 185 91 / 18%);
+}
+
+@media (max-width: 700px) {
+  .filme {
+    grid-template-columns: 1fr;
+  }
+}

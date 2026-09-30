@@ -1,0 +1,46 @@
+.poster {
+  display: flex;
+  align-items: flex-end;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: var(--raio-card);
+  border: 1px solid rgb(242 236 223 / 7%);
+  overflow: hidden;
+  transition: transform 220ms ease, box-shadow 220ms ease;
+}
+
+.titulo {
+  padding: var(--espaco-4);
+  font-family: var(--fonte-display);
+  font-weight: 600;
+  font-size: 1.5rem;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+
+.grande {
+  max-width: 300px;
+  box-shadow: 0 34px 70px rgb(0 0 0 / 50%);
+}
+
+.grande .titulo {
+  font-size: 2.1rem;
+  padding: var(--espaco-6);
+}
+
+.fundo0 {
+  background: linear-gradient(160deg, var(--veludo) 0%, var(--noite) 80%);
+}
+
+.fundo1 {
+  background: linear-gradient(160deg, #3a1f2e 0%, var(--noite) 80%);
+}
+
+.fundo2 {
+  background: linear-gradient(160deg, #1f2a45 0%, var(--noite) 80%);
+}
+
+.fundo3 {
+  background: linear-gradient(160deg, #2e2a1f 0%, var(--noite) 80%);
+}

@@ -1,7 +1,7 @@
 # Task 0017 — SPA: fundação (shell, tokens, cliente `/api`, CI do front) (E5, T1)
 
 - **Data:** 2026-09-29
-- **Status:** em andamento
+- **Status:** concluída
 - **Branch:** `feature/0017-spa-fundacao` (da main `67d1d0b`)
 - **PRD:** docs/prd/0017-spa-fundacao.md
 - **Item do roadmap:** E5 — SPA cliente, parte 1 (task 1/4). Refinamento: `docs/refinamentos/E5-spa-cliente.md` §T1; ADR 0009.

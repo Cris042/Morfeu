@@ -1,23 +1,37 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { apiFalsa } from '../test/renderizar'
 import { App } from './App'
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 function renderizarEm(caminho: string) {
   render(
-    <MemoryRouter initialEntries={[caminho]}>
-      <App />
-    </MemoryRouter>,
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <MemoryRouter initialEntries={[caminho]}>
+        <App />
+      </MemoryRouter>
+    </QueryClientProvider>,
   )
 }
 
 describe('shell', () => {
-  it('mostra a marca, o cartaz e a atribuição do TMDB', () => {
+  it('mostra a marca (link para o cartaz), o cartaz e a atribuição do TMDB', async () => {
+    apiFalsa({ '/api/filmes': { corpo: [] } })
     renderizarEm('/')
-    expect(screen.getByText('Morfeu')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Em cartaz' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Morfeu' })).toHaveAttribute('href', '/')
+    expect(await screen.findByRole('heading', { name: 'Escolha o filme da noite' })).toBeInTheDocument()
     expect(screen.getByText(/fornecidos pelo TMDB/)).toBeInTheDocument()
+  })
+
+  it('sessão ainda sem mapa mostra o aviso', () => {
+    renderizarEm('/sessoes/11')
+    expect(screen.getByRole('heading', { name: 'Escolha de assentos' })).toBeInTheDocument()
   })
 
   it('rota desconhecida mostra o 404 amigável com volta ao cartaz', () => {
