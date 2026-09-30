@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0018-spa-cartaz.md
 - **Branch:** feature/0018-spa-cartaz
 - **Data:** 2026-09-29
-- **Status:** ativo
+- **Status:** concluído
 
 ## Objetivo
 

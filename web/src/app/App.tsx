@@ -1,8 +1,15 @@
+import { lazy, Suspense } from 'react'
 import { Link, Route, Routes } from 'react-router'
 
 import { Cartaz } from '../features/cartaz/Cartaz'
 import { PaginaFilme } from '../features/filme/PaginaFilme'
 import styles from './App.module.css'
+
+// Demonstração do mapa só em dev (PRD 0019 RF06): em produção a constante é
+// false e o import dinâmico some do bundle.
+const DemoMapa = import.meta.env.DEV
+  ? lazy(() => import('../features/mapa/DemoMapa').then((m) => ({ default: m.DemoMapa })))
+  : undefined
 
 // Shell da SPA: marca, rotas e a atribuição obrigatória do TMDB (refinamento E2).
 export function App() {
@@ -18,6 +25,16 @@ export function App() {
           <Route path="/" element={<Cartaz />} />
           <Route path="/filmes/:id" element={<PaginaFilme />} />
           <Route path="/sessoes/:id" element={<EscolhaEmBreve />} />
+          {DemoMapa && (
+            <Route
+              path="/_demo/mapa"
+              element={
+                <Suspense fallback={null}>
+                  <DemoMapa />
+                </Suspense>
+              }
+            />
+          )}
           <Route path="*" element={<NaoEncontrada />} />
         </Routes>
       </main>

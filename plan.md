@@ -4,9 +4,23 @@
 
 ## Estado corrente (2026-09-29)
 
-**Task 0018 — SPA: cartaz e sessões do filme (E5 T2): IMPLEMENTAÇÃO COMPLETA e validada; gate → PR** (branch `feature/0018-spa-cartaz`, da main `cce783c`).
+**Task 0019 — SPA: mapa de assentos isolado (E5 T3): IMPLEMENTAÇÃO COMPLETA e validada; gate → PR** (branch `feature/0019-spa-mapa`, da main `849064b`).
 
-### Plano da task 0018
+### Plano da task 0019
+
+1. ~~Estado puro~~ — `estado.ts`: precedência meu > selecionado > ocupado > bloqueado > livre (o hold próprio também vem na ocupação pública), `alternavel`, `rotuloDoAssento` ("Fileira C, assento 7, PCD, ocupado").
+2. ~~Componente~~ — `MapaDeAssentos` puro (sem I/O): "Tela", `role=grid`/`row`/`gridcell`, vão = célula vazia sem botão, roving tabindex (1 tab stop), setas pulando vãos, ↑/↓ para a mesma coluna ou o assento mais próximo, Home/End, Enter/Espaço; `aria-pressed` (selecionado/meu), `aria-disabled` (ocupado/limite — continua focável), marcas ✓ ● × ♿ redundantes à cor; limite de 6 (selecionados + meus) com aviso `aria-live`; `Legenda`.
+3. ~~Fixture + demo~~ — sala 6 × 10 com corredor e fileira curta; `/_demo/mapa` só com `import.meta.env.DEV` (import dinâmico) — **ausente do bundle de produção** (grep no `dist`).
+4. ~~Testes~~ — 30 verdes (estado 3, mapa 5 com user-event: grade, teclado completo, Enter/Espaço, ocupado não alterna, aria-pressed, limite); lint/typecheck 0; build 94 KB gzip; audit 0. Conferência visual (0018 + 0019) antes do merge — imagem do Playwright baixando.
+
+---
+
+### Task 0018 — SPA: cartaz e sessões do filme: CONCLUÍDA e MERGEADA (PR #46, `849064b`)
+
+Auditoria APROVADA (2026-09-29, `qa`); não-bloqueante: a UI assume sessões ordenadas por `inicio` (contrato RN01 da API).
+
+#### Plano executado da 0018
+
 
 1. ~~Dados~~ — `tipos.ts` (contrato público), `consultas.ts` (`useFilmes`/`useFilme`/`useSessoesDoFilme`; política de retry **global** no `QueryClient`: só rede/5xx, 1× — por consulta ela sobrescrevia o `retry: false` dos testes).
 2. ~~Formatação~~ — `formato.ts` sempre em `America/Sao_Paulo`/pt-BR (hora, dia, chave do dia, BRL, duração), testada com instantes que viram o dia.

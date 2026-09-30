@@ -1,0 +1,130 @@
+.mapa {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--espaco-4);
+  overflow-x: auto;
+}
+
+/* A tela: a luz no fundo da sala. */
+.tela {
+  width: min(80%, 560px);
+  padding-bottom: var(--espaco-2);
+  text-align: center;
+  font-family: var(--fonte-mono);
+  font-size: var(--texto-xs);
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--nevoa);
+  border-top: 3px solid var(--tela);
+  border-radius: 50% 50% 0 0 / 12px 12px 0 0;
+  box-shadow: 0 -10px 30px rgb(242 236 223 / 12%);
+}
+
+.grade {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fileira {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.letra {
+  width: 1.5rem;
+  text-align: center;
+  font-family: var(--fonte-mono);
+  font-size: var(--texto-xs);
+  color: var(--nevoa);
+}
+
+.celula,
+.vao {
+  width: 32px;
+  height: 32px;
+}
+
+.assento {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  font-size: 0.8rem;
+  line-height: 1;
+  color: var(--tela);
+  background: var(--sala);
+  border: 1px solid var(--veludo);
+  border-radius: 6px 6px 3px 3px;
+  cursor: pointer;
+  transition: border-color var(--transicao), box-shadow var(--transicao);
+}
+
+.livre:hover {
+  border-color: var(--tungstenio);
+  box-shadow: 0 0 12px rgb(233 185 91 / 25%);
+}
+
+.selecionado {
+  color: #241c00;
+  background: var(--tungstenio);
+  border-color: var(--tungstenio);
+  font-weight: 700;
+}
+
+.meu {
+  color: var(--tinta-papoula);
+  background: var(--papoula);
+  border-color: var(--papoula);
+}
+
+.ocupado {
+  color: #5d5478;
+  background: transparent;
+  border-style: dashed;
+  cursor: not-allowed;
+}
+
+.bloqueado {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pcd {
+  border-width: 2px;
+}
+
+.aviso {
+  min-height: 1.5em;
+  margin: 0;
+  font-size: var(--texto-sm);
+  color: var(--tungstenio);
+}
+
+.legenda {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--espaco-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--texto-sm);
+  color: var(--nevoa);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-2);
+}
+
+.amostra {
+  width: 20px;
+  height: 20px;
+  font-size: 0.7rem;
+  cursor: default;
+}

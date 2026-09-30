@@ -25,4 +25,5 @@ Convenção: `NNNN-titulo-kebab.md`, numeração sequencial a partir de `0001`. 
 | 0015 | [Reserva: trava de assento + sweeper](./0015-reserva-trava.md) | E4 (T1) | concluída (auditoria APROVADA; merge `36613c3`, PR #41) | `feature/0015-reserva-trava` | [0015](../prd/0015-reserva-trava.md) |
 | 0016 | [Reserva: ocupação pública, cache e alertas](./0016-reserva-ocupacao.md) | E4 (T2) | concluída (auditoria APROVADA; merge `b9ad75a`, PR #42) | `feature/0016-reserva-ocupacao` | [0016](../prd/0016-reserva-ocupacao.md) |
 | 0017 | [SPA: fundação (shell, tokens, cliente /api, CI do front)](./0017-spa-fundacao.md) | E5 (T1) | concluída (auditoria APROVADA; merge `cce783c`, PR #45) | `feature/0017-spa-fundacao` | [0017](../prd/0017-spa-fundacao.md) |
-| 0018 | [SPA: cartaz e sessões do filme](./0018-spa-cartaz.md) | E5 (T2) | em andamento (aberta 2026-09-29) | `feature/0018-spa-cartaz` | [0018](../prd/0018-spa-cartaz.md) |
+| 0018 | [SPA: cartaz e sessões do filme](./0018-spa-cartaz.md) | E5 (T2) | concluída (auditoria APROVADA; merge `849064b`, PR #46) | `feature/0018-spa-cartaz` | [0018](../prd/0018-spa-cartaz.md) |
+| 0019 | [SPA: mapa de assentos isolado](./0019-spa-mapa.md) | E5 (T3) | em andamento (aberta 2026-09-29) | `feature/0019-spa-mapa` | [0019](../prd/0019-spa-mapa.md) |
