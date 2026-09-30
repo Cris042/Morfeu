@@ -10,8 +10,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sort"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"syscall"
@@ -639,7 +639,7 @@ const (
 	limiteConsultaIP    = 10
 	limiteConsultaEmail = 5
 	limiteIngressoIP    = 30
-	limiteWebhookIP   = 300
+	limiteWebhookIP     = 300
 )
 
 // montarPedido liga o módulo pedido (PRD 0023/0024): porta de preço =

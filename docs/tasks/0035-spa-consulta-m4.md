@@ -1,7 +1,7 @@
 # Task 0035 — SPA: consulta e ingresso + E2E do M4 (E8, T5)
 
 - **Data:** 2026-09-30
-- **Status:** em andamento
+- **Status:** concluída (auditoria APROVADA em 2026-09-30)
 - **Branch:** `feature/0035-spa-consulta-m4` (da main `2a76e67`)
 - **PRD:** docs/prd/0035-spa-consulta-m4.md
 - **Item do roadmap:** E8 — SPA checkout + convidado/conta (5ª de 5, fecha o E8). **Fecha o M4.** Refinamento: `docs/refinamentos/E8-spa-checkout.md` §T5.
@@ -28,8 +28,8 @@ Deploy/Caddy real (E0c-CD); Stripe real no E2E (sem rede externa no CI).
 
 ## Critérios de aceite
 
-- [ ] Consulta com mensagem única de erro; ingresso com estados válido/usado/404/410 e QR sem referrer.
-- [ ] E2E M4 (convidado e conta) verde no CI, sem violação de CSP nem do axe; M3 intacto.
+- [x] Consulta com mensagem única de erro; ingresso com estados válido/usado/404/410 e QR sem referrer.
+- [x] E2E M4 (convidado e conta) verde no CI, sem violação de CSP nem do axe; M3 intacto.
 
 ## Riscos
 

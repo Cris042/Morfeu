@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0035-spa-consulta-m4.md
 - **Branch:** feature/0035-spa-consulta-m4
 - **Data:** 2026-09-30
-- **Status:** em andamento
+- **Status:** concluído
 
 ## Objetivo
 
@@ -45,11 +45,11 @@ Telas, rota de teste do e-mail, E2E, CSP no preview, snippet do Caddy.
 
 ## Critérios de aceite
 
-- [ ] CA01 — Consulta: acerto com links e corpo exato; pendente sem links; 404/429/500 com mensagens próprias; storage vazio.
-- [ ] CA02 — Ingresso: válido com QR `no-referrer` e fetch `no-referrer`; usado; 404/410 sem QR e com link da consulta.
-- [ ] CA03 — Rota de teste do e-mail: só o destinatário pedido; sem `para` → vazio; travas conferidas (unit).
-- [ ] CA04 — E2E M4 convidado e conta verdes, sem violação de CSP nem do axe; M3 e sessão verdes.
-- [ ] CA05 — Gate de CSP igual; lint, typecheck, testes, build e CI (web-ci, CI Go, E2E) verdes.
+- [x] CA01 — Consulta: acerto com links e corpo exato; pendente sem links; 404/429/500 com mensagens próprias; storage vazio.
+- [x] CA02 — Ingresso: válido com QR `no-referrer` e fetch `no-referrer`; usado; 404/410 sem QR e com link da consulta.
+- [x] CA03 — Rota de teste do e-mail: só o destinatário pedido; sem `para` → vazio; travas conferidas (unit).
+- [x] CA04 — E2E M4 convidado e conta verdes, sem violação de CSP nem do axe; M3 e sessão verdes.
+- [x] CA05 — Gate de CSP igual; lint, typecheck, testes, build e CI (web-ci, CI Go, E2E) verdes.
 
 ## Plano de testes
 

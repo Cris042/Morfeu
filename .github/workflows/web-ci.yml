@@ -67,7 +67,8 @@ jobs:
         run: |
           csp=$(grep -o 'Content-Security-Policy "[^"]*"' ../configs/caddy/seguranca.caddy | sed 's/^Content-Security-Policy "//; s/"$//')
           test -n "$csp"
-          grep -qF "$csp" vite.config.ts
+          # Linha exata (sem texto extra antes/depois da política).
+          grep -qxF "  \"$csp\"" vite.config.ts
 
       - name: Auditoria de dependências (gate)
         run: npm audit --audit-level=high
