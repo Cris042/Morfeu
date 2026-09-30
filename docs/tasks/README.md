@@ -24,3 +24,4 @@ Convenção: `NNNN-titulo-kebab.md`, numeração sequencial a partir de `0001`. 
 | 0014 | [Sessões: leitura pública, mapa e cache](./0014-sessoes-leitura-publica.md) | E3 (T2) | concluída (auditoria APROVADA; merge `fea38b1`, PR #39) | `feature/0014-sessoes-leitura-publica` | [0014](../prd/0014-sessoes-leitura-publica.md) |
 | 0015 | [Reserva: trava de assento + sweeper](./0015-reserva-trava.md) | E4 (T1) | concluída (auditoria APROVADA; merge `36613c3`, PR #41) | `feature/0015-reserva-trava` | [0015](../prd/0015-reserva-trava.md) |
 | 0016 | [Reserva: ocupação pública, cache e alertas](./0016-reserva-ocupacao.md) | E4 (T2) | concluída (auditoria APROVADA; merge `b9ad75a`, PR #42) | `feature/0016-reserva-ocupacao` | [0016](../prd/0016-reserva-ocupacao.md) |
+| 0017 | [SPA: fundação (shell, tokens, cliente /api, CI do front)](./0017-spa-fundacao.md) | E5 (T1) | em andamento (aberta 2026-09-29) | `feature/0017-spa-fundacao` | [0017](../prd/0017-spa-fundacao.md) |

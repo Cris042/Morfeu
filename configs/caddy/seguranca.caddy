@@ -1,0 +1,15 @@
+# Headers de segurança da SPA em produção (PRD 0017 RF09; decisão do usuário no
+# refinamento E5: definidos agora, aplicados no E0c-CD). Snippet importável:
+#   import seguranca.caddy   → dentro do site block, depois: import seguranca
+# A CSP casa com a SPA do ADR 0009: tudo da mesma origem (fontes self-hosted,
+# sem CDN), pôster por hotlink de image.tmdb.org, API em /api (connect-src 'self').
+(seguranca) {
+	header {
+		Content-Security-Policy "default-src 'self'; img-src 'self' https://image.tmdb.org; connect-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+		# Ligar junto com o TLS do E0c-CD (Let's Encrypt):
+		# Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
+}
