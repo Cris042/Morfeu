@@ -28,6 +28,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
 	"github.com/mclovin137/morfeu/internal/autenticacao"
@@ -337,7 +338,7 @@ func registrarRotasDeDominio(e *echo.Echo, mode string, cfg *config.Config, dbPo
 	// Reserva e pedido também existem no worker: as tarefas da saga (PRD 0025)
 	// usam o serviço do pedido e a porta transacional da reserva.
 	reservaHandler, reservaServico := montarReserva(dbPool, sessaoServico, redisClient, cacheLayer, log)
-	pedidoHandler, pedidoServico := montarPedido(cfg, dbPool, sessaoServico, reservaServico, redisClient, log)
+	pedidoHandler, pedidoServico := montarPedido(cfg, dbPool, sessaoServico, reservaServico, infoSessao(sessaoServico, catalogoServico), redisClient, log)
 	if mode == modeWorker {
 		return pedidoServico, sessaoServico
 	}
@@ -552,6 +553,22 @@ func (f fonteDoEmail) Carregar(ctx context.Context, id uuid.UUID) (notificacao.D
 	return out, nil
 }
 
+// infoSessao compõe o que a página do ingresso mostra (PRD 0034): sessão +
+// título do filme, sem filtro de aberta/arquivado (a sessão pode ter começado).
+func infoSessao(sessoes *sessao.Servico, filmes *catalogo.Servico) func(context.Context, int64) (pedido.InfoSessao, error) {
+	return func(ctx context.Context, id int64) (pedido.InfoSessao, error) {
+		s, ok, err := sessoes.DadosParaIngresso(ctx, id)
+		if err != nil || !ok {
+			return pedido.InfoSessao{}, fmt.Errorf("sessão %d do ingresso: ok=%t: %w", id, ok, err)
+		}
+		titulo, ok, err := filmes.TituloDoFilme(ctx, s.FilmeID)
+		if err != nil || !ok {
+			return pedido.InfoSessao{}, fmt.Errorf("filme %d da sessão: ok=%t: %w", s.FilmeID, ok, err)
+		}
+		return pedido.InfoSessao{Filme: titulo, Sala: s.Sala, Inicio: s.Inicio}, nil
+	}
+}
+
 // CarregarEstorno compõe o aviso de estorno (PRD 0030) a partir do pedido.
 func (f fonteDoEmail) CarregarEstorno(ctx context.Context, id uuid.UUID) (notificacao.DadosEstorno, error) {
 	d, err := f.pedidos.DadosParaAvisoDeEstorno(ctx, id)
@@ -583,6 +600,11 @@ func iniciarTarefasPedido(ctx context.Context, mode string, s *pedido.Servico, w
 const (
 	limitePedidosIP   = 10
 	limitePedidosDono = 5
+	// Consulta de convidado e página do ingresso (PRD 0034): baixos — o
+	// código tem 80 bits; o teto só corta varredura e abuso.
+	limiteConsultaIP    = 10
+	limiteConsultaEmail = 5
+	limiteIngressoIP    = 30
 	limiteWebhookIP   = 300
 )
 
@@ -590,7 +612,7 @@ const (
 // sessao, porta transacional = reserva (ADR 0010), gateway escolhido pela
 // config (fake recusado em produção), verificador do webhook, limitadores do
 // E1, funil e métricas do gateway.
-func montarPedido(cfg *config.Config, dbPool *pgxpool.Pool, sessoes pedido.FonteSessoes, r *reserva.Servico, redisClient redis.Cmdable, log *logger.Logger) (*pedido.Handler, *pedido.Servico) {
+func montarPedido(cfg *config.Config, dbPool *pgxpool.Pool, sessoes pedido.FonteSessoes, r *reserva.Servico, info func(context.Context, int64) (pedido.InfoSessao, error), redisClient redis.Cmdable, log *logger.Logger) (*pedido.Handler, *pedido.Servico) {
 	fatal := func(msg string, err error) {
 		log.ErrorMsg(msg, zap.Error(err))
 		os.Exit(1)
@@ -630,6 +652,15 @@ func montarPedido(cfg *config.Config, dbPool *pgxpool.Pool, sessoes pedido.Fonte
 		},
 		Compensacao: func(ctx context.Context, passo string) {
 			compensacoes.Add(ctx, 1, metric.WithAttributes(attribute.String("passo", passo)))
+		},
+		// Consulta de convidado e página do ingresso (PRD 0034).
+		Consulta: &pedido.ConfigConsulta{
+			LimiteIP:       novoLimitador("consulta-ip", limiteConsultaIP),
+			LimiteEmail:    novoLimitador("consulta-email", limiteConsultaEmail),
+			LimiteIngresso: novoLimitador("ingresso-ip", limiteIngressoIP),
+			Sessao:         info,
+			QR:             notificacao.QR,
+			BaseURL:        cfg.BaseURLPublica,
 		},
 	}
 	if cfg.StripeWebhookSegredo == "" {
@@ -849,6 +880,9 @@ func setupRouter(log *logger.Logger, tel *telemetria.Telemetria, healthHandler *
 	// Primeiro middleware: o span/métrica cobre recover e logger (RF03, PRD 0006).
 	e.Use(tel.MiddlewareHTTP("morfeu"))
 
+	// O link do ingresso é credencial (PRD 0034): o span fica com o template.
+	e.Use(redigirSpanDoIngresso)
+
 	e.Use(middleware.RecoverWithConfig(middleware.RecoverConfig{
 		StackSize: 1 << 10, // 1 KB
 	}))
@@ -860,7 +894,7 @@ func setupRouter(log *logger.Logger, tel *telemetria.Telemetria, healthHandler *
 		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
 			logger.ComTrace(c.Request().Context(), log.Logger).Info("request",
 				zap.String("method", v.Method),
-				zap.String("uri", v.URI),
+				zap.String("uri", uriParaLog(c, v.URI)),
 				zap.Int("status", v.Status),
 				zap.Duration("latency", v.Latency),
 			)
@@ -874,6 +908,33 @@ func setupRouter(log *logger.Logger, tel *telemetria.Telemetria, healthHandler *
 	e.GET("/metrics", echo.WrapHandler(tel.Handler()))
 
 	return e
+}
+
+// prefixoIngresso: o path /i/{id}.{token} carrega o token do ingresso.
+const prefixoIngresso = "/i/"
+
+// uriParaLog troca o path do link do ingresso pelo template da rota (o token
+// nunca vai para o access log — refinamento E7/E8).
+func uriParaLog(c echo.Context, uri string) string {
+	if !strings.HasPrefix(c.Request().URL.Path, prefixoIngresso) {
+		return uri
+	}
+	if p := c.Path(); strings.HasPrefix(p, prefixoIngresso) {
+		return p
+	}
+	return prefixoIngresso + "[redigido]"
+}
+
+// redigirSpanDoIngresso sobrescreve o url.path do span do otelecho (gravado
+// com o path real no início da requisição) pelo valor redigido.
+func redigirSpanDoIngresso(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		err := next(c)
+		if strings.HasPrefix(c.Request().URL.Path, prefixoIngresso) {
+			trace.SpanFromContext(c.Request().Context()).SetAttributes(attribute.String("url.path", uriParaLog(c, "")))
+		}
+		return err
+	}
 }
 
 // waitForShutdown blocks until a termination signal arrives, then shuts down

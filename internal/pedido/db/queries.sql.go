@@ -238,6 +238,48 @@ func (q *Queries) ExpiradosComCobrancaAberta(ctx context.Context, limite int32) 
 	return items, nil
 }
 
+const ingressoParaPagina = `-- name: IngressoParaPagina :many
+SELECT i.assento_codigo, i.status, i.versao_token, i.sessao_id, p.status AS status_pedido
+FROM ingressos i
+JOIN pedidos p ON p.id = i.pedido_id
+WHERE i.id = $1
+`
+
+type IngressoParaPaginaRow struct {
+	AssentoCodigo string `db:"assento_codigo"`
+	Status        string `db:"status"`
+	VersaoToken   int16  `db:"versao_token"`
+	SessaoID      int64  `db:"sessao_id"`
+	StatusPedido  string `db:"status_pedido"`
+}
+
+// Página pública do ingresso (PRD 0034): o HMAC é conferido no serviço.
+func (q *Queries) IngressoParaPagina(ctx context.Context, id uuid.UUID) ([]IngressoParaPaginaRow, error) {
+	rows, err := q.db.Query(ctx, ingressoParaPagina, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []IngressoParaPaginaRow
+	for rows.Next() {
+		var i IngressoParaPaginaRow
+		if err := rows.Scan(
+			&i.AssentoCodigo,
+			&i.Status,
+			&i.VersaoToken,
+			&i.SessaoID,
+			&i.StatusPedido,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const ingressosAtivosDoPedido = `-- name: IngressosAtivosDoPedido :many
 SELECT id, assento_codigo, versao_token
 FROM ingressos
@@ -434,6 +476,54 @@ func (q *Queries) PedidoParaNotificacao(ctx context.Context, id uuid.UUID) ([]Pe
 			&i.Codigo,
 			&i.SessaoID,
 			&i.TotalCentavos,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const pedidoPorCodigo = `-- name: PedidoPorCodigo :many
+SELECT id, email, codigo, sessao_id, assentos::text[] AS assentos, total_centavos, status, expira_em
+FROM pedidos
+WHERE codigo = $1
+`
+
+type PedidoPorCodigoRow struct {
+	ID            uuid.UUID `db:"id"`
+	Email         string    `db:"email"`
+	Codigo        string    `db:"codigo"`
+	SessaoID      int64     `db:"sessao_id"`
+	Assentos      []string  `db:"assentos"`
+	TotalCentavos int64     `db:"total_centavos"`
+	Status        string    `db:"status"`
+	ExpiraEm      time.Time `db:"expira_em"`
+}
+
+// Consulta de convidado (PRD 0034): o código é único; o e-mail é conferido
+// fora do SQL, em tempo constante, pelo mesmo caminho do "não encontrado".
+func (q *Queries) PedidoPorCodigo(ctx context.Context, codigo string) ([]PedidoPorCodigoRow, error) {
+	rows, err := q.db.Query(ctx, pedidoPorCodigo, codigo)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PedidoPorCodigoRow
+	for rows.Next() {
+		var i PedidoPorCodigoRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.Codigo,
+			&i.SessaoID,
+			&i.Assentos,
+			&i.TotalCentavos,
+			&i.Status,
+			&i.ExpiraEm,
 		); err != nil {
 			return nil, err
 		}
