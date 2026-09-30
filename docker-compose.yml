@@ -67,6 +67,9 @@ services:
     container_name: morfeu-app
     profiles: ["app"]
     command: ["-mode=all"]
+    # Shutdown gracioso (PRD 0027): a entrega em curso termina em até 30 s
+    # (processamentoTimeout) antes do SIGKILL — o padrão de 10 s a cortaria.
+    stop_grace_period: 45s
     env_file: .env.docker-compose
     ports:
       - "127.0.0.1:8080:8080"

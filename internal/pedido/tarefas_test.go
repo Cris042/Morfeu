@@ -25,6 +25,7 @@ func semPendenciasAlheias(t *testing.T) {
 	for _, sql := range []string{
 		`UPDATE pedidos SET status = 'estornado' WHERE status = 'estorno_pendente'`,
 		`UPDATE pedidos SET status = 'expirado' WHERE status = 'aguardando_pagamento'`,
+		`UPDATE pedidos SET cobranca_encerrada = true WHERE status = 'expirado'`,
 	} {
 		if _, err := pool.Exec(context.Background(), sql); err != nil {
 			t.Fatal(err)
@@ -262,5 +263,37 @@ func TestPresos(t *testing.T) {
 	_ = a.servico.ExecutarEstornos(ctx)
 	if v, e, _ := a.servico.Presos(ctx); v != 0 || e != 0 {
 		t.Fatalf("depois das tarefas: vencidos=%d estornos=%d (pedido %s)", v, e, p.ID)
+	}
+}
+
+// TestReconciliar_CobrancaAbertaPaga cobre CA06 (auditoria 0025, NB2): o
+// cliente paga, o webhook se perde e o cancelamento lazy é recusado → a
+// varredura de cobranças abertas estorna; cobrança cancelada não é varrida.
+func TestReconciliar_CobrancaAbertaPaga(t *testing.T) {
+	semPendenciasAlheias(t)
+	a := novoAmbiente(t)
+	ctx := context.Background()
+	pago, carPago, sessaoPago := a.pedidoCom(t, "B2")
+	abandonado, carAband, sessaoAband := a.pedidoCom(t, "B3")
+	a.gateway.Aprovar(intencaoDe(pago))
+	a.rel.avancar(TTLPedido)
+	_ = a.criar(carPago, sessaoPago, "B2")   // lazy: cancelamento recusado (já paga)
+	_ = a.criar(carAband, sessaoAband, "B3") // lazy: cancelamento aceito → encerrada
+	if statusDe(t, pago.ID) != "expirado" || statusDe(t, abandonado.ID) != "expirado" {
+		t.Fatal("pré-condição: ambos expirados")
+	}
+	r := a.servico.Reconciliar(ctx)
+	if r.Encerradas != 1 || r.Falhas != 0 {
+		t.Fatalf("rodada: %+v", r)
+	}
+	if e := efeitosDe(t, pago.ID); e != (efeitos{status: "estorno_pendente", motivo: MotivoTardio}) {
+		t.Fatalf("pago tarde: %+v", e)
+	}
+	_ = a.servico.ExecutarEstornos(ctx)
+	if statusDe(t, pago.ID) != "estornado" || statusDe(t, abandonado.ID) != "expirado" {
+		t.Fatal("estados finais")
+	}
+	if r := a.servico.Reconciliar(ctx); r.Encerradas != 0 {
+		t.Fatalf("nada mais a varrer: %+v", r)
 	}
 }

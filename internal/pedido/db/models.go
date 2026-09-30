@@ -36,6 +36,7 @@ type Pedido struct {
 	TentativasEstorno int16      `db:"tentativas_estorno"`
 	CriadoEm          time.Time  `db:"criado_em"`
 	AtualizadoEm      time.Time  `db:"atualizado_em"`
+	CobrancaEncerrada bool       `db:"cobranca_encerrada"`
 }
 
 type PedidoEvento struct {

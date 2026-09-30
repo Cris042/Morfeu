@@ -4,7 +4,19 @@
 
 ## Estado corrente (2026-09-30)
 
-**Task 0026 — Observabilidade da saga + consumidor de notificação + integração ponta a ponta (E6 T5): CONCLUÍDA — auditoria APROVADA na revalidação (itens 1 e 7), CI verde (PR #55)** (branch `feature/0026-observabilidade-saga`, da main `b3a496f`).
+**Task 0027 — Replay da DLQ + hardening do worker (E6 T6, fecha o E6): IMPLEMENTADA; em PR** (branch `feature/0027-replay-dlq-hardening`, da main `cd139d7`).
+
+### Plano da task 0027
+
+1. ~~Replay~~ — `broker.Reprocessar` (lista fechada de DLQs → routing key de origem; get → publish com confirm → ack; `message_id`/headers de negócio preservados, sem `x-death`; dry-run devolve) + subcomando `replay-dlq` (padrão dos subcomandos existentes, em vez de `-mode=replay`).
+2. ~~Worker~~ — panic no handler → DLQ (consumidor segue); gauge `morfeu_dlq_mensagens{fila}` para todas as DLQs; limpeza da outbox publicada > 7 d (lotes de 1000, 1 h); `stop_grace_period: 45s`. Prefetch mantido em 1 (decisão da 0005: semântica do `x-delivery-limit`).
+3. ~~Cobranças abertas~~ — migration 014 (`cobranca_encerrada`); expiração lazy e reconciliação encerram a cobrança cancelada; varredura de expirados com cobrança aberta (aprovada → estorno tardio).
+4. ~~Testes~~ — replay/panic/limpeza com RabbitMQ + PG reais; cobrança aberta paga; gauge multi-fila.
+5. Lint 0 → suíte completa → CI + passe de julgamento → merge. **Fecha o E6.**
+
+---
+
+### Task 0026 — Observabilidade da saga: CONCLUÍDA e MERGEADA (PR #55, `cd139d7`)
 
 ### Plano da task 0026
 

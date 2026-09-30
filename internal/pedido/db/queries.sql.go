@@ -149,6 +149,16 @@ func (q *Queries) EmitirIngresso(ctx context.Context, arg EmitirIngressoParams) 
 	return items, nil
 }
 
+const encerrarCobranca = `-- name: EncerrarCobranca :exec
+UPDATE pedidos SET cobranca_encerrada = true WHERE id = $1
+`
+
+// A cobrança do pedido foi cancelada no gateway (ou já estava): nada a varrer.
+func (q *Queries) EncerrarCobranca(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, encerrarCobranca, id)
+	return err
+}
+
 const estornosPendentes = `-- name: EstornosPendentes :many
 SELECT id, payment_intent_id, tentativas_estorno, atualizado_em
 FROM pedidos
@@ -180,6 +190,41 @@ func (q *Queries) EstornosPendentes(ctx context.Context, limite int32) ([]Estorn
 			&i.TentativasEstorno,
 			&i.AtualizadoEm,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const expiradosComCobrancaAberta = `-- name: ExpiradosComCobrancaAberta :many
+SELECT id, payment_intent_id
+FROM pedidos
+WHERE status = 'expirado' AND NOT cobranca_encerrada AND payment_intent_id IS NOT NULL
+ORDER BY atualizado_em
+LIMIT $1::int
+`
+
+type ExpiradosComCobrancaAbertaRow struct {
+	ID              uuid.UUID `db:"id"`
+	PaymentIntentID *string   `db:"payment_intent_id"`
+}
+
+// Varredura (PRD 0027): expirados cuja cobrança não foi encerrada — o
+// cancelamento pode ter sido recusado porque o cliente acabou de pagar.
+func (q *Queries) ExpiradosComCobrancaAberta(ctx context.Context, limite int32) ([]ExpiradosComCobrancaAbertaRow, error) {
+	rows, err := q.db.Query(ctx, expiradosComCobrancaAberta, limite)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ExpiradosComCobrancaAbertaRow
+	for rows.Next() {
+		var i ExpiradosComCobrancaAbertaRow
+		if err := rows.Scan(&i.ID, &i.PaymentIntentID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
