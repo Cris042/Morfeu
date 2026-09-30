@@ -1,7 +1,7 @@
 # Task 0016 — Reserva: ocupação pública, cache e alertas (E4, T2)
 
 - **Data:** 2026-09-29
-- **Status:** em andamento
+- **Status:** concluída
 - **Branch:** `feature/0016-reserva-ocupacao` (da main `36613c3`, pós-0015)
 - **PRD:** docs/prd/0016-reserva-ocupacao.md
 - **Item do roadmap:** E4 — Reserva (task 2/2; fecha o épico). Refinamento: `docs/refinamentos/E4-reserva.md` §T2.
