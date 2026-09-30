@@ -4,7 +4,19 @@
 
 ## Estado corrente (2026-09-30)
 
-**Task 0031 — Backend do checkout e da conta (E8 T1): CONCLUÍDA — auditoria APROVADA em 2026-09-30 (`security`), CI verde (PR #62)** (branch `feature/0031-backend-checkout-conta`, da main `6e9f880`). Refinamento E8 mergeado (PR #61).
+**Task 0032 — SPA: sessão, login/cadastro e "Meus pedidos" (E8 T2): EM ANDAMENTO** (branch `feature/0032-spa-sessao-conta`, da main `802e374`).
+
+### Plano da task 0032
+
+1. ~~Proxy~~ — `cookiePathRewrite` no Vite (o cookie de refresh com `Path=/auth/refresh` nunca voltava pelo `/api` — achado na abertura; Caddy registrado para a E0c-CD).
+2. ~~Sessão~~ — `sessao.ts` (token só em memória, `criarRefreshUnico` com Web Locks + releitura no lock, BroadcastChannel para resultado/saída) + `client.ts` (Autenticador injetado, Bearer, 1 retry após 401).
+3. ~~Telas~~ — `/entrar`, `/cadastro`, `/conta/pedidos`, `/conta/pedidos/:id`, menu da conta, boot no `main.tsx`.
+4. ~~Testes~~ — unit do refresh único e do módulo; componentes das telas; E2E de duas abas.
+5. Lint + typecheck + build + E2E local (3/3, imagem oficial do Playwright) + CI + passe de julgamento — **auditoria APROVADA em 2026-09-30** (`security`, sem bloqueantes). Resolvidos: `/auth/*` sem Bearer imposto pelo caminho no cliente; contagem do PRD (22). Registrados: `BroadcastChannel` não fechado entre instâncias de teste (inofensivo); `sair()` com refresh em voo pode causar 1 refresh redundante (benigno); 2º refresh quando a mensagem do canal chega após o lock é seguro (cookie já rotacionado no jar).
+
+---
+
+### Task 0031 — Backend do checkout e da conta: CONCLUÍDA e MERGEADA (PR #62, `802e374`)
 
 ### Plano da task 0031
 

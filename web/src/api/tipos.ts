@@ -50,3 +50,24 @@ export interface Hold {
   expira_em: string
   extensoes_usadas: number
 }
+
+/** GET /auth/eu — dono da sessão (PRD 0032). */
+export interface Usuario {
+  id: string
+  nome: string
+  email: string
+  papel: 'cliente' | 'operador'
+}
+
+export type StatusPedido = 'aguardando_pagamento' | 'pago' | 'expirado' | 'falhou' | 'estorno_pendente' | 'estornado'
+
+/** Pedido como a API o devolve (GET /pedidos, GET /pedidos/{id}). */
+export interface Pedido {
+  id: string
+  codigo: string
+  sessao_id: number
+  assentos: string[]
+  total_centavos: number
+  status: StatusPedido
+  expira_em: string
+}

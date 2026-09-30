@@ -11,6 +11,10 @@ const proxy = {
     target: api,
     changeOrigin: true,
     rewrite: (caminho: string) => caminho.replace(/^\/api/, ''),
+    // O Echo emite o cookie de refresh com Path=/auth/refresh; o navegador o
+    // vê em /api/auth/refresh. Sem reescrever o Path, o cookie nunca volta
+    // (PRD 0032). Mesma reescrita no Caddy (header_down Set-Cookie) no deploy.
+    cookiePathRewrite: { '/auth/refresh': '/api/auth/refresh' },
   },
 }
 

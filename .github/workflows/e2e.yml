@@ -1,4 +1,4 @@
-# E2E do M3 (PRD 0021; decisão do usuário no refinamento E5: CI, job próprio).
+# E2E do M3 e da sessão do SPA (PRD 0021/0032; decisão do usuário no refinamento E5: CI, job próprio).
 # Sobe a stack real pelo compose (API em -mode=all + PG + Redis + RabbitMQ;
 # migrations no boot), semeia a sessão de teste e roda o Playwright contra o
 # `vite preview`, que repete o proxy /api do ADR 0009. Só dispara quando o
@@ -13,6 +13,8 @@ on:
       - "internal/reserva/**"
       - "internal/sessao/**"
       - "internal/catalogo/**"
+      - "internal/identidade/**"
+      - "internal/pedido/**"
       - "cmd/**"
       - "migrations/**"
       - ".github/workflows/e2e.yml"
@@ -22,6 +24,8 @@ on:
       - "internal/reserva/**"
       - "internal/sessao/**"
       - "internal/catalogo/**"
+      - "internal/identidade/**"
+      - "internal/pedido/**"
       - "cmd/**"
       - "migrations/**"
       - ".github/workflows/e2e.yml"
@@ -75,7 +79,7 @@ jobs:
           npm ci --no-fund
           npx playwright install --with-deps chromium
 
-      - name: Playwright (M3 + caminho feliz)
+      - name: Playwright (M3, caminho feliz e sessão entre abas)
         working-directory: web
         run: npx playwright test
 

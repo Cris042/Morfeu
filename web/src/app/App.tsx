@@ -2,9 +2,12 @@ import { lazy, Suspense } from 'react'
 import { Link, Route, Routes } from 'react-router'
 
 import { Cartaz } from '../features/cartaz/Cartaz'
+import { Entrar } from '../features/conta/Entrar'
+import { MeusPedidos, PedidoDaConta } from '../features/conta/MeusPedidos'
 import { PaginaFilme } from '../features/filme/PaginaFilme'
 import { PaginaSessao } from '../features/sessao/PaginaSessao'
 import styles from './App.module.css'
+import { MenuConta } from './MenuConta'
 
 // Demonstração do mapa só em dev (PRD 0019 RF06): em produção a constante é
 // false e o import dinâmico some do bundle.
@@ -20,12 +23,17 @@ export function App() {
         <Link to="/" className={styles.marca}>
           Morfeu
         </Link>
+        <MenuConta />
       </header>
       <main>
         <Routes>
           <Route path="/" element={<Cartaz />} />
           <Route path="/filmes/:id" element={<PaginaFilme />} />
           <Route path="/sessoes/:id" element={<PaginaSessao />} />
+          <Route path="/entrar" element={<Entrar modo="entrar" />} />
+          <Route path="/cadastro" element={<Entrar modo="cadastro" />} />
+          <Route path="/conta/pedidos" element={<MeusPedidos />} />
+          <Route path="/conta/pedidos/:id" element={<PedidoDaConta />} />
           {DemoMapa && (
             <Route
               path="/_demo/mapa"

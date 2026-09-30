@@ -55,6 +55,7 @@ npm audit --audit-level=high   # gate no web-ci
 ```
 
 - A API precisa estar em `:8080` (`docker compose --profile app up -d` ou `go run ./cmd/morfeu -mode=api` com PG/Redis). O cookie `morfeu_carrinho` (`Path=/`) atravessa o proxy sem ajuste — verificado na task 0017.
+- O cookie de refresh (`morfeu_refresh`) sai do Echo com `Path=/auth/refresh`; o navegador o vê em `/api/auth/refresh`. O proxy **reescreve o `Path`** (`cookiePathRewrite` no `vite.config.ts`, task 0032) — sem isso a sessão nunca é restaurada ao recarregar. O Caddy do deploy (E0c-CD) precisa da mesma reescrita no `Set-Cookie`.
 - `npm install` em `/mnt/c` é lento (≈ 4–5 min na 1ª vez): I/O do Windows. Some quando o repo for para o ext4 do WSL (item 0 do roadmap).
 - Nunca use `localStorage`/`sessionStorage` nem `fetch` fora de `src/api/` — o lint barra (PRD 0017 RF07).
 
@@ -68,6 +69,8 @@ npm run e2e                                  # sobe o vite preview (proxy /api) 
 ```
 
 - Sem Chrome/libs no WSL (caso desta máquina: faltam libasound/libxcomposite/libxrandr), use a imagem oficial: `docker run --rm --network host -v "$PWD/web":/work -w /work mcr.microsoft.com/playwright:v1.63.0-noble npx playwright test` (a imagem é grande — ~2 GB no 1º pull).
+- Portas 5432/5672 ocupadas por outro projeto: suba a stack com outro nome de projeto e um override (`docker compose -p morfeu-e2e -f docker-compose.yml -f override.yml --profile app up -d`, com `ports: !override [...]` e `env_file: !override [cópia do .env.docker-compose.example]`). O `.env.docker-compose` de dev aponta a API para `localhost` e não serve dentro do compose.
+- Com o repo em `/mnt/c`, o `01-usuario-monitoracao.sh` perde o bit de execução e o entrypoint do postgres o executa com `source`: com `PG_MONITOR_PASSWORD` vazio, o `exit 0` dele encerra o container na 1ª inicialização. Defina a senha (o example já define).
 - No CI roda no job `E2E` (`.github/workflows/e2e.yml`), que sobe a stack pelo compose e anexa o relatório em falha.
 
 ## Checkout (tasks 0023–0025 — ADR 0010)
