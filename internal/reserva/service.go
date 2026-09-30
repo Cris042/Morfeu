@@ -42,6 +42,7 @@ type Metricas struct {
 	Indisponiveis func(ctx context.Context)
 	Expirados     func(ctx context.Context, n int64)
 	Varreduras    func(ctx context.Context)
+	Convertidos   func(ctx context.Context, n int64) // vendidos (PRD 0022 RF09)
 }
 
 // comPadroes troca callbacks ausentes por no-op.
@@ -57,6 +58,9 @@ func (m Metricas) comPadroes() Metricas {
 	}
 	if m.Varreduras == nil {
 		m.Varreduras = func(context.Context) {}
+	}
+	if m.Convertidos == nil {
+		m.Convertidos = func(context.Context, int64) {}
 	}
 	return m
 }
@@ -224,7 +228,10 @@ func (s *Servico) Estender(ctx context.Context, id uuid.UUID, d Dono) (Hold, err
 	}
 	if !gravou {
 		// Outra requisição estendeu (ou o prazo venceu) entre a leitura e o UPDATE.
-		if _, vivo, errR := r.vivoDoDono(ctx, id, d, s.cfg.Agora()); errR == nil && vivo {
+		if atual, vivo, errR := r.vivoDoDono(ctx, id, d, s.cfg.Agora()); errR == nil && vivo {
+			if atual.EmPedido() {
+				return Hold{}, ErrHoldEmPedido
+			}
 			return Hold{}, ErrExtensaoEsgotada
 		}
 		return Hold{}, ErrHoldNaoEncontrado
@@ -235,11 +242,16 @@ func (s *Servico) Estender(ctx context.Context, id uuid.UUID, d Dono) (Hold, err
 
 // Liberar devolve o assento (RF07).
 func (s *Servico) Liberar(ctx context.Context, id uuid.UUID, d Dono) error {
-	ok, err := repositorio{q: db.New(s.pool)}.liberar(ctx, id, d, s.cfg.Agora())
+	r := repositorio{q: db.New(s.pool)}
+	ok, err := r.liberar(ctx, id, d, s.cfg.Agora())
 	if err != nil {
 		return err
 	}
 	if !ok {
+		// Distingue o hold preso a um pedido (409) do inexistente/alheio (404).
+		if h, vivo, errR := r.vivoDoDono(ctx, id, d, s.cfg.Agora()); errR == nil && vivo && h.EmPedido() {
+			return ErrHoldEmPedido
+		}
 		return ErrHoldNaoEncontrado
 	}
 	s.logger.Info("reserva: hold liberado")

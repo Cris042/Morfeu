@@ -13,6 +13,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -89,7 +90,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 		defer pool.Close()
-		for _, arq := range []string{"001_initial_schema.up.sql", "002_outbox_events.up.sql", "007_filmes.up.sql", "008_salas_sessoes.up.sql", "009_holds.up.sql"} {
+		for _, arq := range []string{"001_initial_schema.up.sql", "002_outbox_events.up.sql", "007_filmes.up.sql", "008_salas_sessoes.up.sql", "009_holds.up.sql", "010_holds_pedido.up.sql"} {
 			ddl, err := os.ReadFile("../../migrations/" + arq)
 			if err == nil {
 				_, err = pool.Exec(ctx, string(ddl))
@@ -126,9 +127,11 @@ func (r *relogio) avancar(d time.Duration) {
 }
 
 type ambiente struct {
-	e       *echo.Echo
-	rel     *relogio
-	sweeper *Sweeper
+	e           *echo.Echo
+	rel         *relogio
+	sweeper     *Sweeper
+	servico     *Servico
+	convertidos *atomic.Int64
 }
 
 type limites struct{ ip, dono int }
@@ -156,16 +159,18 @@ func montarAmbiente(t *testing.T, lim limites) *ambiente {
 		}
 		return l
 	}
+	convertidos := &atomic.Int64{}
 	s, err := NovoServico(pool, Config{
 		Sessoes: sessoes, LimiteIP: limitador("ip", lim.ip), LimiteDono: limitador("dono", lim.dono), Agora: rel.agora,
-		Cache: cache.NewRedisCache(redisCli, zap.NewNop()),
+		Cache:    cache.NewRedisCache(redisCli, zap.NewNop()),
+		Metricas: Metricas{Convertidos: func(_ context.Context, n int64) { convertidos.Add(n) }},
 	}, logTeste)
 	if err != nil {
 		t.Fatalf("serviço: %v", err)
 	}
 	e := echo.New()
 	NovoHandler(s, logTeste).RegistrarRotas(e)
-	return &ambiente{e: e, rel: rel, sweeper: NovoSweeper(pool, Metricas{}, rel.agora, logTeste)}
+	return &ambiente{e: e, rel: rel, sweeper: NovoSweeper(pool, Metricas{}, rel.agora, logTeste), servico: s, convertidos: convertidos}
 }
 
 // Layout de teste: 3 × 10 com vão em C5 → 29 assentos (A1…C10, sem C5).

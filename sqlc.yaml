@@ -103,6 +103,7 @@ sql:
   # só integridade declarada — nenhuma query lê sessoes).
   - schema:
       - "./migrations/009_holds.up.sql"
+      - "./migrations/010_holds_pedido.up.sql"
     queries: "./internal/reserva/queries.sql"
     engine: "postgresql"
     gen:
@@ -118,5 +119,11 @@ sql:
         overrides:
           - db_type: "uuid"
             go_type: "github.com/google/uuid.UUID"
+          - db_type: "uuid"
+            nullable: true
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+              pointer: true
           - db_type: "timestamptz"
             go_type: "time.Time"

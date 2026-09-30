@@ -368,11 +368,13 @@ func metricasReserva(log *logger.Logger) reserva.Metricas {
 	indisponiveis := contador("reserva_holds_indisponiveis_total", "Travas recusadas porque outro dono segura o assento.")
 	expirados := contador("reserva_holds_expirados_total", "Holds vencidos marcados como expirados pelo sweeper.")
 	varreduras := contador("reserva_sweeper_execucoes_total", "Passadas concluídas do sweeper de holds.")
+	convertidos := contador("reserva_holds_convertidos_total", "Holds convertidos em venda pelo pedido (PRD 0022).")
 	return reserva.Metricas{
 		Criados:       func(ctx context.Context, n int64) { criados.Add(ctx, n) },
 		Indisponiveis: func(ctx context.Context) { indisponiveis.Add(ctx, 1) },
 		Expirados:     func(ctx context.Context, n int64) { expirados.Add(ctx, n) },
 		Varreduras:    func(ctx context.Context) { varreduras.Add(ctx, 1) },
+		Convertidos:   func(ctx context.Context, n int64) { convertidos.Add(ctx, n) },
 	}
 }
 

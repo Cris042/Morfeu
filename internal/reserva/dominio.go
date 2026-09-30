@@ -50,6 +50,7 @@ type Hold struct {
 	assento         AssentoCodigo
 	expiraEm        time.Time
 	extensoesUsadas int
+	emPedido        bool // preso a um pedido em pagamento (PRD 0022 RF06)
 }
 
 // reconstituir monta o aggregate a partir do repositório (hold ativo).
@@ -76,10 +77,18 @@ func (h Hold) ExtensoesUsadas() int { return h.extensoesUsadas }
 // instante exato de expiraEm o hold já pode ser roubado (RN02).
 func (h Hold) Vivo(agora time.Time) bool { return agora.Before(h.expiraEm) }
 
-// Estender aplica a única extensão (+10 min sobre o prazo atual).
+// EmPedido informa se o hold está preso a um pedido em pagamento: só o
+// pedido o converte ou libera (PRD 0022 RF06).
+func (h Hold) EmPedido() bool { return h.emPedido }
+
+// Estender aplica a única extensão (+10 min sobre o prazo atual). Hold preso
+// a um pedido tem o prazo do pedido — o cliente não o estende.
 func (h Hold) Estender(agora time.Time) (Hold, error) {
 	if !h.Vivo(agora) {
 		return Hold{}, ErrHoldNaoEncontrado
+	}
+	if h.emPedido {
+		return Hold{}, ErrHoldEmPedido
 	}
 	if h.extensoesUsadas >= maxExtensoes {
 		return Hold{}, ErrExtensaoEsgotada
@@ -117,6 +126,15 @@ func NovoLote(codigos []string) (Lote, error) {
 
 // Assentos do lote, em ordem crescente.
 func (l Lote) Assentos() []AssentoCodigo { return append([]AssentoCodigo(nil), l.assentos...) }
+
+// codigos devolve os códigos como texto (parâmetro das queries).
+func (l Lote) codigos() []string {
+	out := make([]string, len(l.assentos))
+	for i, a := range l.assentos {
+		out[i] = string(a)
+	}
+	return out
+}
 
 // ContidoEm verifica o lote contra os códigos reais da sala (vãos e posições
 // fora da grade não existem).

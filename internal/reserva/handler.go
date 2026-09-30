@@ -195,6 +195,8 @@ func (h *Handler) responderErro(c echo.Context, err error) error {
 		return c.JSON(http.StatusConflict, map[string]string{"erro": "limite_holds"})
 	case errors.Is(err, ErrExtensaoEsgotada):
 		return c.JSON(http.StatusConflict, map[string]string{"erro": "extensao_esgotada"})
+	case errors.Is(err, ErrHoldEmPedido):
+		return c.JSON(http.StatusConflict, map[string]string{"erro": "hold_em_pedido"})
 	case errors.Is(err, ErrMuitasRequisicoes):
 		return c.JSON(http.StatusTooManyRequests, map[string]string{"erro": "muitas_requisicoes"})
 	case errors.Is(err, ErrSessaoIndisponivel), errors.Is(err, ErrHoldNaoEncontrado):

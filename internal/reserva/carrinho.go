@@ -36,6 +36,18 @@ func DonoDoToken(token string) (Dono, bool) {
 	return donoDe(token), true
 }
 
+// Hash devolve uma cópia do SHA-256 do token — a identidade que o pedido
+// guarda (PRD 0022 RF10; o token em claro nunca sai do cookie).
+func (d Dono) Hash() []byte { return append([]byte(nil), d.hash...) }
+
+// DonoDoHash reconstrói o dono a partir do hash guardado pelo pedido.
+func DonoDoHash(h []byte) (Dono, bool) {
+	if len(h) != sha256.Size {
+		return Dono{}, false
+	}
+	return Dono{hash: append([]byte(nil), h...)}, true
+}
+
 func donoDe(token string) Dono {
 	soma := sha256.Sum256([]byte(token))
 	return Dono{hash: soma[:]}
