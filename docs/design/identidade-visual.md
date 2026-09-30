@@ -54,7 +54,7 @@ Tokens CSS (nomes em PT, seguindo o idioma do domínio — ADR 0004):
 
 Regras: horários e códigos **sempre** em mono com `font-variant-numeric: tabular-nums`; eyebrows em mono uppercase com `letter-spacing: .18em`; títulos com `text-wrap: balance`; texto corrido ≤ 65ch.
 
-> **Pendência de implementação:** as fontes serão **self-hosted** no bundle da SPA (ex.: pacotes `@fontsource/*`) — nunca Google Fonts via CDN (privacidade/LGPD + same-origin). Registrar os pacotes no `lib.md` antes de entrar no build (roles.md §6.9).
+> **Implementado na task 0017:** fontes **self-hosted** como arquivos woff2 variáveis em `web/public/fonts/` (mesmos arquivos do protótipo — SHA-256 conferido contra `fonts.gstatic.com`), com a licença OFL; `@fontsource/*` descartado. Nunca Google Fonts via CDN (privacidade/LGPD + same-origin + CSP `font-src 'self'`). Tokens em `web/src/styles/tokens.css`.
 
 ## 4. Movimento
 

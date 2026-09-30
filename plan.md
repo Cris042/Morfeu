@@ -4,7 +4,18 @@
 
 ## Estado corrente (2026-09-29)
 
-**Chore — refinamento do E5 + ADR 0009** (branch `chore/e5-refinamento-adr-0009`, da main `b9ad75a`; só documentação — §6.14.6). Registra `docs/refinamentos/E5-spa-cliente.md` (5 pareceres, debate, 4 respostas do usuário), `docs/adr/0009-frontend-spa.md`, roadmap (E4 ✅, E5 em 4 tasks, telas do operador → E9) e fecha o status da 0016. Próximo: task 0017 (E5 T1 — fundação da SPA).
+**Task 0017 — SPA: fundação (E5 T1): IMPLEMENTAÇÃO COMPLETA e validada; gate → PR** (branch `feature/0017-spa-fundacao`, da main `67d1d0b`). Antes: refinamento E5 + ADR 0009 (PR #43, auditoria APROVADA; não-bloqueante sobre o cookie `Path=/` incorporado ao PRD) e reativação das skills de frontend (PR #44).
+
+### Plano da task 0017
+
+1. ~~Dependências~~ — versões do registro npm e peers conferidos: **TypeScript 6.0.3** (7.x incompatível com typescript-eslint `<6.1`), **ESLint 10 sem eslint-plugin-react** (peer `^9.7` → `react/no-danger` virou `no-restricted-syntax`); `lib.md` antes do install; `npm audit` 0 vulnerabilidades.
+2. ~~Scaffold~~ — `web/` com versões exatas, TS estrito (`noUncheckedIndexedAccess`, `verbatimModuleSyntax`), Vite 8 com proxy `/api` + `rewrite` (dev e preview), Vitest (jsdom), ESLint flat type-checked + react-hooks + proibições (`dangerouslySetInnerHTML`, `localStorage`/`sessionStorage`, `fetch` fora de `src/api/`) — as 3 verificadas com arquivo temporário. `MORFEU_API` removido (evitaria `@types/node`).
+3. ~~Identidade~~ — `tokens.css` (7 cores + ClassInd, tipografia, raios, halo tungstênio, reduced-motion); 4 woff2 variáveis **com SHA-256 idêntico ao `fonts.gstatic.com` e ao protótipo** + OFL das 3 famílias.
+4. ~~Código~~ — `api/client.ts` (base `/api`, `credentials: 'include'`, `X-Requested-With` só nas escritas, `ErroApi` com código/corpo, rede → status 0) com 5 testes; shell (`BrowserRouter` + `QueryClientProvider`, cartaz placeholder, 404 amigável, atribuição TMDB) com 2 testes.
+5. ~~CI/docs~~ — `web-ci.yml` (ARM64, setup-node v7 pinado por SHA, `npm ci` → lint → typecheck → test → build → `npm audit --audit-level=high`); `configs/caddy/seguranca.caddy` (CSP + nosniff + Referrer-Policy, HSTS comentado até o TLS); `ambiente-dev.md` (seção do front); pendência das fontes fechada no doc de identidade.
+6. ~~Verificação do proxy (CA05)~~ — API real (`-mode=api`, PG/Redis efêmeros em portas livres — 5432/5672 ocupadas por outro projeto) + `vite`: `/api/filmes` idêntico a `/filmes`; trava via proxy → 201 com `Set-Cookie ... Path=/; HttpOnly; Secure; SameSite=Strict`; `GET /api/holds` com o cookie devolve o hold; ocupação reflete. Ambiente derrubado.
+
+Gate local: lint 0, typecheck 0, 7 testes verdes, build 89 KB gzip, audit 0.
 
 ---
 

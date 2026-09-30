@@ -52,6 +52,10 @@ build/
 ### IntelliJ (pasta inteira — decisão 2026-07-04) ###
 .idea/
 
-### Go binaries ###
-app
+### Go binaries (raiz — ancorado p/ não ignorar web/src/app, task 0017) ###
+/app
 *.log
+
+### SPA (web/, task 0017) ###
+web/node_modules/
+web/dist/

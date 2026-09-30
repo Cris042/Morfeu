@@ -1,0 +1,144 @@
+/*
+ * Identidade visual "A Sala Escura" (docs/design/identidade-visual.md).
+ * Tokens em PT (ADR 0004). Fontes self-hosted, mesma origem (CSP do PRD 0017).
+ */
+
+@font-face {
+  font-family: 'Fraunces';
+  src: url('/fonts/fraunces.woff2') format('woff2');
+  font-weight: 500 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Fraunces';
+  src: url('/fonts/fraunces-italico.woff2') format('woff2');
+  font-weight: 500;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Schibsted Grotesk';
+  src: url('/fonts/schibsted-grotesk.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Spline Sans Mono';
+  src: url('/fonts/spline-sans-mono.woff2') format('woff2');
+  font-weight: 400 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* Paleta (contraste calculado no documento de identidade). */
+  --noite: #14101f;
+  --sala: #1e1830;
+  --veludo: #2a2145;
+  --tela: #f2ecdf;
+  --nevoa: #a79dc4;
+  --tungstenio: #e9b95b;
+  --papoula: #ff5c45;
+  --tinta-papoula: #2a100b;
+
+  /* Classificação indicativa — cores oficiais do ClassInd (não são cor de ação). */
+  --classind-l: #00a54f;
+  --classind-12: #f8c300;
+  --classind-14: #e67824;
+  --classind-16: #db2827;
+  --classind-18: #000000;
+
+  /* Tipografia. */
+  --fonte-display: 'Fraunces', Georgia, serif;
+  --fonte-corpo: 'Schibsted Grotesk', system-ui, sans-serif;
+  --fonte-mono: 'Spline Sans Mono', ui-monospace, monospace;
+
+  --texto-xs: 0.75rem;
+  --texto-sm: 0.875rem;
+  --texto-md: 1rem;
+  --texto-lg: 1.25rem;
+  --texto-xl: 1.75rem;
+  --texto-2xl: 2.5rem;
+
+  /* Forma e ritmo: raios pequenos (cards 8px, chips 3px). */
+  --raio-card: 8px;
+  --raio-chip: 3px;
+  --espaco-1: 0.25rem;
+  --espaco-2: 0.5rem;
+  --espaco-3: 0.75rem;
+  --espaco-4: 1rem;
+  --espaco-6: 1.5rem;
+  --espaco-8: 2rem;
+  --largura-texto: 65ch;
+
+  /* Movimento: corte de cena ~500ms; brilho de tungstênio no foco/hover. */
+  --corte: 500ms;
+  --transicao: 160ms ease-out;
+  --halo: 0 0 0 2px var(--tungstenio), 0 0 12px rgb(233 185 91 / 35%);
+
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--noite);
+  color: var(--tela);
+  font-family: var(--fonte-corpo);
+  font-size: var(--texto-md);
+  line-height: 1.5;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--fonte-display);
+  font-weight: 600;
+  text-wrap: balance;
+}
+
+p {
+  max-width: var(--largura-texto);
+}
+
+a {
+  color: var(--tela);
+}
+
+/* Horários e códigos: sempre mono com algarismos tabulares. */
+time,
+code,
+.mono {
+  font-family: var(--fonte-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Brilho de tungstênio: foco sempre visível. */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--halo);
+  border-radius: var(--raio-chip);
+}
+
+/* Respeito ao usuário: com reduced-motion tudo vira estado estático. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
