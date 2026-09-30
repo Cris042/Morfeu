@@ -28,6 +28,7 @@ var (
 // Tipos de e-mail (label `tipo` das métricas — lista fechada).
 const (
 	TipoConfirmacao = "confirmacao"
+	TipoEstorno     = "estorno" // PRD 0030
 )
 
 // fusoCinema: o cinema e o cliente estão no horário de Brasília.
@@ -226,6 +227,91 @@ var (
 
 func templatesHTML() *htmltemplate.Template  { return tplHTML() }
 func templatesTexto() *texttemplate.Template { return tplTexto() }
+
+// DadosEstorno é o que o aviso de estorno mostra: sem ingresso, sem token.
+type DadosEstorno struct {
+	PedidoID      uuid.UUID
+	Para          string
+	Codigo        string
+	TotalCentavos int64
+}
+
+// FonteDoEstorno carrega o pedido estornado (porta ligada no main).
+// Devolve ErrNaoNotificavel (não estornado) ou ErrPedidoInexistente.
+type FonteDoEstorno interface {
+	CarregarEstorno(ctx context.Context, pedidoID uuid.UUID) (DadosEstorno, error)
+}
+
+// AvisoDeEstorno entrega o e-mail de estorno (PRD 0030) — o Config.Entregar
+// do consumidor de pedido.estornado.
+type AvisoDeEstorno struct {
+	fonte  FonteDoEstorno
+	sender EmailSender
+}
+
+// NovoAvisoDeEstorno exige fonte e sender.
+func NovoAvisoDeEstorno(fonte FonteDoEstorno, sender EmailSender) (*AvisoDeEstorno, error) {
+	if fonte == nil || sender == nil {
+		return nil, errors.New("notificacao: fonte ou sender ausente")
+	}
+	return &AvisoDeEstorno{fonte: fonte, sender: sender}, nil
+}
+
+// Entregar carrega o pedido estornado, monta o aviso e envia.
+func (a *AvisoDeEstorno) Entregar(ctx context.Context, pedidoID uuid.UUID) error {
+	d, err := a.fonte.CarregarEstorno(ctx, pedidoID)
+	if err != nil {
+		return err
+	}
+	m, err := MontarEstorno(d)
+	if err != nil {
+		return err
+	}
+	return a.sender.Enviar(ctx, m)
+}
+
+type estornoView struct {
+	Codigo string
+	Total  string
+}
+
+// MontarEstorno produz o aviso: texto curto, sem QR, sem link de ingresso
+// (refinamento E7, security) — o ingresso foi cancelado.
+func MontarEstorno(d DadosEstorno) (Mensagem, error) {
+	v := estornoView{Codigo: d.Codigo, Total: formatarBRL(d.TotalCentavos)}
+	var html, texto bytes.Buffer
+	if err := tplEstornoHTML().Execute(&html, v); err != nil {
+		return Mensagem{}, fmt.Errorf("notificacao: template HTML do estorno: %w", err)
+	}
+	if err := tplEstornoTexto().Execute(&texto, v); err != nil {
+		return Mensagem{}, fmt.Errorf("notificacao: template texto do estorno: %w", err)
+	}
+	return Mensagem{
+		Tipo: TipoEstorno, Para: d.Para, Assunto: "Seu estorno foi concluído — Morfeu",
+		HTML: html.String(), Texto: texto.String(),
+		ChaveIdempotencia: TipoEstorno + "-" + d.PedidoID.String(),
+	}, nil
+}
+
+const htmlEstorno = `<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>Estorno concluído</title></head>
+<body style="font-family:sans-serif;color:#14101F">
+<h1>Seu estorno foi concluído</h1>
+<p>Não foi possível confirmar os assentos do pedido <strong>{{.Codigo}}</strong>, e o valor de {{.Total}} foi devolvido ao seu cartão.</p>
+<p>O prazo para aparecer na fatura depende do banco emissor. Nenhum ingresso deste pedido é válido.</p>
+</body></html>
+`
+
+const textoEstorno = `Seu estorno foi concluído
+
+Não foi possível confirmar os assentos do pedido {{.Codigo}}, e o valor de {{.Total}} foi devolvido ao seu cartão.
+O prazo para aparecer na fatura depende do banco emissor. Nenhum ingresso deste pedido é válido.
+`
+
+var (
+	tplEstornoHTML  = sync.OnceValue(func() *htmltemplate.Template { return htmltemplate.Must(htmltemplate.New("eh").Parse(htmlEstorno)) })
+	tplEstornoTexto = sync.OnceValue(func() *texttemplate.Template { return texttemplate.Must(texttemplate.New("et").Parse(textoEstorno)) })
+)
 
 // Fake é o EmailSender em memória (CI, dev e load-test — o Resend grátis
 // aguenta 100/dia). Recusado em produção pelo boot (task 0029). Seguro para

@@ -2,6 +2,7 @@ package pedido
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -228,6 +229,12 @@ func (s *Servico) estornarUm(ctx context.Context, id uuid.UUID, intencao *string
 	err := outbox.WithTx(ctx, s.pool, func(tx outbox.Tx) error {
 		r := repositorio{q: db.New(tx)}
 		if _, err := r.transicionar(ctx, id, EstornoPendente, EstornoConcluido, s.cfg.Agora()); err != nil {
+			return err
+		}
+		// Aviso ao cliente (PRD 0030): na MESMA TX do estornado — CAS perdido
+		// = rollback = nenhum evento duplicado.
+		payload, _ := json.Marshal(map[string]string{"pedido_id": id.String()})
+		if _, err := outbox.Enqueue(ctx, tx, outbox.Evento{EventType: EventoEstornado, AggregateID: id.String(), OccurredAt: s.cfg.Agora(), Payload: payload}); err != nil {
 			return err
 		}
 		// Divergência com o pedido ainda aguardando deixou holds presos.

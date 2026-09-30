@@ -18,11 +18,16 @@ import (
 	"github.com/mclovin137/morfeu/internal/outbox"
 )
 
-// Consumidor é o nome do consumidor no registro de dedup (processed_messages).
-const Consumidor = "notificacao.pedido_confirmado"
+// Nomes dos consumidores no registro de dedup (processed_messages).
+const (
+	Consumidor        = "notificacao.pedido_confirmado"
+	ConsumidorEstorno = "notificacao.pedido_estornado" // PRD 0030
+)
 
 // Config agrupa o que o main injeta (o domínio não conhece OTel).
 type Config struct {
+	// Tipo do e-mail (label `tipo`): TipoConfirmacao (padrão) ou TipoEstorno.
+	Tipo string
 	// Latencia recebe o tempo entre o pagamento confirmado (evento) e a
 	// notificação processada — o SLI do checkout fim a fim (doc.md §13).
 	Latencia func(ctx context.Context, d time.Duration)
@@ -58,6 +63,9 @@ func NovoConsumidor(cfg Config, logger *zap.Logger) *ConsumidorPedidos {
 	if cfg.Latencia == nil {
 		cfg.Latencia = func(context.Context, time.Duration) {}
 	}
+	if cfg.Tipo == "" {
+		cfg.Tipo = TipoConfirmacao
+	}
 	if cfg.Resultado == nil {
 		cfg.Resultado = func(context.Context, string, string, time.Duration) {}
 	}
@@ -88,7 +96,7 @@ func (c *ConsumidorPedidos) Efeito(ctx context.Context, _ outbox.Tx, msg outbox.
 	if !msg.OccurredAt.IsZero() {
 		c.cfg.Latencia(ctx, c.cfg.Agora().Sub(msg.OccurredAt))
 	}
-	c.logger.Info("notificacao: pedido confirmado registrado", zap.String("pedido_id", id.String()))
+	c.logger.Info("notificacao: pedido notificado", zap.String("tipo", c.cfg.Tipo), zap.String("pedido_id", id.String()))
 	return nil
 }
 
@@ -116,7 +124,7 @@ func (c *ConsumidorPedidos) entregar(ctx context.Context, id uuid.UUID) error {
 		resultado = ResultadoTransitorio
 		err = fmt.Errorf("notificacao: entregar ingresso: %w", err)
 	}
-	c.cfg.Resultado(ctx, TipoConfirmacao, resultado, c.cfg.Agora().Sub(inicio))
+	c.cfg.Resultado(ctx, c.cfg.Tipo, resultado, c.cfg.Agora().Sub(inicio))
 	if resultado == ResultadoIgnorado {
 		return errIgnorado
 	}

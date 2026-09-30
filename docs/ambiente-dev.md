@@ -92,7 +92,7 @@ docker compose --profile app exec app /app replay-dlq -fila notificacao.pedido_c
 docker compose --profile app exec app /app replay-dlq -fila notificacao.pedido_confirmado.dlq -limite 10
 ```
 
-- DLQs aceitas: `catalogo.filme_criado.dlq` e `notificacao.pedido_confirmado.dlq` (lista fechada em `broker.FilasReplay`).
+- DLQs aceitas: `catalogo.filme_criado.dlq`, `notificacao.pedido_confirmado.dlq` e `notificacao.pedido_estornado.dlq` (lista fechada em `broker.FilasReplay`).
 - Cada mensagem é republicada com confirm **antes** do ack, com o **mesmo `message_id`**: queda no meio duplica e o dedup do consumidor absorve; nunca perde. Mensagem que continua falhando volta à DLQ depois de 3 entregas (sem loop).
 - A saída e o log trazem só contagens e `message_id` — nunca payload.
 

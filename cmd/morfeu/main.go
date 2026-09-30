@@ -428,7 +428,7 @@ func iniciarRotinasDaSaga(ctx context.Context, mode string, cfg *config.Config, 
 // iniciarNotificacao consome pedido.confirmado (PRD 0026/0028): carrega o
 // pedido pelas portas, monta o e-mail com os QRs e envia. O provedor real
 // entra na task 0029; até lá, fake (nenhum e-mail sai).
-func iniciarNotificacao(ctx context.Context, cfg *config.Config, cli *broker.Client, dbPool *pgxpool.Pool, fonte notificacao.FonteDoEmail, wg *sync.WaitGroup, log *logger.Logger) {
+func iniciarNotificacao(ctx context.Context, cfg *config.Config, cli *broker.Client, dbPool *pgxpool.Pool, fonte fonteDoEmail, wg *sync.WaitGroup, log *logger.Logger) {
 	fatal := func(msg string, err error) {
 		log.ErrorMsg(msg, zap.Error(err))
 		os.Exit(1)
@@ -457,29 +457,41 @@ func iniciarNotificacao(ctx context.Context, cfg *config.Config, cli *broker.Cli
 	if err := errors.Join(err1, err2); err != nil {
 		fatal("métricas de e-mail", err)
 	}
-	// As séries do alerta de recusa/cota nascem em 0 (o increase() não vê a 1ª).
-	for _, r := range []string{notificacao.ResultadoPermanente, notificacao.ResultadoCota} {
-		envios.Add(context.Background(), 0, metric.WithAttributes(attribute.String("provedor", provedor),
-			attribute.String("tipo", notificacao.TipoConfirmacao), attribute.String("resultado", r)))
+	aviso, err := notificacao.NovoAvisoDeEstorno(fonte, sender)
+	if err != nil {
+		fatal("aviso de estorno", err)
 	}
-	notif := notificacao.NovoConsumidor(notificacao.Config{
-		Latencia: func(ctx context.Context, d time.Duration) { latencia.Record(ctx, d.Seconds()) },
-		Entregar: entregador.Entregar,
-		Resultado: func(ctx context.Context, tipo, resultado string, d time.Duration) {
-			envios.Add(ctx, 1, metric.WithAttributes(attribute.String("provedor", provedor),
-				attribute.String("tipo", tipo), attribute.String("resultado", resultado)))
-			duracao.Record(ctx, d.Seconds(), metric.WithAttributes(attribute.String("provedor", provedor)))
-		},
-	}, log.Logger)
-	handler := outbox.NovoHandler(dbPool, notificacao.Consumidor, notif.Efeito, log.Logger)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		if err := cli.Consumir(ctx, broker.QueuePedidoConfirmado, handler); err != nil {
-			log.ErrorMsg("consumer de pedido.confirmado encerrado com erro", zap.Error(err))
+	resultado := func(ctx context.Context, tipo, r string, d time.Duration) {
+		envios.Add(ctx, 1, metric.WithAttributes(attribute.String("provedor", provedor),
+			attribute.String("tipo", tipo), attribute.String("resultado", r)))
+		duracao.Record(ctx, d.Seconds(), metric.WithAttributes(attribute.String("provedor", provedor)))
+	}
+	// As séries do alerta de recusa/cota nascem em 0 (o increase() não vê a 1ª).
+	for _, tipo := range []string{notificacao.TipoConfirmacao, notificacao.TipoEstorno} {
+		for _, r := range []string{notificacao.ResultadoPermanente, notificacao.ResultadoCota} {
+			envios.Add(context.Background(), 0, metric.WithAttributes(attribute.String("provedor", provedor),
+				attribute.String("tipo", tipo), attribute.String("resultado", r)))
 		}
-	}()
-	log.Info("Consumer de pedido.confirmado iniciado")
+	}
+	consumir := func(fila, consumidor string, c *notificacao.ConsumidorPedidos) {
+		handler := outbox.NovoHandler(dbPool, consumidor, c.Efeito, log.Logger)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := cli.Consumir(ctx, fila, handler); err != nil {
+				log.ErrorMsg("consumer encerrado com erro", zap.String("fila", fila), zap.Error(err))
+			}
+		}()
+		log.Info("Consumer de notificação iniciado", zap.String("fila", fila))
+	}
+	consumir(broker.QueuePedidoConfirmado, notificacao.Consumidor, notificacao.NovoConsumidor(notificacao.Config{
+		Latencia: func(ctx context.Context, d time.Duration) { latencia.Record(ctx, d.Seconds()) },
+		Entregar: entregador.Entregar, Resultado: resultado,
+	}, log.Logger))
+	// Estorno (PRD 0030): sem latência de checkout — não é o SLI da compra.
+	consumir(broker.QueuePedidoEstornado, notificacao.ConsumidorEstorno, notificacao.NovoConsumidor(notificacao.Config{
+		Tipo: notificacao.TipoEstorno, Entregar: aviso.Entregar, Resultado: resultado,
+	}, log.Logger))
 }
 
 // montarEmailSender escolhe o provedor (ADR 0005 Strategy): Resend ou o
@@ -530,6 +542,20 @@ func (f fonteDoEmail) Carregar(ctx context.Context, id uuid.UUID) (notificacao.D
 		out.Ingressos = append(out.Ingressos, notificacao.IngressoEmail{ID: i.ID, Assento: i.Assento, Token: i.Token})
 	}
 	return out, nil
+}
+
+// CarregarEstorno compõe o aviso de estorno (PRD 0030) a partir do pedido.
+func (f fonteDoEmail) CarregarEstorno(ctx context.Context, id uuid.UUID) (notificacao.DadosEstorno, error) {
+	d, err := f.pedidos.DadosParaAvisoDeEstorno(ctx, id)
+	switch {
+	case errors.Is(err, pedido.ErrNaoNotificavel):
+		return notificacao.DadosEstorno{}, notificacao.ErrNaoNotificavel
+	case errors.Is(err, pedido.ErrPedidoNaoEncontrado):
+		return notificacao.DadosEstorno{}, notificacao.ErrPedidoInexistente
+	case err != nil:
+		return notificacao.DadosEstorno{}, err
+	}
+	return notificacao.DadosEstorno{PedidoID: id, Para: d.Email, Codigo: d.Codigo, TotalCentavos: d.TotalCentavos}, nil
 }
 
 // iniciarTarefasPedido roda reconciliação + estornos da saga (PRD 0025) em

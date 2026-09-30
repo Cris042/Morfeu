@@ -35,6 +35,12 @@ const (
 	ExchangePedidoConfirmadoDLX = "notificacao.pedido_confirmado.dlx"
 	RoutingKeyPedidoConfirmado  = "pedido.confirmado"
 
+	// Pedido estornado → aviso ao cliente (PRD 0030), com DLX/DLQ próprias.
+	QueuePedidoEstornado       = "notificacao.pedido_estornado"
+	QueuePedidoEstornadoDLQ    = "notificacao.pedido_estornado.dlq"
+	ExchangePedidoEstornadoDLX = "notificacao.pedido_estornado.dlx"
+	RoutingKeyPedidoEstornado  = "pedido.estornado"
+
 	filmeCriadoDeliveryLimit = int32(3)
 
 	confirmTimeout = 5 * time.Second
@@ -377,7 +383,10 @@ func declareTopology(ch *amqp.Channel) error {
 		return fmt.Errorf("bind %s -> %s: %w", QueueFilmeCriado, ExchangeEvents, err)
 	}
 
-	return declararFilaComDLQ(ch, QueuePedidoConfirmado, RoutingKeyPedidoConfirmado, ExchangePedidoConfirmadoDLX, QueuePedidoConfirmadoDLQ)
+	if err := declararFilaComDLQ(ch, QueuePedidoConfirmado, RoutingKeyPedidoConfirmado, ExchangePedidoConfirmadoDLX, QueuePedidoConfirmadoDLQ); err != nil {
+		return err
+	}
+	return declararFilaComDLQ(ch, QueuePedidoEstornado, RoutingKeyPedidoEstornado, ExchangePedidoEstornadoDLX, QueuePedidoEstornadoDLQ)
 }
 
 // declararFilaComDLQ declara uma quorum queue ligada à morfeu.events com a

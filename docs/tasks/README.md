@@ -37,3 +37,4 @@ Convenção: `NNNN-titulo-kebab.md`, numeração sequencial a partir de `0001`. 
 | 0027 | [Replay da DLQ + hardening do worker](./0027-replay-dlq-hardening.md) | E6 (T6) | concluída (auditoria APROVADA; PR #56) | `feature/0027-replay-dlq-hardening` | [0027](../prd/0027-replay-dlq-hardening.md) |
 | 0028 | [Notificação: núcleo do e-mail de confirmação com QR](./0028-notificacao-nucleo.md) | E7 (T1) | concluída (auditoria APROVADA; PR #58) | `feature/0028-notificacao-nucleo` | [0028](../prd/0028-notificacao-nucleo.md) |
 | 0029 | [Provedor Resend, config, métricas e alertas de e-mail](./0029-provedor-resend.md) | E7 (T2) | concluída (auditoria APROVADA; PR #59) | `feature/0029-provedor-resend` | [0029](../prd/0029-provedor-resend.md) |
+| 0030 | [E-mail de estorno](./0030-email-estorno.md) | E7 (T3) | em andamento (aberta 2026-09-30) | `feature/0030-email-estorno` | [0030](../prd/0030-email-estorno.md) |

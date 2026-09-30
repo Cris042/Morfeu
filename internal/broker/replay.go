@@ -13,6 +13,7 @@ import (
 var filaDeOrigem = map[string]string{
 	QueueFilmeCriadoDLQ:      QueueFilmeCriado,
 	QueuePedidoConfirmadoDLQ: QueuePedidoConfirmado,
+	QueuePedidoEstornadoDLQ:  QueuePedidoEstornado,
 }
 
 // FilasReplay lista as DLQs aceitas pelo replay e a routing key da
@@ -21,6 +22,7 @@ var filaDeOrigem = map[string]string{
 var FilasReplay = map[string]string{
 	QueueFilmeCriadoDLQ:      RoutingKeyFilmeCriado,
 	QueuePedidoConfirmadoDLQ: RoutingKeyPedidoConfirmado,
+	QueuePedidoEstornadoDLQ:  RoutingKeyPedidoEstornado,
 }
 
 // ErrFilaNaoPermitida: DLQ fora de FilasReplay.
