@@ -20,6 +20,10 @@ import (
 // resto — sem PII no broker, refinamento E6).
 const EventoConfirmado = "pedido.confirmado"
 
+// EventoEstornado avisa o cliente que o dinheiro voltou (PRD 0030) — também
+// só com o pedido_id.
+const EventoEstornado = "pedido.estornado"
+
 // Motivos do estorno automático (ADR 0010).
 const (
 	MotivoDivergencia = "divergencia" // valor/moeda do pagamento ≠ pedido

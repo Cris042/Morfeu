@@ -236,3 +236,64 @@ func TestFormatarBRL(t *testing.T) {
 		}
 	}
 }
+
+// --- Aviso de estorno (PRD 0030) ---
+
+type fonteEstornoFixa struct {
+	d   DadosEstorno
+	err error
+}
+
+func (f fonteEstornoFixa) CarregarEstorno(context.Context, uuid.UUID) (DadosEstorno, error) {
+	return f.d, f.err
+}
+
+// TestAvisoDeEstorno cobre CA03/CA04: sem QR, sem link de ingresso, sem
+// token; assunto e chave próprios; não estornado não envia.
+func TestAvisoDeEstorno(t *testing.T) {
+	d := DadosEstorno{PedidoID: uuid.MustParse("11111111-2222-3333-4444-555555555555"), Para: "ana@exemplo.com", Codigo: "ABCDEFGHIJKLMNOP", TotalCentavos: 6000}
+	m, err := MontarEstorno(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Tipo != TipoEstorno || m.Assunto != "Seu estorno foi concluído — Morfeu" || m.ChaveIdempotencia != "estorno-11111111-2222-3333-4444-555555555555" ||
+		len(m.Anexos) != 0 || strings.Contains(m.HTML, "<img") || strings.Contains(m.HTML, "/i/") || strings.Contains(m.Texto, "/i/") ||
+		!strings.Contains(m.Texto, "ABCDEFGHIJKLMNOP") || !strings.Contains(m.Texto, "R$ 60,00") {
+		t.Fatalf("aviso: %+v", m)
+	}
+	fake := NovoFake()
+	a, err := NovoAvisoDeEstorno(fonteEstornoFixa{d: d}, fake)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Entregar(context.Background(), d.PedidoID); err != nil || len(fake.Enviadas()) != 1 {
+		t.Fatalf("envio: %v %d", err, len(fake.Enviadas()))
+	}
+	nada := NovoFake()
+	a2, _ := NovoAvisoDeEstorno(fonteEstornoFixa{err: ErrNaoNotificavel}, nada)
+	if err := a2.Entregar(context.Background(), d.PedidoID); !errors.Is(err, ErrNaoNotificavel) || len(nada.Enviadas()) != 0 {
+		t.Fatalf("não estornado: %v", err)
+	}
+	var tipo string
+	c := NovoConsumidor(Config{Tipo: TipoEstorno, Entregar: a.Entregar,
+		Resultado: func(_ context.Context, ti, _ string, _ time.Duration) { tipo = ti }}, zap.NewNop())
+	if err := c.Efeito(context.Background(), nil, outbox.Mensagem{Payload: []byte(`{"pedido_id":"` + d.PedidoID.String() + `"}`)}); err != nil || tipo != TipoEstorno {
+		t.Fatalf("consumidor de estorno: %v tipo=%s", err, tipo)
+	}
+}
+
+// TestConsumidor_TipoPadrao: sem Config.Tipo o consumidor é o de confirmação
+// e mede a latência; o de estorno não mede (auditoria 0030).
+func TestConsumidor_TipoPadrao(t *testing.T) {
+	var tipo string
+	var latencias int
+	msg := outbox.Mensagem{Payload: []byte(`{"pedido_id":"` + uuid.NewString() + `"}`), OccurredAt: time.Now()}
+	conf := NovoConsumidor(Config{
+		Entregar:  func(context.Context, uuid.UUID) error { return nil },
+		Latencia:  func(context.Context, time.Duration) { latencias++ },
+		Resultado: func(_ context.Context, ti, _ string, _ time.Duration) { tipo = ti },
+	}, zap.NewNop())
+	if err := conf.Efeito(context.Background(), nil, msg); err != nil || tipo != TipoConfirmacao || latencias != 1 {
+		t.Fatalf("confirmação: %v tipo=%s latências=%d", err, tipo, latencias)
+	}
+}

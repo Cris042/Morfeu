@@ -5,12 +5,15 @@ package pedido
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // Tarefas do worker (PRD 0025): reconciliação e estornos com o gateway fake
@@ -295,5 +298,38 @@ func TestReconciliar_CobrancaAbertaPaga(t *testing.T) {
 	}
 	if r := a.servico.Reconciliar(ctx); r.Encerradas != 0 {
 		t.Fatalf("nada mais a varrer: %+v", r)
+	}
+}
+
+// TestEstorno_AvisoAoCliente cobre o PRD 0030: o estorno concluído enfileira
+// exatamente 1 pedido.estornado; o pagamento tardio nunca gera
+// pedido.confirmado; a porta do aviso só atende pedido estornado.
+func TestEstorno_AvisoAoCliente(t *testing.T) {
+	semPendenciasAlheias(t)
+	a := novoAmbiente(t)
+	ctx := context.Background()
+	p, car, sessaoID := a.pedidoCom(t, "C6")
+	a.rel.avancar(TTLPedido)
+	_ = a.criar(car, sessaoID, "C6") // expira (lazy)
+	_ = a.webhook(aprovado(p))       // pago tarde → estorno pendente
+	if _, err := a.servico.DadosParaAvisoDeEstorno(ctx, p.ID); !errors.Is(err, ErrNaoNotificavel) {
+		t.Fatalf("estorno pendente não avisa: %v", err)
+	}
+	_ = a.servico.ExecutarEstornos(ctx)
+	_ = a.servico.ExecutarEstornos(ctx) // 2ª rodada: nada a fazer
+	contar := func(tipo string) int {
+		var n int
+		_ = pool.QueryRow(ctx, `SELECT count(*) FROM outbox_events WHERE aggregate_id = $1 AND event_type = $2`, p.ID.String(), tipo).Scan(&n)
+		return n
+	}
+	if contar(EventoEstornado) != 1 || contar(EventoConfirmado) != 0 {
+		t.Fatalf("eventos: estornado=%d confirmado=%d", contar(EventoEstornado), contar(EventoConfirmado))
+	}
+	d, err := a.servico.DadosParaAvisoDeEstorno(ctx, p.ID)
+	if err != nil || d.Email != "ana@exemplo.com" || d.Codigo != p.Codigo || d.TotalCentavos != p.TotalCentavos {
+		t.Fatalf("aviso: %+v %v", d, err)
+	}
+	if _, err := a.servico.DadosParaAvisoDeEstorno(ctx, uuid.New()); !errors.Is(err, ErrPedidoNaoEncontrado) {
+		t.Fatalf("inexistente: %v", err)
 	}
 }

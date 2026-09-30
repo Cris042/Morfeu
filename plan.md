@@ -4,7 +4,19 @@
 
 ## Estado corrente (2026-09-30)
 
-**Task 0029 — Provedor Resend, config, métricas e alertas de e-mail (E7 T2): CONCLUÍDA — auditoria APROVADA em 2026-09-30 (`security`), CI verde (PR #59)** (branch `feature/0029-provedor-resend`, da main `1088c66`).
+**Task 0030 — E-mail de estorno (E7 T3, fecha o E7): CONCLUÍDA — auditoria APROVADA em 2026-09-30 (`qa`), CI verde (PR #60). **E7 CONCLUÍDO.** (branch `feature/0030-email-estorno`, da main `da2dae1`).
+
+### Plano da task 0030
+
+1. ~~Evento~~ — `pedido.estornado` na mesma TX do CAS `estornado` (tarefas.go); porta `DadosParaAvisoDeEstorno` (só estornado; reutiliza a query da confirmação).
+2. ~~Broker~~ — fila `notificacao.pedido_estornado` + DLX/DLQ próprias; DLQ em `FilasReplay` (replay + gauge).
+3. ~~Notificação~~ — consumidor tipado (`Config.Tipo`), `AvisoDeEstorno` + template sem QR/link/token, chave `estorno-{pedido}`; segundo consumidor no worker com as mesmas métricas (`tipo=estorno`).
+4. ~~Testes~~ — 1 evento por estorno, nenhum `pedido.confirmado` no pago-tarde, porta só p/ estornado, aviso sem ingresso.
+5. ~~Suíte + lint + CI + passe de julgamento~~ — APROVADO. Resolvidos: comentário do consumidor; teste do tipo padrão (confirmação mede latência). Registrados: prova concorrente do CAS perdido no estorno e teste de integração da fila nova (garantidos por construção — mesma TX e lista fechada).
+
+---
+
+### Task 0029 — Provedor Resend: CONCLUÍDA e MERGEADA (PR #59, `da2dae1`)
 
 ### Plano da task 0029
 

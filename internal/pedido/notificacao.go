@@ -82,3 +82,28 @@ func (s *Servico) DadosParaNotificacao(ctx context.Context, id uuid.UUID) (Dados
 	}
 	return out, nil
 }
+
+// DadosAvisoEstorno é o que o e-mail de estorno mostra (sem ingresso, sem token).
+type DadosAvisoEstorno struct {
+	Email         string
+	Codigo        string
+	TotalCentavos int64
+}
+
+// DadosParaAvisoDeEstorno é a porta do e-mail de estorno (PRD 0030): só
+// pedido estornado. Inexistente → ErrPedidoNaoEncontrado; qualquer outro
+// status (inclusive estorno_pendente) → ErrNaoNotificavel.
+func (s *Servico) DadosParaAvisoDeEstorno(ctx context.Context, id uuid.UUID) (DadosAvisoEstorno, error) {
+	linhas, err := db.New(s.pool).PedidoParaNotificacao(ctx, id)
+	if err != nil {
+		return DadosAvisoEstorno{}, fmt.Errorf("pedido: dados do aviso de estorno: %w", err)
+	}
+	if len(linhas) == 0 {
+		return DadosAvisoEstorno{}, ErrPedidoNaoEncontrado
+	}
+	p := linhas[0]
+	if Status(p.Status) != Estornado {
+		return DadosAvisoEstorno{}, ErrNaoNotificavel
+	}
+	return DadosAvisoEstorno{Email: p.Email, Codigo: p.Codigo, TotalCentavos: p.TotalCentavos}, nil
+}
