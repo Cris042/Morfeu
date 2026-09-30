@@ -1,7 +1,7 @@
 # Task 0033 — SPA: checkout e pagamento (E8, T3)
 
 - **Data:** 2026-09-30
-- **Status:** em andamento
+- **Status:** concluída (auditoria APROVADA em 2026-09-30)
 - **Branch:** `feature/0033-spa-checkout` (da main `f539bdf`)
 - **PRD:** docs/prd/0033-spa-checkout.md
 - **Item do roadmap:** E8 — SPA checkout + convidado/conta (3ª de 5). Refinamento: `docs/refinamentos/E8-spa-checkout.md` §T3.
@@ -28,11 +28,11 @@ Consulta de convidado e página do ingresso (0034/0035); E2E do M4 e axe (0035).
 
 ## Critérios de aceite
 
-- [ ] Pedido criado com os assentos da sessão; e-mail da conta pré-preenchido; Bearer quando logado.
-- [ ] 409 pendente → retomada; holds inválidos/404 → volta ao mapa; 400/429/503/rede com mensagens próprias.
-- [ ] Payment Element sem redirecionamento; recusa mostrada; fake chama a rota de teste.
-- [ ] Polling com backoff, pausa sem foco, parada no terminal e teto com aviso do e-mail.
-- [ ] Bundle de produção sem pagamento de teste e sem segredos; CSP libera só o Stripe necessário.
+- [x] Pedido criado com os assentos da sessão; e-mail da conta pré-preenchido; Bearer quando logado.
+- [x] 409 pendente → retomada; holds inválidos/404 → volta ao mapa; 400/429/503/rede com mensagens próprias.
+- [x] Payment Element sem redirecionamento; recusa mostrada; fake chama a rota de teste.
+- [x] Polling com backoff, pausa sem foco, parada no terminal e teto com aviso do e-mail.
+- [x] Bundle de produção sem pagamento de teste e sem segredos; CSP libera só o Stripe necessário.
 
 ## Riscos
 

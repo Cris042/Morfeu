@@ -4,7 +4,7 @@
 
 ## Estado corrente (2026-09-30)
 
-**Task 0033 — SPA: checkout e pagamento (E8 T3): EM ANDAMENTO** (branch `feature/0033-spa-checkout`, da main `f539bdf`).
+**Task 0033 — SPA: checkout e pagamento (E8 T3): CONCLUÍDA — auditoria APROVADA em 2026-09-30 (`security`), CI verde (PR #64)** (branch `feature/0033-spa-checkout`, da main `f539bdf`).
 
 ### Plano da task 0033
 
@@ -12,7 +12,7 @@
 2. ~~Telas~~ — checkout (`/sessoes/:id/pagamento`), meio por build (fake × Stripe, chunk do outro modo não gerado), acompanhamento `/pedido/:id` (backoff, teto 2 min), link no painel.
 3. ~~Testes~~ — componentes (checkout, meios com mocks do Stripe, polling com timers falsos) + adapter Go; smoke manual do fluxo na stack local (assento → "Pagar (teste)" → pago → assento ocupado).
 4. ~~CSP/gates~~ — Stripe na CSP do Caddy; `web-ci` barra teste/segredo no bundle; E2E builda em modo fake com a rota de teste ativa.
-5. Lint + typecheck + build + CI + passe de julgamento.
+5. ~~Lint + typecheck + build + CI + passe de julgamento~~ — APROVADO, sem bloqueantes. Resolvido: `img-src https://*.stripe.com` na CSP (ícones do Payment Element). Registrados: smoke manual com `pk_test` olhando violações de CSP no E0c-CD (Caddy real); pedido criado antes do deploy e com retry do `CriarCobranca` depois pode receber `idempotency_error` do Stripe (parâmetros mudaram; janela de 24 h, raro — cai no 503 e o usuário refaz); o segredo vive no estado do checkout enquanto a rota está montada (memória de componente, aceito).
 
 ---
 

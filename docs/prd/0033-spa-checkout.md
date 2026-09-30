@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0033-spa-checkout.md
 - **Branch:** feature/0033-spa-checkout
 - **Data:** 2026-09-30
-- **Status:** em andamento
+- **Status:** concluído
 
 ## Objetivo
 
@@ -50,13 +50,13 @@ Checkout, meios de pagamento, acompanhamento, CSP, PaymentIntent sem redireciona
 
 ## Critérios de aceite
 
-- [ ] CA01 — Convidado: só os assentos da sessão, corpo exato do pedido, fase de pagamento com código/total, segredo fora do DOM e do storage.
-- [ ] CA02 — Logado: e-mail pré-preenchido e Bearer no `POST /pedidos`.
-- [ ] CA03 — Pendente → retomada; retomada 404 → volta ao mapa; 409/400/503/429/500 com mensagens próprias; sem holds → tela própria.
-- [ ] CA04 — Fake: chama a rota de teste com anti-CSRF e conclui; falha permite tentar de novo. Stripe: `confirmPayment` sem redirecionamento; recusa exibida; 2ª tentativa conclui.
-- [ ] CA05 — Polling: backoff, parada no terminal, teto + "Verificar de novo", telas de expirado/falhou/estorno, 404.
-- [ ] CA06 — `allow_redirects=never` enviado ao Stripe (teste do adapter).
-- [ ] CA07 — Build de produção sem chunk de teste e sem segredos; build fake sem Stripe.js; lint, typecheck, testes e CI verdes.
+- [x] CA01 — Convidado: só os assentos da sessão, corpo exato do pedido, fase de pagamento com código/total, segredo fora do DOM e do storage.
+- [x] CA02 — Logado: e-mail pré-preenchido e Bearer no `POST /pedidos`.
+- [x] CA03 — Pendente → retomada; retomada 404 → volta ao mapa; 409/400/503/429/500 com mensagens próprias; sem holds → tela própria.
+- [x] CA04 — Fake: chama a rota de teste com anti-CSRF e conclui; falha permite tentar de novo. Stripe: `confirmPayment` sem redirecionamento; recusa exibida; 2ª tentativa conclui.
+- [x] CA05 — Polling: backoff, parada no terminal, teto + "Verificar de novo", telas de expirado/falhou/estorno, 404.
+- [x] CA06 — `allow_redirects=never` enviado ao Stripe (teste do adapter).
+- [x] CA07 — Build de produção sem chunk de teste e sem segredos; build fake sem Stripe.js; lint, typecheck, testes e CI verdes.
 
 ## Plano de testes
 
