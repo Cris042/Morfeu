@@ -2,9 +2,13 @@
 
 > Este arquivo é o plano vivo da task corrente **do projeto** — não confundir com o *plan mode* do Claude Code (que grava em `~/.claude/plans/`). Atualizado durante a implementação; reflete o estado real (regras em `roles.md` §6.11).
 
-## Estado corrente (2026-09-29)
+## Estado corrente (2026-09-30)
 
-**Task 0021 — E2E do M3 (E5 T4b): IMPLEMENTAÇÃO COMPLETA; 1ª execução real do Playwright no CI** (branch `feature/0021-e2e-m3`, da main `f355cd8`). Fecha o E5 e o marco **M3**. Execução local do Playwright indisponível nesta máquina (sem Chrome; libs nativas ausentes; imagem oficial ~2 GB em pull lento) — o job `E2E` do CI é o gate (decisão do usuário).
+**Épico E6 — Saga do checkout: REFINADO** (`docs/refinamentos/E6-saga-checkout.md`; ADR 0010 autorizado e criado; 6 tasks 0022–0027 no roadmap). Branch de docs `chore/e6-refinamento-adr-0010`. Próxima: **task 0022** (reserva: holds vendidos ocupam o assento + portas transacionais), consumindo as exigências da T1 do refinamento.
+
+---
+
+### Task 0021 — E2E do M3: CONCLUÍDA e MERGEADA (PR #49, `38aa433`)
 
 ### Plano da task 0021
 
