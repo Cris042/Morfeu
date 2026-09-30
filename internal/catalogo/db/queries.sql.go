@@ -190,6 +190,32 @@ func (q *Queries) BuscarFilmePublico(ctx context.Context, id int64) ([]BuscarFil
 	return items, nil
 }
 
+const buscarTituloFilme = `-- name: BuscarTituloFilme :many
+SELECT titulo FROM filmes WHERE id = $1 LIMIT 1
+`
+
+// Porta para a notificação (PRD 0028): o título do filme de um ingresso já
+// vendido — sem filtro de arquivado (o filme pode sair do cartaz depois da compra).
+func (q *Queries) BuscarTituloFilme(ctx context.Context, id int64) ([]string, error) {
+	rows, err := q.db.Query(ctx, buscarTituloFilme, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var titulo string
+		if err := rows.Scan(&titulo); err != nil {
+			return nil, err
+		}
+		items = append(items, titulo)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const inserirFilme = `-- name: InserirFilme :one
 INSERT INTO filmes (titulo, sinopse, duracao_min, ano, poster_url, imdb_id)
 VALUES ($1, $2, $3, $4, $5, $6)

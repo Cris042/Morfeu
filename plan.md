@@ -4,7 +4,19 @@
 
 ## Estado corrente (2026-09-30)
 
-**Épico E7 — Notificação: REFINADO** (`docs/refinamentos/E7-notificacao.md`; 3 tasks 0028–0030 no roadmap; sem ADR). Próxima: **task 0028** (núcleo), consumindo as exigências da T1.
+**Task 0028 — Notificação: núcleo do e-mail de confirmação com QR (E7 T1): IMPLEMENTADA; em PR** (branch `feature/0028-notificacao-nucleo`, da main `43a84fd`). Refinamento E7 mergeado (PR #57).
+
+### Plano da task 0028
+
+1. ~~Portas~~ — `pedido.DadosParaNotificacao` + `TokenIngresso` (HMAC `"ingresso:v1:"+id`, 43 chars); `sessao.DadosParaIngresso`; `catalogo.TituloDoFilme` (sem filtro de aberta/arquivado); adapter `fonteDoEmail` no main.
+2. ~~E-mail~~ — `notificacao.Entregador` (carregar → montar → enviar), templates `html/template` + texto (Brasília, BRL), QR PNG inline por CID (skip2), fake do `EmailSender`; consumidor trata não notificável (ack) e inexistente (DLQ).
+3. ~~Config~~ — `INGRESSO_TOKEN_SEGREDO_V1` (≥ 32 bytes; obrigatório em produção; dev gera aleatório) e `BASE_URL_PUBLICA` (https em produção).
+4. ~~Testes~~ — QR decodificado (gozxing), golden, escape/sem imagem externa, entregador, consumidor, porta do pedido com PG real, config. **Bug achado pelos testes:** o `html/template` trocava `cid:` vindo de dado por `#ZgotmplZ` (QR não apareceria) → prefixo literal no template.
+5. Lint + suíte completa → CI + passe de julgamento → merge.
+
+---
+
+### Refinamento E7 — CONCLUÍDO (PR #57, `43a84fd`)
 
 ---
 

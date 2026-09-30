@@ -106,3 +106,15 @@ FROM pedidos
 WHERE status = 'expirado' AND NOT cobranca_encerrada AND payment_intent_id IS NOT NULL
 ORDER BY atualizado_em
 LIMIT @limite::int;
+
+-- name: PedidoParaNotificacao :many
+-- Porta da notificação (PRD 0028): o e-mail sai só de pedido pago.
+SELECT status, email, codigo, sessao_id, total_centavos
+FROM pedidos
+WHERE id = @id;
+
+-- name: IngressosAtivosDoPedido :many
+SELECT id, assento_codigo, versao_token
+FROM ingressos
+WHERE pedido_id = @pedido_id AND status = 'ativo'
+ORDER BY assento_codigo;

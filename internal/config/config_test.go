@@ -133,6 +133,7 @@ func TestValidarPagamento(t *testing.T) {
 		{"stripe com chave restrita de teste", func(c *Config) { c.Gateway, c.StripeChave, c.StripeWebhookSegredo = "stripe", "rk_test_x", "whsec_x" }, ""},
 		{"produção com stripe", func(c *Config) {
 			c.Ambiente, c.Gateway, c.StripeChave, c.StripeWebhookSegredo = "producao", "stripe", "rk_test_x", "whsec_x"
+			c.TokenSegredoV1, c.BaseURLPublica = strings.Repeat("s", 32), "https://m.exemplo"
 		}, ""},
 		{"stripe sem segredo do webhook", func(c *Config) { c.Gateway, c.StripeChave = "stripe", "rk_test_x" }, "STRIPE_WEBHOOK_SECRET"},
 		{"produção com fake", func(c *Config) { c.Ambiente = "producao" }, "fake"},
@@ -141,6 +142,13 @@ func TestValidarPagamento(t *testing.T) {
 		{"chave live mesmo com fake", func(c *Config) { c.StripeChave = "rk_live_x" }, "modo de teste"},
 		{"gateway desconhecido", func(c *Config) { c.Gateway = "paypal" }, "MORFEU_GATEWAY"},
 		{"ambiente desconhecido", func(c *Config) { c.Ambiente = "prod" }, "AMBIENTE"},
+		{"segredo do token curto", func(c *Config) { c.TokenSegredoV1 = "curto" }, "INGRESSO_TOKEN_SEGREDO_V1"},
+		{"produção sem segredo do token", func(c *Config) {
+			c.Ambiente, c.Gateway, c.StripeChave, c.StripeWebhookSegredo, c.TokenSegredoV1, c.BaseURLPublica = "producao", "stripe", "rk_test_x", "whsec_x", "", "https://m.exemplo"
+		}, "INGRESSO_TOKEN_SEGREDO_V1"},
+		{"produção com base http", func(c *Config) {
+			c.Ambiente, c.Gateway, c.StripeChave, c.StripeWebhookSegredo, c.TokenSegredoV1, c.BaseURLPublica = "producao", "stripe", "rk_test_x", "whsec_x", strings.Repeat("s", 32), "http://m.exemplo"
+		}, "BASE_URL_PUBLICA"},
 	}
 	for _, c := range casos {
 		cfg := base

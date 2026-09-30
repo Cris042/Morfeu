@@ -67,3 +67,13 @@ LIMIT 1;
 -- filme_id p/ invalidar o cache público do filme (PRD 0014 RF03).
 UPDATE sessoes SET status = 'cancelada', atualizado_em = now() WHERE id = $1
 RETURNING filme_id;
+
+-- name: BuscarSessaoParaIngresso :many
+-- Porta para a notificação (PRD 0028): dados do ingresso de uma sessão já
+-- vendida — sem filtro de status/horário (a sessão pode ter sido cancelada ou
+-- já ter começado quando o e-mail sai).
+SELECT s.filme_id, s.inicio, sa.nome AS sala_nome
+FROM sessoes s
+JOIN salas sa ON sa.id = s.sala_id
+WHERE s.id = $1
+LIMIT 1;

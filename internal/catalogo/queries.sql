@@ -78,3 +78,8 @@ RETURNING id, titulo, sinopse, duracao_min, ano, poster_url, imdb_id, tmdb_id, (
 -- Porta para o módulo sessao (PRD 0013 RF06): o sessao não lê filmes — o
 -- catálogo responde se o filme existe, está ativo e qual a duração.
 SELECT duracao_min, arquivado_em FROM filmes WHERE id = $1 LIMIT 1;
+
+-- name: BuscarTituloFilme :many
+-- Porta para a notificação (PRD 0028): o título do filme de um ingresso já
+-- vendido — sem filtro de arquivado (o filme pode sair do cartaz depois da compra).
+SELECT titulo FROM filmes WHERE id = $1 LIMIT 1;

@@ -150,6 +150,19 @@ func (s *Servico) DuracaoFilmeAtivo(ctx context.Context, filmeID int64) (int32, 
 	return *linhas[0].DuracaoMin, true, nil
 }
 
+// TituloDoFilme é a porta da notificação (PRD 0028): o título de um filme,
+// mesmo arquivado. ok=false quando o filme não existe.
+func (s *Servico) TituloDoFilme(ctx context.Context, filmeID int64) (string, bool, error) {
+	linhas, err := s.q.BuscarTituloFilme(ctx, filmeID)
+	if err != nil {
+		return "", false, fmt.Errorf("catalogo: título do filme: %w", err)
+	}
+	if len(linhas) == 0 {
+		return "", false, nil
+	}
+	return linhas[0], true, nil
+}
+
 // Criar insere o filme e enfileira catalogo.filme_criado na MESMA TX (PRD
 // 0002 RN01) e invalida o cartaz após o commit (RF05).
 func (s *Servico) Criar(ctx context.Context, dados DadosFilme) (Filme, error) {

@@ -395,6 +395,27 @@ func (s *Servico) PrecoDaSessaoAberta(ctx context.Context, sessaoID int64) (int6
 	return m.PrecoCentavos, true, nil
 }
 
+// SessaoDoIngresso são os dados de uma sessão que o ingresso mostra.
+type SessaoDoIngresso struct {
+	FilmeID int64
+	Inicio  time.Time
+	Sala    string
+}
+
+// DadosParaIngresso é a porta da notificação (PRD 0028): sessão de um
+// ingresso já vendido, em qualquer status. ok=false quando não existe.
+func (s *Servico) DadosParaIngresso(ctx context.Context, sessaoID int64) (SessaoDoIngresso, bool, error) {
+	linhas, err := s.q.BuscarSessaoParaIngresso(ctx, sessaoID)
+	if err != nil {
+		return SessaoDoIngresso{}, false, fmt.Errorf("sessao: dados do ingresso: %w", err)
+	}
+	if len(linhas) == 0 {
+		return SessaoDoIngresso{}, false, nil
+	}
+	l := linhas[0]
+	return SessaoDoIngresso{FilmeID: l.FilmeID, Inicio: l.Inicio, Sala: l.SalaNome}, true, nil
+}
+
 func futuras(lista []SessaoPublica, agora time.Time) []SessaoPublica {
 	out := make([]SessaoPublica, 0, len(lista))
 	for _, l := range lista {

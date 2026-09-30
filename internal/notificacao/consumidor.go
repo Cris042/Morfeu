@@ -8,6 +8,7 @@ package notificacao
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -62,7 +63,16 @@ func (c *ConsumidorPedidos) Efeito(ctx context.Context, _ outbox.Tx, msg outbox.
 		return fmt.Errorf("notificacao: pedido_id inválido: %w", outbox.ErrPermanente)
 	}
 	if c.cfg.Entregar != nil {
-		if err := c.cfg.Entregar(ctx, id); err != nil {
+		err := c.cfg.Entregar(ctx, id)
+		switch {
+		case errors.Is(err, ErrNaoNotificavel):
+			// Pedido não pago ou sem ingresso ativo (ex.: estornado): ack sem
+			// envio — nenhum replay muda isso e nunca sai QR de ingresso inválido.
+			c.logger.Info("notificacao: pedido não notificável, nada enviado", zap.String("pedido_id", id.String()))
+			return nil
+		case errors.Is(err, ErrPedidoInexistente):
+			return fmt.Errorf("notificacao: %w: %w", err, outbox.ErrPermanente)
+		case err != nil:
 			return fmt.Errorf("notificacao: entregar ingresso: %w", err)
 		}
 	}
