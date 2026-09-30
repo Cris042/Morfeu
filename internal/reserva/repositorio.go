@@ -39,7 +39,9 @@ func (r repositorio) vivosDoDono(ctx context.Context, d Dono, agora time.Time) (
 	}
 	out := make([]Hold, 0, len(linhas))
 	for _, l := range linhas {
-		out = append(out, reconstituir(l.ID, l.SessaoID, l.AssentoCodigo, l.ExpiresAt, int(l.ExtensoesUsadas)))
+		h := reconstituir(l.ID, l.SessaoID, l.AssentoCodigo, l.ExpiresAt, int(l.ExtensoesUsadas))
+		h.emPedido = l.PedidoID != nil
+		out = append(out, h)
 	}
 	return out, nil
 }
@@ -69,7 +71,9 @@ func (r repositorio) vivoDoDono(ctx context.Context, id uuid.UUID, d Dono, agora
 		return Hold{}, false, nil
 	}
 	l := linhas[0]
-	return reconstituir(l.ID, l.SessaoID, l.AssentoCodigo, l.ExpiresAt, int(l.ExtensoesUsadas)), true, nil
+	h := reconstituir(l.ID, l.SessaoID, l.AssentoCodigo, l.ExpiresAt, int(l.ExtensoesUsadas))
+	h.emPedido = l.PedidoID != nil
+	return h, true, nil
 }
 
 // estender persiste a extensão com a guarda extensoes_usadas = 0.

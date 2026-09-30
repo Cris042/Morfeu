@@ -13,7 +13,7 @@ import (
 )
 
 const buscarHoldVivoDoDono = `-- name: BuscarHoldVivoDoDono :many
-SELECT id, sessao_id, assento_codigo, expires_at, extensoes_usadas
+SELECT id, sessao_id, assento_codigo, expires_at, extensoes_usadas, pedido_id
 FROM holds
 WHERE id = $1 AND dono_hash = $2 AND status = 'ativo' AND expires_at > $3
 `
@@ -25,11 +25,12 @@ type BuscarHoldVivoDoDonoParams struct {
 }
 
 type BuscarHoldVivoDoDonoRow struct {
-	ID              uuid.UUID `db:"id"`
-	SessaoID        int64     `db:"sessao_id"`
-	AssentoCodigo   string    `db:"assento_codigo"`
-	ExpiresAt       time.Time `db:"expires_at"`
-	ExtensoesUsadas int16     `db:"extensoes_usadas"`
+	ID              uuid.UUID  `db:"id"`
+	SessaoID        int64      `db:"sessao_id"`
+	AssentoCodigo   string     `db:"assento_codigo"`
+	ExpiresAt       time.Time  `db:"expires_at"`
+	ExtensoesUsadas int16      `db:"extensoes_usadas"`
+	PedidoID        *uuid.UUID `db:"pedido_id"`
 }
 
 func (q *Queries) BuscarHoldVivoDoDono(ctx context.Context, arg BuscarHoldVivoDoDonoParams) ([]BuscarHoldVivoDoDonoRow, error) {
@@ -47,6 +48,7 @@ func (q *Queries) BuscarHoldVivoDoDono(ctx context.Context, arg BuscarHoldVivoDo
 			&i.AssentoCodigo,
 			&i.ExpiresAt,
 			&i.ExtensoesUsadas,
+			&i.PedidoID,
 		); err != nil {
 			return nil, err
 		}
@@ -58,10 +60,59 @@ func (q *Queries) BuscarHoldVivoDoDono(ctx context.Context, arg BuscarHoldVivoDo
 	return items, nil
 }
 
+const converterDoPedido = `-- name: ConverterDoPedido :execrows
+UPDATE holds
+SET status = 'convertido', atualizado_em = $1
+WHERE pedido_id = $2 AND status = 'ativo'
+`
+
+type ConverterDoPedidoParams struct {
+	Agora    time.Time  `db:"agora"`
+	PedidoID *uuid.UUID `db:"pedido_id"`
+}
+
+// Porta do pedido (RF04): vendido. Sem olhar o prazo — se ainda é 'ativo'
+// com este pedido_id, ninguém o roubou (o roubo zera pedido_id).
+func (q *Queries) ConverterDoPedido(ctx context.Context, arg ConverterDoPedidoParams) (int64, error) {
+	result, err := q.db.Exec(ctx, converterDoPedido, arg.Agora, arg.PedidoID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const convertidosDoPedido = `-- name: ConvertidosDoPedido :many
+SELECT assento_codigo
+FROM holds
+WHERE pedido_id = $1 AND status = 'convertido'
+ORDER BY assento_codigo
+`
+
+func (q *Queries) ConvertidosDoPedido(ctx context.Context, pedidoID *uuid.UUID) ([]string, error) {
+	rows, err := q.db.Query(ctx, convertidosDoPedido, pedidoID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var assento_codigo string
+		if err := rows.Scan(&assento_codigo); err != nil {
+			return nil, err
+		}
+		items = append(items, assento_codigo)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const estenderHold = `-- name: EstenderHold :many
 UPDATE holds
 SET expires_at = $1, extensoes_usadas = extensoes_usadas + 1, atualizado_em = $2
 WHERE id = $3 AND dono_hash = $4 AND status = 'ativo' AND expires_at > $2 AND extensoes_usadas = 0
+    AND pedido_id IS NULL
 RETURNING id, sessao_id, assento_codigo, expires_at, extensoes_usadas
 `
 
@@ -140,7 +191,7 @@ func (q *Queries) ExpirarVencidos(ctx context.Context, arg ExpirarVencidosParams
 }
 
 const holdsVivosDoDono = `-- name: HoldsVivosDoDono :many
-SELECT id, sessao_id, assento_codigo, expires_at, extensoes_usadas
+SELECT id, sessao_id, assento_codigo, expires_at, extensoes_usadas, pedido_id
 FROM holds
 WHERE dono_hash = $1 AND status = 'ativo' AND expires_at > $2
 ORDER BY expires_at, sessao_id, assento_codigo
@@ -152,11 +203,12 @@ type HoldsVivosDoDonoParams struct {
 }
 
 type HoldsVivosDoDonoRow struct {
-	ID              uuid.UUID `db:"id"`
-	SessaoID        int64     `db:"sessao_id"`
-	AssentoCodigo   string    `db:"assento_codigo"`
-	ExpiresAt       time.Time `db:"expires_at"`
-	ExtensoesUsadas int16     `db:"extensoes_usadas"`
+	ID              uuid.UUID  `db:"id"`
+	SessaoID        int64      `db:"sessao_id"`
+	AssentoCodigo   string     `db:"assento_codigo"`
+	ExpiresAt       time.Time  `db:"expires_at"`
+	ExtensoesUsadas int16      `db:"extensoes_usadas"`
+	PedidoID        *uuid.UUID `db:"pedido_id"`
 }
 
 func (q *Queries) HoldsVivosDoDono(ctx context.Context, arg HoldsVivosDoDonoParams) ([]HoldsVivosDoDonoRow, error) {
@@ -174,6 +226,7 @@ func (q *Queries) HoldsVivosDoDono(ctx context.Context, arg HoldsVivosDoDonoPara
 			&i.AssentoCodigo,
 			&i.ExpiresAt,
 			&i.ExtensoesUsadas,
+			&i.PedidoID,
 		); err != nil {
 			return nil, err
 		}
@@ -185,10 +238,30 @@ func (q *Queries) HoldsVivosDoDono(ctx context.Context, arg HoldsVivosDoDonoPara
 	return items, nil
 }
 
+const liberarDoPedido = `-- name: LiberarDoPedido :execrows
+UPDATE holds
+SET status = 'liberado', atualizado_em = $1
+WHERE pedido_id = $2 AND status = 'ativo'
+`
+
+type LiberarDoPedidoParams struct {
+	Agora    time.Time  `db:"agora"`
+	PedidoID *uuid.UUID `db:"pedido_id"`
+}
+
+// Porta do pedido (RF05): devolve os assentos ainda presos (nunca vendidos).
+func (q *Queries) LiberarDoPedido(ctx context.Context, arg LiberarDoPedidoParams) (int64, error) {
+	result, err := q.db.Exec(ctx, liberarDoPedido, arg.Agora, arg.PedidoID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const liberarHold = `-- name: LiberarHold :execrows
 UPDATE holds
 SET status = 'liberado', atualizado_em = $1
-WHERE id = $2 AND dono_hash = $3 AND status = 'ativo' AND expires_at > $1
+WHERE id = $2 AND dono_hash = $3 AND status = 'ativo' AND expires_at > $1 AND pedido_id IS NULL
 `
 
 type LiberarHoldParams struct {
@@ -197,6 +270,7 @@ type LiberarHoldParams struct {
 	DonoHash []byte    `db:"dono_hash"`
 }
 
+// Hold preso a um pedido só é liberado pelo pedido (LiberarDoPedido).
 func (q *Queries) LiberarHold(ctx context.Context, arg LiberarHoldParams) (int64, error) {
 	result, err := q.db.Exec(ctx, liberarHold, arg.Agora, arg.ID, arg.DonoHash)
 	if err != nil {
@@ -208,7 +282,8 @@ func (q *Queries) LiberarHold(ctx context.Context, arg LiberarHoldParams) (int64
 const ocupadosDaSessao = `-- name: OcupadosDaSessao :many
 SELECT assento_codigo
 FROM holds
-WHERE sessao_id = $1 AND status = 'ativo' AND expires_at > $2
+WHERE sessao_id = $1
+  AND (status = 'convertido' OR (status = 'ativo' AND expires_at > $2))
 ORDER BY assento_codigo
 `
 
@@ -217,10 +292,57 @@ type OcupadosDaSessaoParams struct {
 	Agora    time.Time `db:"agora"`
 }
 
-// Ocupação pública (PRD 0016): só códigos de holds vivos, pelo índice único
-// parcial holds_assento_ativo.
+// Ocupação pública (PRD 0016/0022): holds vivos + vendidos (convertido não
+// vence), pelo índice único parcial holds_assento_ocupado.
 func (q *Queries) OcupadosDaSessao(ctx context.Context, arg OcupadosDaSessaoParams) ([]string, error) {
 	rows, err := q.db.Query(ctx, ocupadosDaSessao, arg.SessaoID, arg.Agora)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var assento_codigo string
+		if err := rows.Scan(&assento_codigo); err != nil {
+			return nil, err
+		}
+		items = append(items, assento_codigo)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const prenderParaPedido = `-- name: PrenderParaPedido :many
+UPDATE holds
+SET expires_at = $1, pedido_id = $2, atualizado_em = $3
+WHERE dono_hash = $4 AND sessao_id = $5 AND assento_codigo = ANY($6::text[])
+  AND status = 'ativo' AND expires_at > $3
+  AND (pedido_id IS NULL OR pedido_id = $2)
+RETURNING assento_codigo
+`
+
+type PrenderParaPedidoParams struct {
+	Ate      time.Time  `db:"ate"`
+	PedidoID *uuid.UUID `db:"pedido_id"`
+	Agora    time.Time  `db:"agora"`
+	DonoHash []byte     `db:"dono_hash"`
+	SessaoID int64      `db:"sessao_id"`
+	Codigos  []string   `db:"codigos"`
+}
+
+// Porta do pedido (PRD 0022 RF03): fixa o prazo e o pedido nos holds VIVOS
+// do dono; idempotente para o mesmo pedido. Quem chama confere a cobertura.
+func (q *Queries) PrenderParaPedido(ctx context.Context, arg PrenderParaPedidoParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, prenderParaPedido,
+		arg.Ate,
+		arg.PedidoID,
+		arg.Agora,
+		arg.DonoHash,
+		arg.SessaoID,
+		arg.Codigos,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -259,10 +381,10 @@ func (q *Queries) TentarTravaSweeper(ctx context.Context, arg TentarTravaSweeper
 const travarAssento = `-- name: TravarAssento :many
 INSERT INTO holds (id, sessao_id, assento_codigo, dono_hash, status, expires_at, extensoes_usadas, criado_em, atualizado_em)
 VALUES ($1, $2, $3, $4, 'ativo', $5, 0, $6, $6)
-ON CONFLICT (sessao_id, assento_codigo) WHERE status = 'ativo'
+ON CONFLICT (sessao_id, assento_codigo) WHERE status IN ('ativo', 'convertido')
 DO UPDATE SET id = EXCLUDED.id, dono_hash = EXCLUDED.dono_hash, expires_at = EXCLUDED.expires_at,
-    extensoes_usadas = 0, criado_em = EXCLUDED.criado_em, atualizado_em = EXCLUDED.atualizado_em
-WHERE holds.expires_at <= $6
+    extensoes_usadas = 0, pedido_id = NULL, criado_em = EXCLUDED.criado_em, atualizado_em = EXCLUDED.atualizado_em
+WHERE holds.status = 'ativo' AND holds.expires_at <= $6
 RETURNING id, sessao_id, assento_codigo, expires_at, extensoes_usadas
 `
 
@@ -285,6 +407,8 @@ type TravarAssentoRow struct {
 
 // Único caminho de criação (ADR 0008): cria o hold ou rouba um vencido.
 // Sem linha no RETURNING = hold vivo de outro dono → 409.
+// Predicado idêntico ao do índice holds_assento_ocupado (migration 010): um
+// hold 'convertido' (vendido) conflita e NUNCA é roubado; só 'ativo' vencido.
 func (q *Queries) TravarAssento(ctx context.Context, arg TravarAssentoParams) ([]TravarAssentoRow, error) {
 	rows, err := q.db.Query(ctx, travarAssento,
 		arg.ID,

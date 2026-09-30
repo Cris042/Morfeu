@@ -11,6 +11,8 @@ var (
 	ErrLimiteHolds         = errors.New("reserva: limite de holds vivos por dono")
 	ErrMuitasRequisicoes   = errors.New("reserva: muitas requisições")
 	ErrAssentoIndisponivel = errors.New("reserva: assento indisponível")
+	ErrHoldEmPedido        = errors.New("reserva: hold preso a um pedido em pagamento")
+	ErrHoldsDoPedido       = errors.New("reserva: holds não cobrem o pedido (vencidos, de outro dono ou ausentes)")
 	errTravaSweeperOcupada = errors.New("reserva: sweeper já em execução")
 )
 

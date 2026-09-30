@@ -11,13 +11,14 @@ import (
 )
 
 type Hold struct {
-	ID              uuid.UUID `db:"id"`
-	SessaoID        int64     `db:"sessao_id"`
-	AssentoCodigo   string    `db:"assento_codigo"`
-	DonoHash        []byte    `db:"dono_hash"`
-	Status          string    `db:"status"`
-	ExpiresAt       time.Time `db:"expires_at"`
-	ExtensoesUsadas int16     `db:"extensoes_usadas"`
-	CriadoEm        time.Time `db:"criado_em"`
-	AtualizadoEm    time.Time `db:"atualizado_em"`
+	ID              uuid.UUID  `db:"id"`
+	SessaoID        int64      `db:"sessao_id"`
+	AssentoCodigo   string     `db:"assento_codigo"`
+	DonoHash        []byte     `db:"dono_hash"`
+	Status          string     `db:"status"`
+	ExpiresAt       time.Time  `db:"expires_at"`
+	ExtensoesUsadas int16      `db:"extensoes_usadas"`
+	CriadoEm        time.Time  `db:"criado_em"`
+	AtualizadoEm    time.Time  `db:"atualizado_em"`
+	PedidoID        *uuid.UUID `db:"pedido_id"`
 }
