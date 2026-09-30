@@ -4,7 +4,7 @@
 
 ## Estado corrente (2026-09-30)
 
-**Task 0031 — Backend do checkout e da conta (E8 T1): IMPLEMENTADA; em PR** (branch `feature/0031-backend-checkout-conta`, da main `6e9f880`). Refinamento E8 mergeado (PR #61).
+**Task 0031 — Backend do checkout e da conta (E8 T1): CONCLUÍDA — auditoria APROVADA em 2026-09-30 (`security`), CI verde (PR #62)** (branch `feature/0031-backend-checkout-conta`, da main `6e9f880`). Refinamento E8 mergeado (PR #61).
 
 ### Plano da task 0031
 
@@ -13,7 +13,7 @@
 3. ~~Retomada~~ — `Gateway.RecuperarSegredo` (Stripe Retrieve / fake) + `POST /pedidos/{id}/retomar` (dono, aguardando no prazo, `no-store`).
 4. ~~Pagamento de teste~~ — `POST /__teste/pagar/{id}` só com gateway fake: evento assinado com o segredo do webhook → `Verificar` + pivô reais.
 5. ~~Testes~~ — Opcional (5 casos), vínculo, meus pedidos, retomada, rota de teste presente/ausente, Stripe RecuperarSegredo.
-6. Lint + suíte completa → CI + passe de julgamento → merge.
+6. ~~Lint + suíte + CI + passe de julgamento~~ — APROVADO, sem correções. Registrados: retomada só pelo carrinho (intencional); `PagarParaTeste` lê com `FOR UPDATE` fora de TX (inofensivo, rota só com fake).
 
 ---
 

@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0031-backend-checkout-conta.md
 - **Branch:** feature/0031-backend-checkout-conta
 - **Data:** 2026-09-30
-- **Status:** em andamento
+- **Status:** concluído
 
 ## Objetivo
 
@@ -40,6 +40,7 @@ Fontes: `docs/refinamentos/E8-spa-checkout.md` §T1, ADR 0003, ADR 0010, decisã
   - `no-store`.
   - Fora disso → 404. Gateway fora → 503.
   - É POST porque o cliente HTTP só manda o anti-CSRF em escritas, e o POST evita cache.
+  - **Só pelo carrinho, não pela conta** (intencional, refinamento E8 §T1): o segredo de pagamento fica com o navegador que abriu o pedido; outro dispositivo logado vê o pedido mas não retoma o pagamento.
 - RF07 — `POST /__teste/pagar/{id}` (decisão do usuário):
   - Registrada **só** quando o main tem gateway fake e segredo de webhook.
   - Monta um `payment_intent.succeeded` com a cobrança e o total do pedido, **assina com o segredo do webhook** e passa pelo mesmo `Verificar` + `ProcessarEvento` da rota real (pivô, outbox, e-mail).
@@ -53,13 +54,13 @@ Fontes: `docs/refinamentos/E8-spa-checkout.md` §T1, ADR 0003, ADR 0010, decisã
 
 ## Critérios de aceite
 
-- [ ] CA01 — Logado → `usuario_id` = sub; convidado → nulo; Bearer inválido → 401 e nenhum pedido do carrinho.
-- [ ] CA02 — "Meus pedidos": 2 da conta em ordem decrescente, `no-store`; sem login → 401; pedido pela conta sem o carrinho → 200; pedido de outra conta → 404.
-- [ ] CA03 — Retomada: segredo do gateway, código, `no-store`; outro carrinho → 404; repetível; expirado → 404; pago → 404.
-- [ ] CA04 — Rota de teste → 204 e pedido `pago` com ingresso, evento e holds convertidos; sem o registro → 404/405.
-- [ ] CA05 — `Opcional`: sem header, válido, expirado, adulterado, Basic.
-- [ ] CA06 — Stripe `RecuperarSegredo` pelo servidor falso.
-- [ ] CA07 — CI verde.
+- [x] CA01 — Logado → `usuario_id` = sub; convidado → nulo; Bearer inválido → 401 e nenhum pedido do carrinho.
+- [x] CA02 — "Meus pedidos": 2 da conta em ordem decrescente, `no-store`; sem login → 401; pedido pela conta sem o carrinho → 200; pedido de outra conta → 404.
+- [x] CA03 — Retomada: segredo do gateway, código, `no-store`; outro carrinho → 404; repetível; expirado → 404; pago → 404.
+- [x] CA04 — Rota de teste → 204 e pedido `pago` com ingresso, evento e holds convertidos; sem o registro → 404/405.
+- [x] CA05 — `Opcional`: sem header, válido, expirado, adulterado, Basic.
+- [x] CA06 — Stripe `RecuperarSegredo` pelo servidor falso.
+- [x] CA07 — CI verde.
 
 ## Arquivos que serão criados
 
@@ -74,7 +75,7 @@ Fontes: `docs/refinamentos/E8-spa-checkout.md` §T1, ADR 0003, ADR 0010, decisã
 - `cmd/morfeu/main.go`, `sqlc.yaml`, `docs/ambiente-dev.md`
 - `docs/tasks/README.md`, `plan.md`, `state.md`
 
-Total: 29.
+Total: 26.
 
 ## Dependências utilizadas
 
