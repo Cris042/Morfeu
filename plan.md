@@ -4,9 +4,24 @@
 
 ## Estado corrente (2026-09-29)
 
-**Task 0017 — SPA: fundação (E5 T1): IMPLEMENTAÇÃO COMPLETA e validada; gate → PR** (branch `feature/0017-spa-fundacao`, da main `67d1d0b`). Antes: refinamento E5 + ADR 0009 (PR #43, auditoria APROVADA; não-bloqueante sobre o cookie `Path=/` incorporado ao PRD) e reativação das skills de frontend (PR #44).
+**Task 0018 — SPA: cartaz e sessões do filme (E5 T2): IMPLEMENTAÇÃO COMPLETA e validada; gate → PR** (branch `feature/0018-spa-cartaz`, da main `cce783c`).
 
-### Plano da task 0017
+### Plano da task 0018
+
+1. ~~Dados~~ — `tipos.ts` (contrato público), `consultas.ts` (`useFilmes`/`useFilme`/`useSessoesDoFilme`; política de retry **global** no `QueryClient`: só rede/5xx, 1× — por consulta ela sobrescrevia o `retry: false` dos testes).
+2. ~~Formatação~~ — `formato.ts` sempre em `America/Sao_Paulo`/pt-BR (hora, dia, chave do dia, BRL, duração), testada com instantes que viram o dia.
+3. ~~UI base~~ — `Poster` (img só de `https://image.tmdb.org`, senão tipográfico com gradiente por **classe** — CSP `style-src 'self'` proíbe style inline), `Estado` (carregando/erro com "Tentar de novo"/vazio).
+4. ~~Telas~~ — Cartaz (grade 4→2→1, cartão-link, meta mono) e Página do filme (pôster grande, sinopse como texto, sessões agrupadas pelo dia local em chips-link para `/sessoes/:id`, 404 → "não está em cartaz", id inválido sem chamada); shell com topbar/rodapé em CSS Modules e rota placeholder de sessão.
+5. ~~Testes~~ — 22 verdes (formato 5, cartaz 4, filme 5 incl. sinopse hostil como texto, shell 3, cliente 5); lint/typecheck 0; build 94 KB gzip; audit 0. Conferência visual pendente (Chrome ausente p/ o Playwright MCP; imagem Docker do Playwright baixando — será usada no E2E da 0020).
+
+---
+
+### Task 0017 — SPA: fundação: CONCLUÍDA e MERGEADA (PR #45, `cce783c`)
+
+Auditoria APROVADA (2026-09-29, `security`); informativos: HSTS comentado até o TLS do E0c-CD; `object-src` coberto por `default-src`. Primeiro `web-ci` verde em 16 s (ARM64).
+
+#### Plano executado da 0017
+
 
 1. ~~Dependências~~ — versões do registro npm e peers conferidos: **TypeScript 6.0.3** (7.x incompatível com typescript-eslint `<6.1`), **ESLint 10 sem eslint-plugin-react** (peer `^9.7` → `react/no-danger` virou `no-restricted-syntax`); `lib.md` antes do install; `npm audit` 0 vulnerabilidades.
 2. ~~Scaffold~~ — `web/` com versões exatas, TS estrito (`noUncheckedIndexedAccess`, `verbatimModuleSyntax`), Vite 8 com proxy `/api` + `rewrite` (dev e preview), Vitest (jsdom), ESLint flat type-checked + react-hooks + proibições (`dangerouslySetInnerHTML`, `localStorage`/`sessionStorage`, `fetch` fora de `src/api/`) — as 3 verificadas com arquivo temporário. `MORFEU_API` removido (evitaria `@types/node`).

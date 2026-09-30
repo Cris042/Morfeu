@@ -1,0 +1,32 @@
+.pagina {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 var(--espaco-6);
+}
+
+.topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px 0 20px;
+  margin-bottom: 44px;
+  border-bottom: 1px solid var(--veludo);
+}
+
+.marca {
+  font-family: var(--fonte-display);
+  font-weight: 600;
+  font-size: 1.1rem;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--tela);
+  text-decoration: none;
+}
+
+.rodape {
+  margin-top: 72px;
+  padding: 22px 0 var(--espaco-8);
+  border-top: 1px solid var(--veludo);
+  font-size: 0.8rem;
+  color: #7a7096;
+}

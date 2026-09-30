@@ -3,11 +3,12 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router'
 
+import { repetirSeTransitorio } from './api/consultas'
 import { App } from './app/App'
 import './styles/tokens.css'
 
 const clienteQuery = new QueryClient({
-  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
+  defaultOptions: { queries: { retry: repetirSeTransitorio, refetchOnWindowFocus: false } },
 })
 
 const raiz = document.getElementById('raiz')

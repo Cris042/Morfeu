@@ -1,0 +1,20 @@
+.estado {
+  padding: var(--espaco-8) 0;
+  color: var(--nevoa);
+}
+
+.botao {
+  margin-top: var(--espaco-3);
+  padding: var(--espaco-2) var(--espaco-4);
+  font: inherit;
+  color: var(--tela);
+  background: transparent;
+  border: 1px solid var(--veludo);
+  border-radius: var(--raio-chip);
+  cursor: pointer;
+  transition: border-color var(--transicao);
+}
+
+.botao:hover {
+  border-color: var(--tungstenio);
+}

@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0017-spa-fundacao.md
 - **Branch:** feature/0017-spa-fundacao
 - **Data:** 2026-09-29
-- **Status:** ativo
+- **Status:** concluído
 
 ## Objetivo
 

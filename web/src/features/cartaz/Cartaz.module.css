@@ -1,0 +1,62 @@
+.eyebrow {
+  margin: 0 0 var(--espaco-2);
+  font-family: var(--fonte-mono);
+  font-size: var(--texto-xs);
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--tungstenio);
+}
+
+.titulo {
+  margin: 0 0 var(--espaco-8);
+  font-size: var(--texto-xl);
+}
+
+.grade {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 26px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.filme {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+  color: inherit;
+  text-decoration: none;
+}
+
+.filme:hover > :first-child,
+.filme:focus-visible > :first-child {
+  transform: translateY(-4px);
+  box-shadow: 0 22px 44px rgb(0 0 0 / 45%);
+}
+
+.nome {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.meta {
+  margin: 0;
+  font-family: var(--fonte-mono);
+  font-size: var(--texto-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--nevoa);
+}
+
+@media (max-width: 900px) {
+  .grade {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .grade {
+    grid-template-columns: 1fr;
+  }
+}
