@@ -59,6 +59,10 @@ type Config struct {
 	// contra DoS — o Stripe reenvia o que receber 429).
 	LimiteWebhook Limitador
 	Funil         func(ctx context.Context, etapa string)
+	// SegredosToken: segredo do HMAC do token do ingresso por versão
+	// (ingressos.versao_token — ADR 0010, rotação). Só a porta da notificação
+	// usa; o segredo nunca sai do módulo.
+	SegredosToken map[int16][]byte
 	// Compensacao conta cada compensação executada (saga_compensacoes_total{passo}).
 	Compensacao func(ctx context.Context, passo string)
 	Agora       func() time.Time

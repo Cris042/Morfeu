@@ -44,6 +44,11 @@ type Config struct {
 	Gateway              string
 	StripeChave          string
 	StripeWebhookSegredo string
+
+	// Notificação (PRD 0028): segredo do HMAC do token do ingresso (versão 1,
+	// ADR 0010) e a URL pública base dos links do e-mail (nunca do header Host).
+	TokenSegredoV1 string
+	BaseURLPublica string
 }
 
 // LoadConfig loads configuration from environment variables with defaults
@@ -73,6 +78,8 @@ func LoadConfig() (*Config, error) {
 		Gateway:              getEnv("MORFEU_GATEWAY", "fake"),
 		StripeChave:          getEnv("STRIPE_SECRET_KEY", ""),
 		StripeWebhookSegredo: getEnv("STRIPE_WEBHOOK_SECRET", ""),
+		TokenSegredoV1:       getEnv("INGRESSO_TOKEN_SEGREDO_V1", ""),
+		BaseURLPublica:       getEnv("BASE_URL_PUBLICA", "http://localhost:5173"),
 	}
 
 	// Parse cache TTL
@@ -170,12 +177,30 @@ func (c *Config) ValidarPagamento() error {
 	if c.StripeChave != "" && !chaveDeTeste {
 		return fmt.Errorf("STRIPE_SECRET_KEY precisa ser de modo de teste (sk_test_/rk_test_)")
 	}
+	if err := c.validarNotificacao(); err != nil {
+		return err
+	}
 	if c.Gateway == "stripe" && (c.StripeChave == "" || c.StripeWebhookSegredo == "") {
 		// Sem o webhook nenhum pagamento real é confirmado (auditoria 0024).
 		return fmt.Errorf("MORFEU_GATEWAY=stripe exige STRIPE_SECRET_KEY e STRIPE_WEBHOOK_SECRET")
 	}
 	return nil
 }
+
+// validarNotificacao confere o segredo do token do ingresso e a URL pública
+// dos links do e-mail (PRD 0028). Mensagens sem valores.
+func (c *Config) validarNotificacao() error {
+	if c.TokenSegredoV1 != "" && len(c.TokenSegredoV1) < tamanhoMinimoSegredoToken {
+		return fmt.Errorf("INGRESSO_TOKEN_SEGREDO_V1 curto (mínimo %d bytes)", tamanhoMinimoSegredoToken)
+	}
+	if c.Ambiente == "producao" && (c.TokenSegredoV1 == "" || !strings.HasPrefix(c.BaseURLPublica, "https://")) {
+		return fmt.Errorf("em produção, INGRESSO_TOKEN_SEGREDO_V1 é obrigatório e BASE_URL_PUBLICA deve ser https")
+	}
+	return nil
+}
+
+// tamanhoMinimoSegredoToken: 32 bytes (256 bits) — refinamento E7, security.
+const tamanhoMinimoSegredoToken = 32
 
 // getEnv returns environment variable value or default
 func getEnv(key string, defaultVal string) string {

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -344,5 +345,43 @@ func TestWebhook_CobrancaOrfa(t *testing.T) {
 	_ = pool.QueryRow(context.Background(), `SELECT payment_intent_id FROM pedidos WHERE id = $1`, p.ID).Scan(&pi)
 	if e := efeitosDe(t, p.ID); e.status != "pago" || pi != "pi_fake_"+p.ID.String() {
 		t.Fatalf("órfã: %+v pi=%s", e, pi)
+	}
+}
+
+// TestDadosParaNotificacao cobre a porta da notificação (PRD 0028 CA01): só
+// pedido pago com ingresso ativo; token HMAC determinístico, 43 caracteres,
+// sem o id em claro, dependente do segredo.
+func TestDadosParaNotificacao(t *testing.T) {
+	a := novoAmbiente(t)
+	ctx := context.Background()
+	p, _, sessaoID := a.pedidoCom(t, "B8", "B9")
+	if _, err := a.servico.DadosParaNotificacao(ctx, p.ID); !errors.Is(err, ErrNaoNotificavel) {
+		t.Fatalf("aguardando pagamento: %v", err)
+	}
+	if _, err := a.servico.DadosParaNotificacao(ctx, uuid.New()); !errors.Is(err, ErrPedidoNaoEncontrado) {
+		t.Fatalf("inexistente: %v", err)
+	}
+	_ = a.webhook(aprovado(p))
+	d, err := a.servico.DadosParaNotificacao(ctx, p.ID)
+	if err != nil || d.Email != "ana@exemplo.com" || d.Codigo != p.Codigo || d.SessaoID != sessaoID || d.TotalCentavos != 6000 || len(d.Ingressos) != 2 {
+		t.Fatalf("dados: %+v %v", d, err)
+	}
+	for _, i := range d.Ingressos {
+		if i.Token != TokenIngresso(segredoTokenTeste, i.ID) || len(i.Token) != 43 || strings.Contains(i.Token, i.ID.String()) {
+			t.Fatalf("token do %s: %q", i.Assento, i.Token)
+		}
+		if i.Token == TokenIngresso([]byte("outro-segredo-qualquer-32-bytes!"), i.ID) {
+			t.Fatal("token não depende do segredo")
+		}
+	}
+	if d.Ingressos[0].Token == d.Ingressos[1].Token {
+		t.Fatal("ingressos distintos com o mesmo token")
+	}
+	// Estornado não notifica (nunca um QR de ingresso inválido).
+	if _, err := pool.Exec(ctx, `UPDATE ingressos SET status = 'cancelado' WHERE pedido_id = $1`, p.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.servico.DadosParaNotificacao(ctx, p.ID); !errors.Is(err, ErrNaoNotificavel) {
+		t.Fatalf("sem ingresso ativo: %v", err)
 	}
 }

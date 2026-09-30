@@ -235,6 +235,39 @@ func (q *Queries) ExpiradosComCobrancaAberta(ctx context.Context, limite int32) 
 	return items, nil
 }
 
+const ingressosAtivosDoPedido = `-- name: IngressosAtivosDoPedido :many
+SELECT id, assento_codigo, versao_token
+FROM ingressos
+WHERE pedido_id = $1 AND status = 'ativo'
+ORDER BY assento_codigo
+`
+
+type IngressosAtivosDoPedidoRow struct {
+	ID            uuid.UUID `db:"id"`
+	AssentoCodigo string    `db:"assento_codigo"`
+	VersaoToken   int16     `db:"versao_token"`
+}
+
+func (q *Queries) IngressosAtivosDoPedido(ctx context.Context, pedidoID uuid.UUID) ([]IngressosAtivosDoPedidoRow, error) {
+	rows, err := q.db.Query(ctx, ingressosAtivosDoPedido, pedidoID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []IngressosAtivosDoPedidoRow
+	for rows.Next() {
+		var i IngressosAtivosDoPedidoRow
+		if err := rows.Scan(&i.ID, &i.AssentoCodigo, &i.VersaoToken); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const inserirPedido = `-- name: InserirPedido :many
 INSERT INTO pedidos (id, codigo, email, dono_hash, sessao_id, assentos, total_centavos, status, expira_em, criado_em, atualizado_em)
 VALUES ($1, $2, $3, $4, $5, $6::varchar[], $7, 'aguardando_pagamento', $8, $9, $9)
@@ -311,6 +344,47 @@ func (q *Queries) MarcarEstorno(ctx context.Context, arg MarcarEstornoParams) (i
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const pedidoParaNotificacao = `-- name: PedidoParaNotificacao :many
+SELECT status, email, codigo, sessao_id, total_centavos
+FROM pedidos
+WHERE id = $1
+`
+
+type PedidoParaNotificacaoRow struct {
+	Status        string `db:"status"`
+	Email         string `db:"email"`
+	Codigo        string `db:"codigo"`
+	SessaoID      int64  `db:"sessao_id"`
+	TotalCentavos int64  `db:"total_centavos"`
+}
+
+// Porta da notificação (PRD 0028): o e-mail sai só de pedido pago.
+func (q *Queries) PedidoParaNotificacao(ctx context.Context, id uuid.UUID) ([]PedidoParaNotificacaoRow, error) {
+	rows, err := q.db.Query(ctx, pedidoParaNotificacao, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PedidoParaNotificacaoRow
+	for rows.Next() {
+		var i PedidoParaNotificacaoRow
+		if err := rows.Scan(
+			&i.Status,
+			&i.Email,
+			&i.Codigo,
+			&i.SessaoID,
+			&i.TotalCentavos,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const pedidosVencidos = `-- name: PedidosVencidos :many

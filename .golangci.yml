@@ -196,6 +196,7 @@ linters:
             - github.com/google/uuid
             - go.uber.org/zap
             - github.com/mclovin137/morfeu/internal/outbox
+            - github.com/skip2/go-qrcode
 
         # Módulo identidade (PRD 0009 RNF01): transaction script sem driver.
         identidade-domain:

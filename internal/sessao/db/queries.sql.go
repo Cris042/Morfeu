@@ -128,6 +128,43 @@ func (q *Queries) BuscarSala(ctx context.Context, id int64) ([]BuscarSalaRow, er
 	return items, nil
 }
 
+const buscarSessaoParaIngresso = `-- name: BuscarSessaoParaIngresso :many
+SELECT s.filme_id, s.inicio, sa.nome AS sala_nome
+FROM sessoes s
+JOIN salas sa ON sa.id = s.sala_id
+WHERE s.id = $1
+LIMIT 1
+`
+
+type BuscarSessaoParaIngressoRow struct {
+	FilmeID  int64     `db:"filme_id"`
+	Inicio   time.Time `db:"inicio"`
+	SalaNome string    `db:"sala_nome"`
+}
+
+// Porta para a notificação (PRD 0028): dados do ingresso de uma sessão já
+// vendida — sem filtro de status/horário (a sessão pode ter sido cancelada ou
+// já ter começado quando o e-mail sai).
+func (q *Queries) BuscarSessaoParaIngresso(ctx context.Context, id int64) ([]BuscarSessaoParaIngressoRow, error) {
+	rows, err := q.db.Query(ctx, buscarSessaoParaIngresso, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []BuscarSessaoParaIngressoRow
+	for rows.Next() {
+		var i BuscarSessaoParaIngressoRow
+		if err := rows.Scan(&i.FilmeID, &i.Inicio, &i.SalaNome); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const cancelarSessao = `-- name: CancelarSessao :many
 UPDATE sessoes SET status = 'cancelada', atualizado_em = now() WHERE id = $1
 RETURNING filme_id

@@ -1,0 +1,29 @@
+== HTML ==
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>Seus ingressos</title></head>
+<body style="font-family:sans-serif;color:#14101F">
+<h1>Seus ingressos estão aqui</h1>
+<p><strong>Duna: Parte Dois</strong><br>01/01/2099 às 20:30 · Sala 1</p>
+<p>Pedido <strong>ABCDEFGHIJKLMNOP</strong> · Total R$ 1.234,56</p>
+<div style="margin:16px 0">
+<p>Assento <strong>A1</strong></p>
+<img src="cid:ingresso-A1" alt="QR do ingresso A1" width="200" height="200">
+<p><a href="https://morfeu.exemplo/i/aaaaaaaa-0000-0000-0000-000000000001.ttttttttttttttttttttttttttttttttttttttttttt">Abrir ingresso A1</a></p>
+</div><div style="margin:16px 0">
+<p>Assento <strong>A2</strong></p>
+<img src="cid:ingresso-A2" alt="QR do ingresso A2" width="200" height="200">
+<p><a href="https://morfeu.exemplo/i/aaaaaaaa-0000-0000-0000-000000000002.uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu">Abrir ingresso A2</a></p>
+</div>
+<p>Apresente o QR na entrada. Guarde o código do pedido para consultas.</p>
+</body></html>
+== TEXTO ==
+Seus ingressos estão aqui
+
+Duna: Parte Dois
+01/01/2099 às 20:30 · Sala 1
+Pedido ABCDEFGHIJKLMNOP · Total R$ 1.234,56
+
+Assento A1: https://morfeu.exemplo/i/aaaaaaaa-0000-0000-0000-000000000001.ttttttttttttttttttttttttttttttttttttttttttt
+Assento A2: https://morfeu.exemplo/i/aaaaaaaa-0000-0000-0000-000000000002.uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu
+
+Apresente o QR na entrada. Guarde o código do pedido para consultas.

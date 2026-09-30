@@ -19,6 +19,9 @@ type Querier interface {
 	BuscarFilmeProjetado(ctx context.Context, filmID int64) (CatalogoFilmesProjetado, error)
 	// :many + LIMIT 1: ausência = vazio (domínio sem pgx.ErrNoRows).
 	BuscarFilmePublico(ctx context.Context, id int64) ([]BuscarFilmePublicoRow, error)
+	// Porta para a notificação (PRD 0028): o título do filme de um ingresso já
+	// vendido — sem filtro de arquivado (o filme pode sair do cartaz depois da compra).
+	BuscarTituloFilme(ctx context.Context, id int64) ([]string, error)
 	// id por IDENTITY (migration 007). Usada pelo backoffice e pela CLI na mesma
 	// TX do evento catalogo.filme_criado (outbox).
 	InserirFilme(ctx context.Context, arg InserirFilmeParams) (InserirFilmeRow, error)

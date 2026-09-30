@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"flag"
 	"fmt"
@@ -217,8 +218,8 @@ func runServer(mode string) {
 	registrarMetricasMensageria(tel, dbPool, brokerClient, log)
 
 	e := setupRouter(log, tel, healthHandler)
-	pedidoServico := registrarRotasDeDominio(e, mode, cfg, dbPool, redisClient, cacheLayer, catalogoServico, catalogoHandler, log)
-	iniciarTarefasPedido(relayCtx, mode, pedidoServico, &relayWG)
+	pedidoServico, sessaoServico := registrarRotasDeDominio(e, mode, cfg, dbPool, redisClient, cacheLayer, catalogoServico, catalogoHandler, log)
+	iniciarRotinasDaSaga(relayCtx, mode, cfg, brokerClient, dbPool, fonteDoEmail{pedidoServico, sessaoServico, catalogoServico}, &relayWG, log)
 
 	go func() {
 		if err := e.Start(":" + cfg.AppPort); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -309,30 +310,6 @@ func startConsumer(ctx context.Context, brokerClient *broker.Client, dbPool *pgx
 		}
 	}()
 	log.Info("Consumer de catalogo.filme_criado iniciado")
-
-	// pedido.confirmado → notificação (PRD 0026): stub até o e-mail do E7.
-	latencia, err := otel.Meter("morfeu/notificacao").Float64Histogram("checkout_confirmado_ate_notificado_segundos",
-		// Sem WithUnit: o exporter anexaria "_seconds" ao nome já em PT.
-		metric.WithDescription("Pagamento confirmado → notificação processada (SLI do checkout fim a fim). "+
-			"O instante do evento tem resolução de segundo: a medida superestima em até 1 s."),
-		// Buckets finos em torno do alvo de 5 s (os padrões do OTel pulam de 0 a 5).
-		metric.WithExplicitBucketBoundaries(0.5, 1, 2, 3, 5, 10, 30, 60))
-	if err != nil {
-		log.ErrorMsg("métrica de latência da notificação", zap.Error(err))
-		os.Exit(1)
-	}
-	notif := notificacao.NovoConsumidor(notificacao.Config{
-		Latencia: func(ctx context.Context, d time.Duration) { latencia.Record(ctx, d.Seconds()) },
-	}, log.Logger)
-	handlerPedidos := outbox.NovoHandler(dbPool, notificacao.Consumidor, notif.Efeito, log.Logger)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		if err := brokerClient.Consumir(ctx, broker.QueuePedidoConfirmado, handlerPedidos); err != nil {
-			log.ErrorMsg("consumer de pedido.confirmado encerrado com erro", zap.Error(err))
-		}
-	}()
-	log.Info("Consumer de pedido.confirmado iniciado")
 }
 
 // conectarTMDB liga o adapter do TMDB ao catálogo quando há token (PRD
@@ -353,7 +330,7 @@ func conectarTMDB(s *catalogo.Servico, cfg *config.Config, log *logger.Logger) {
 // registrarRotasDeDominio monta as rotas dos módulos. Cartaz público sempre;
 // /auth/* e o backoffice só onde o processo serve a API (api|all), pois
 // exigem JWT_SEGREDO (PRD 0009) e o papel operador (PRD 0011).
-func registrarRotasDeDominio(e *echo.Echo, mode string, cfg *config.Config, dbPool *pgxpool.Pool, redisClient redis.Cmdable, cacheLayer cache.Cache, catalogoServico *catalogo.Servico, catalogoHandler *catalogo.Handler, log *logger.Logger) *pedido.Servico {
+func registrarRotasDeDominio(e *echo.Echo, mode string, cfg *config.Config, dbPool *pgxpool.Pool, redisClient redis.Cmdable, cacheLayer cache.Cache, catalogoServico *catalogo.Servico, catalogoHandler *catalogo.Handler, log *logger.Logger) (*pedido.Servico, *sessao.Servico) {
 	catalogoHandler.RegistrarRotasPublicas(e)
 	sessaoHandler, sessaoServico := montarSessao(dbPool, catalogoServico, cacheLayer, log)
 	sessaoHandler.RegistrarRotasPublicas(e)
@@ -362,7 +339,7 @@ func registrarRotasDeDominio(e *echo.Echo, mode string, cfg *config.Config, dbPo
 	reservaHandler, reservaServico := montarReserva(dbPool, sessaoServico, redisClient, cacheLayer, log)
 	pedidoHandler, pedidoServico := montarPedido(cfg, dbPool, sessaoServico, reservaServico, redisClient, log)
 	if mode == modeWorker {
-		return pedidoServico
+		return pedidoServico, sessaoServico
 	}
 	identidadeHandler, emissor := montarIdentidade(cfg, dbPool, redisClient, log)
 	identidadeHandler.RegistrarRotas(e)
@@ -371,7 +348,7 @@ func registrarRotasDeDominio(e *echo.Echo, mode string, cfg *config.Config, dbPo
 	sessaoHandler.RegistrarRotasBackoffice(e, exigirOperador, operadorDaRequisicao)
 	reservaHandler.RegistrarRotas(e)
 	pedidoHandler.RegistrarRotas(e)
-	return pedidoServico
+	return pedidoServico, sessaoServico
 }
 
 // operadorDaRequisicao identifica o operador para o log de auditoria mínima
@@ -439,6 +416,87 @@ func montarReserva(dbPool *pgxpool.Pool, sessoes reserva.FonteSessoes, redisClie
 	return reserva.NovoHandler(servico, log.Logger), servico
 }
 
+// iniciarRotinasDaSaga sobe, no worker, as tarefas do pedido (PRD 0025) e o
+// consumidor de notificação (PRD 0028; só com broker).
+func iniciarRotinasDaSaga(ctx context.Context, mode string, cfg *config.Config, cli *broker.Client, dbPool *pgxpool.Pool, f fonteDoEmail, wg *sync.WaitGroup, log *logger.Logger) {
+	iniciarTarefasPedido(ctx, mode, f.pedidos, wg)
+	if cli != nil {
+		iniciarNotificacao(ctx, cfg, cli, dbPool, f, wg, log)
+	}
+}
+
+// iniciarNotificacao consome pedido.confirmado (PRD 0026/0028): carrega o
+// pedido pelas portas, monta o e-mail com os QRs e envia. O provedor real
+// entra na task 0029; até lá, fake (nenhum e-mail sai).
+func iniciarNotificacao(ctx context.Context, cfg *config.Config, cli *broker.Client, dbPool *pgxpool.Pool, fonte notificacao.FonteDoEmail, wg *sync.WaitGroup, log *logger.Logger) {
+	fatal := func(msg string, err error) {
+		log.ErrorMsg(msg, zap.Error(err))
+		os.Exit(1)
+	}
+	latencia, err := otel.Meter("morfeu/notificacao").Float64Histogram("checkout_confirmado_ate_notificado_segundos",
+		// Sem WithUnit: o exporter anexaria "_seconds" ao nome já em PT.
+		metric.WithDescription("Pagamento confirmado → notificação processada (SLI do checkout fim a fim). "+
+			"O instante do evento tem resolução de segundo: a medida superestima em até 1 s."),
+		// Buckets finos em torno do alvo de 5 s (os padrões do OTel pulam de 0 a 5).
+		metric.WithExplicitBucketBoundaries(0.5, 1, 2, 3, 5, 10, 30, 60))
+	if err != nil {
+		fatal("métrica de latência da notificação", err)
+	}
+	log.Warn("envio de e-mail FAKE ativo (nenhum e-mail sai) — provedor real na task 0029")
+	entregador, err := notificacao.NovoEntregador(fonte, notificacao.NovoFake(), cfg.BaseURLPublica)
+	if err != nil {
+		fatal("entregador de e-mail", err)
+	}
+	notif := notificacao.NovoConsumidor(notificacao.Config{
+		Latencia: func(ctx context.Context, d time.Duration) { latencia.Record(ctx, d.Seconds()) },
+		Entregar: entregador.Entregar,
+	}, log.Logger)
+	handler := outbox.NovoHandler(dbPool, notificacao.Consumidor, notif.Efeito, log.Logger)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := cli.Consumir(ctx, broker.QueuePedidoConfirmado, handler); err != nil {
+			log.ErrorMsg("consumer de pedido.confirmado encerrado com erro", zap.Error(err))
+		}
+	}()
+	log.Info("Consumer de pedido.confirmado iniciado")
+}
+
+// fonteDoEmail compõe as portas de pedido, sessão e catálogo para a
+// notificação (ADR 0003: nenhum módulo lê tabela alheia; o main traduz os
+// erros para o vocabulário da notificação).
+type fonteDoEmail struct {
+	pedidos  *pedido.Servico
+	sessoes  *sessao.Servico
+	catalogo *catalogo.Servico
+}
+
+func (f fonteDoEmail) Carregar(ctx context.Context, id uuid.UUID) (notificacao.DadosEmail, error) {
+	d, err := f.pedidos.DadosParaNotificacao(ctx, id)
+	switch {
+	case errors.Is(err, pedido.ErrNaoNotificavel):
+		return notificacao.DadosEmail{}, notificacao.ErrNaoNotificavel
+	case errors.Is(err, pedido.ErrPedidoNaoEncontrado):
+		return notificacao.DadosEmail{}, notificacao.ErrPedidoInexistente
+	case err != nil:
+		return notificacao.DadosEmail{}, err
+	}
+	s, ok, err := f.sessoes.DadosParaIngresso(ctx, d.SessaoID)
+	if err != nil || !ok {
+		return notificacao.DadosEmail{}, fmt.Errorf("sessão %d do pedido: ok=%t: %w", d.SessaoID, ok, err)
+	}
+	titulo, ok, err := f.catalogo.TituloDoFilme(ctx, s.FilmeID)
+	if err != nil || !ok {
+		return notificacao.DadosEmail{}, fmt.Errorf("filme %d da sessão: ok=%t: %w", s.FilmeID, ok, err)
+	}
+	out := notificacao.DadosEmail{PedidoID: id, Para: d.Email, Codigo: d.Codigo, Filme: titulo,
+		Inicio: s.Inicio, Sala: s.Sala, TotalCentavos: d.TotalCentavos}
+	for _, i := range d.Ingressos {
+		out.Ingressos = append(out.Ingressos, notificacao.IngressoEmail{ID: i.ID, Assento: i.Assento, Token: i.Token})
+	}
+	return out, nil
+}
+
 // iniciarTarefasPedido roda reconciliação + estornos da saga (PRD 0025) em
 // -mode=worker|all, no mesmo WaitGroup do shutdown gracioso.
 func iniciarTarefasPedido(ctx context.Context, mode string, s *pedido.Servico, wg *sync.WaitGroup) {
@@ -492,11 +550,12 @@ func montarPedido(cfg *config.Config, dbPool *pgxpool.Pool, sessoes pedido.Fonte
 		fatal("métrica de compensações", err)
 	}
 	pc := pedido.Config{
-		Sessoes:    sessoes,
-		Reserva:    reservaDoPedido{r},
-		Gateway:    montarGateway(cfg, meter, log),
-		LimiteIP:   novoLimitador("pedido-ip", limitePedidosIP),
-		LimiteDono: novoLimitador("pedido-dono", limitePedidosDono),
+		SegredosToken: map[int16][]byte{1: segredoToken(cfg, log)},
+		Sessoes:       sessoes,
+		Reserva:       reservaDoPedido{r},
+		Gateway:       montarGateway(cfg, meter, log),
+		LimiteIP:      novoLimitador("pedido-ip", limitePedidosIP),
+		LimiteDono:    novoLimitador("pedido-dono", limitePedidosDono),
 		Funil: func(ctx context.Context, etapa string) {
 			funil.Add(ctx, 1, metric.WithAttributes(attribute.String("etapa", etapa)))
 		},
@@ -524,6 +583,22 @@ func montarPedido(cfg *config.Config, dbPool *pgxpool.Pool, sessoes pedido.Fonte
 		compensacoes.Add(context.Background(), 0, metric.WithAttributes(attribute.String("passo", passo)))
 	}
 	return pedido.NovoHandler(servico, log.Logger), servico
+}
+
+// segredoToken devolve o segredo do HMAC do ingresso (versão 1). Em dev sem
+// INGRESSO_TOKEN_SEGREDO_V1, gera um aleatório por processo (links do e-mail
+// deixam de valer após reiniciar); em produção o boot já recusou a ausência.
+func segredoToken(cfg *config.Config, log *logger.Logger) []byte {
+	if cfg.TokenSegredoV1 != "" {
+		return []byte(cfg.TokenSegredoV1)
+	}
+	b := make([]byte, pedido.TamanhoMinimoSegredoToken)
+	if _, err := rand.Read(b); err != nil {
+		log.ErrorMsg("gerar segredo do token", zap.Error(err))
+		os.Exit(1)
+	}
+	log.Warn("INGRESSO_TOKEN_SEGREDO_V1 ausente: segredo aleatório por processo (só dev)")
+	return b
 }
 
 // registrarPedidosPresos expõe pedidos_presos{estado} (PRD 0026): lido do

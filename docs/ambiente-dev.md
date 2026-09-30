@@ -76,6 +76,12 @@ npm run e2e                                  # sobe o vite preview (proxy /api) 
 - Stripe de teste: `MORFEU_GATEWAY=stripe` + `STRIPE_SECRET_KEY` (`rk_test_…`/`sk_test_…`) **e** `STRIPE_WEBHOOK_SECRET` — exigidos na API **e no worker** (o boot recusa sem eles). Webhooks locais: `docker compose --profile app --profile stripe up` e copie o `whsec_` de `docker compose logs stripe-cli`.
 - As tarefas da saga (reconciliação + estornos + cobranças abertas de expirados) rodam a cada 1 min em `-mode=worker|all`; a limpeza da outbox publicada (> 7 dias), a cada 1 h.
 
+### E-mail do ingresso (task 0028)
+
+- O e-mail de confirmação sai pelo **fake** até a task 0029 (Resend): nada é enviado; o consumidor monta o HTML + os QRs normalmente.
+- **Fixe `INGRESSO_TOKEN_SEGREDO_V1` no `.env` de dev** (≥ 32 bytes, ex.: `openssl rand -base64 32`): sem ele cada processo gera um segredo aleatório — links de e-mail deixam de valer após reiniciar e, com `api` e `worker` separados, não batem entre si (a página `/i/{id}.{token}` do E8 valida na API).
+- `BASE_URL_PUBLICA` (padrão `http://localhost:5173`) é a origem dos links do e-mail; em produção precisa ser https.
+
 ### Replay da DLQ (task 0027)
 
 Só pelo shell (nenhuma rota HTTP). Liste antes com `-dry-run` (nada é publicado; as mensagens voltam à DLQ):

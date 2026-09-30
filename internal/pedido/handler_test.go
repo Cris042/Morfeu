@@ -220,8 +220,9 @@ func montarAmbiente(t *testing.T, lim limites) *ambiente {
 		Sessoes: sessoes, Reserva: reservaAdapter{res}, Gateway: gw,
 		LimiteIP: limitador("ip", lim.ip), LimiteDono: limitador("dono", lim.dono), Agora: rel.agora,
 		Webhook: wh, LimiteWebhook: limitador("webhook", 100000),
-		Funil:       contar(funil),
-		Compensacao: contar(compens),
+		SegredosToken: map[int16][]byte{1: segredoTokenTeste},
+		Funil:         contar(funil),
+		Compensacao:   contar(compens),
 	}, logTeste)
 	if err != nil {
 		t.Fatalf("serviço: %v", err)
@@ -230,6 +231,9 @@ func montarAmbiente(t *testing.T, lim limites) *ambiente {
 	NovoHandler(s, logTeste).RegistrarRotas(e)
 	return &ambiente{e: e, rel: rel, reserva: res, servico: s, gateway: gw, funil: funil, compens: compens}
 }
+
+// segredoTokenTeste é o segredo do HMAC do ingresso na suíte (32 bytes).
+var segredoTokenTeste = []byte("segredo-de-teste-do-token-32byte")
 
 // segredoWebhookTeste assina os eventos gerados nos testes (sem rede).
 const segredoWebhookTeste = "whsec_teste_da_suite"
