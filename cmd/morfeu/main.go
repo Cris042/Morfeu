@@ -347,6 +347,14 @@ func registrarRotasDeDominio(e *echo.Echo, mode string, cfg *config.Config, dbPo
 	catalogoHandler.RegistrarRotasBackoffice(e, exigirOperador)
 	sessaoHandler.RegistrarRotasBackoffice(e, exigirOperador, operadorDaRequisicao)
 	reservaHandler.RegistrarRotas(e)
+	// Conta no checkout (PRD 0031): Bearer opcional; "Meus pedidos" exige login.
+	pedidoHandler.ComConta(autenticacao.Opcional(emissor),
+		autenticacao.Exigir(emissor, autenticacao.PapelCliente, autenticacao.PapelOperador), autenticacao.UsuarioID)
+	if cfg.Gateway == "fake" && cfg.StripeWebhookSegredo != "" {
+		// Só com o gateway fake — que o boot recusa em produção (PRD 0024/0031).
+		log.Warn("rota de teste POST /__teste/pagar/:id ATIVA (gateway fake)")
+		pedidoHandler.ComRotasDeTeste()
+	}
 	pedidoHandler.RegistrarRotas(e)
 	return pedidoServico, sessaoServico
 }

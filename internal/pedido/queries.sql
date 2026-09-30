@@ -1,8 +1,8 @@
 -- name: InserirPedido :many
 -- Sem linha no RETURNING = o carrinho já tem pedido pendente (índice único
 -- parcial pedidos_pendente_por_dono) — decidido pelo banco, sem pré-check.
-INSERT INTO pedidos (id, codigo, email, dono_hash, sessao_id, assentos, total_centavos, status, expira_em, criado_em, atualizado_em)
-VALUES (@id, @codigo, @email, @dono_hash, @sessao_id, @assentos::varchar[], @total_centavos, 'aguardando_pagamento', @expira_em, @agora, @agora)
+INSERT INTO pedidos (id, codigo, email, usuario_id, dono_hash, sessao_id, assentos, total_centavos, status, expira_em, criado_em, atualizado_em)
+VALUES (@id, @codigo, @email, sqlc.narg('usuario_id'), @dono_hash, @sessao_id, @assentos::varchar[], @total_centavos, 'aguardando_pagamento', @expira_em, @agora, @agora)
 ON CONFLICT (dono_hash) WHERE status = 'aguardando_pagamento' DO NOTHING
 RETURNING id;
 
@@ -32,8 +32,24 @@ SET payment_intent_id = @payment_intent_id, atualizado_em = @agora
 WHERE id = @id AND payment_intent_id IS NULL;
 
 -- name: BuscarPedidoDoDono :many
--- Posse (RF06): só o carrinho que criou o pedido o enxerga.
+-- Posse (RF06 da 0023; PRD 0031): o carrinho que criou o pedido OU a conta
+-- vinculada a ele (usuario_id vem só do JWT).
 SELECT id, codigo, sessao_id, assentos::text[] AS assentos, total_centavos, status, expira_em
+FROM pedidos
+WHERE id = @id
+  AND (dono_hash = @dono_hash OR (sqlc.narg('usuario_id')::uuid IS NOT NULL AND usuario_id = sqlc.narg('usuario_id')::uuid));
+
+-- name: ListarPedidosDoUsuario :many
+-- "Meus pedidos" (PRD 0031): mais recentes primeiro, paginado.
+SELECT id, codigo, sessao_id, assentos::text[] AS assentos, total_centavos, status, expira_em
+FROM pedidos
+WHERE usuario_id = @usuario_id
+ORDER BY criado_em DESC
+LIMIT @limite::int OFFSET @deslocamento::int;
+
+-- name: PendenteParaRetomar :many
+-- Retomada do pagamento (PRD 0031): só o carrinho dono, com a cobrança.
+SELECT status, expira_em, payment_intent_id, total_centavos, codigo
 FROM pedidos
 WHERE id = @id AND dono_hash = @dono_hash;
 

@@ -36,6 +36,7 @@ type Pedido struct {
 	codigo        string
 	email         string
 	donoHash      []byte
+	usuarioID     *uuid.UUID // conta vinculada (só do JWT — PRD 0031); nil = convidado
 	sessaoID      int64
 	assentos      []string
 	totalCentavos int64
@@ -49,6 +50,9 @@ type Entrada struct {
 	Email    string
 	SessaoID int64
 	Assentos []string
+	// UsuarioID vem SÓ do JWT validado pelo main (nunca do corpo); nil =
+	// convidado (PRD 0031).
+	UsuarioID *uuid.UUID
 }
 
 // validar confere a entrada em memória antes de qualquer I/O.
@@ -106,7 +110,7 @@ func NovoPedido(in Entrada, donoHash []byte, precoCentavos int64, agora time.Tim
 	}
 	assentos := append([]string(nil), in.Assentos...)
 	return Pedido{
-		id: uuid.New(), codigo: codigo, email: in.Email, donoHash: donoHash, sessaoID: in.SessaoID,
+		id: uuid.New(), codigo: codigo, email: in.Email, donoHash: donoHash, usuarioID: in.UsuarioID, sessaoID: in.SessaoID,
 		assentos: assentos, totalCentavos: precoCentavos * int64(len(assentos)),
 		status: AguardandoPagamento, expiraEm: agora.Add(TTLPedido),
 	}, nil

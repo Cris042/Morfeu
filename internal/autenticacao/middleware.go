@@ -49,6 +49,32 @@ func Exigir(e *Emissor, papeis ...Papel) echo.MiddlewareFunc {
 	}
 }
 
+// Opcional autentica quando há token (PRD 0031 — checkout de convidado ou
+// logado): sem header Authorization segue anônimo; header presente e
+// inválido → 401 (nunca cai para anônimo em silêncio — o SPA renova e
+// repete); válido → usuário e papel no contexto, como em Exigir.
+func Opcional(e *Emissor) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			header := c.Request().Header.Get(echo.HeaderAuthorization)
+			if header == "" {
+				return next(c)
+			}
+			token, ok := bearer(header)
+			if !ok {
+				return naoAutenticado(c)
+			}
+			claims, err := e.Validar(token)
+			if err != nil {
+				return naoAutenticado(c)
+			}
+			c.Set(chaveUsuarioID, claims.UsuarioIDDe())
+			c.Set(chavePapel, claims.Papel)
+			return next(c)
+		}
+	}
+}
+
 func naoAutenticado(c echo.Context) error {
 	c.Response().Header().Set(echo.HeaderWWWAuthenticate, "Bearer")
 	return c.JSON(http.StatusUnauthorized, respNaoAutenticado)
@@ -64,8 +90,8 @@ func bearer(header string) (string, bool) {
 	return token, token != ""
 }
 
-// UsuarioID devolve o usuário autenticado da requisição (só em rotas
-// protegidas por Exigir).
+// UsuarioID devolve o usuário autenticado da requisição (rotas com Exigir,
+// ou com Opcional quando havia token).
 func UsuarioID(c echo.Context) (uuid.UUID, bool) {
 	id, ok := c.Get(chaveUsuarioID).(uuid.UUID)
 	return id, ok

@@ -15,12 +15,14 @@ import (
 const buscarPedidoDoDono = `-- name: BuscarPedidoDoDono :many
 SELECT id, codigo, sessao_id, assentos::text[] AS assentos, total_centavos, status, expira_em
 FROM pedidos
-WHERE id = $1 AND dono_hash = $2
+WHERE id = $1
+  AND (dono_hash = $2 OR ($3::uuid IS NOT NULL AND usuario_id = $3::uuid))
 `
 
 type BuscarPedidoDoDonoParams struct {
-	ID       uuid.UUID `db:"id"`
-	DonoHash []byte    `db:"dono_hash"`
+	ID        uuid.UUID  `db:"id"`
+	DonoHash  []byte     `db:"dono_hash"`
+	UsuarioID *uuid.UUID `db:"usuario_id"`
 }
 
 type BuscarPedidoDoDonoRow struct {
@@ -33,9 +35,10 @@ type BuscarPedidoDoDonoRow struct {
 	ExpiraEm      time.Time `db:"expira_em"`
 }
 
-// Posse (RF06): só o carrinho que criou o pedido o enxerga.
+// Posse (RF06 da 0023; PRD 0031): o carrinho que criou o pedido OU a conta
+// vinculada a ele (usuario_id vem só do JWT).
 func (q *Queries) BuscarPedidoDoDono(ctx context.Context, arg BuscarPedidoDoDonoParams) ([]BuscarPedidoDoDonoRow, error) {
-	rows, err := q.db.Query(ctx, buscarPedidoDoDono, arg.ID, arg.DonoHash)
+	rows, err := q.db.Query(ctx, buscarPedidoDoDono, arg.ID, arg.DonoHash, arg.UsuarioID)
 	if err != nil {
 		return nil, err
 	}
@@ -269,22 +272,23 @@ func (q *Queries) IngressosAtivosDoPedido(ctx context.Context, pedidoID uuid.UUI
 }
 
 const inserirPedido = `-- name: InserirPedido :many
-INSERT INTO pedidos (id, codigo, email, dono_hash, sessao_id, assentos, total_centavos, status, expira_em, criado_em, atualizado_em)
-VALUES ($1, $2, $3, $4, $5, $6::varchar[], $7, 'aguardando_pagamento', $8, $9, $9)
+INSERT INTO pedidos (id, codigo, email, usuario_id, dono_hash, sessao_id, assentos, total_centavos, status, expira_em, criado_em, atualizado_em)
+VALUES ($1, $2, $3, $4, $5, $6, $7::varchar[], $8, 'aguardando_pagamento', $9, $10, $10)
 ON CONFLICT (dono_hash) WHERE status = 'aguardando_pagamento' DO NOTHING
 RETURNING id
 `
 
 type InserirPedidoParams struct {
-	ID            uuid.UUID `db:"id"`
-	Codigo        string    `db:"codigo"`
-	Email         string    `db:"email"`
-	DonoHash      []byte    `db:"dono_hash"`
-	SessaoID      int64     `db:"sessao_id"`
-	Assentos      []string  `db:"assentos"`
-	TotalCentavos int64     `db:"total_centavos"`
-	ExpiraEm      time.Time `db:"expira_em"`
-	Agora         time.Time `db:"agora"`
+	ID            uuid.UUID  `db:"id"`
+	Codigo        string     `db:"codigo"`
+	Email         string     `db:"email"`
+	UsuarioID     *uuid.UUID `db:"usuario_id"`
+	DonoHash      []byte     `db:"dono_hash"`
+	SessaoID      int64      `db:"sessao_id"`
+	Assentos      []string   `db:"assentos"`
+	TotalCentavos int64      `db:"total_centavos"`
+	ExpiraEm      time.Time  `db:"expira_em"`
+	Agora         time.Time  `db:"agora"`
 }
 
 // Sem linha no RETURNING = o carrinho já tem pedido pendente (índice único
@@ -294,6 +298,7 @@ func (q *Queries) InserirPedido(ctx context.Context, arg InserirPedidoParams) ([
 		arg.ID,
 		arg.Codigo,
 		arg.Email,
+		arg.UsuarioID,
 		arg.DonoHash,
 		arg.SessaoID,
 		arg.Assentos,
@@ -312,6 +317,59 @@ func (q *Queries) InserirPedido(ctx context.Context, arg InserirPedidoParams) ([
 			return nil, err
 		}
 		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listarPedidosDoUsuario = `-- name: ListarPedidosDoUsuario :many
+SELECT id, codigo, sessao_id, assentos::text[] AS assentos, total_centavos, status, expira_em
+FROM pedidos
+WHERE usuario_id = $1
+ORDER BY criado_em DESC
+LIMIT $3::int OFFSET $2::int
+`
+
+type ListarPedidosDoUsuarioParams struct {
+	UsuarioID    *uuid.UUID `db:"usuario_id"`
+	Deslocamento int32      `db:"deslocamento"`
+	Limite       int32      `db:"limite"`
+}
+
+type ListarPedidosDoUsuarioRow struct {
+	ID            uuid.UUID `db:"id"`
+	Codigo        string    `db:"codigo"`
+	SessaoID      int64     `db:"sessao_id"`
+	Assentos      []string  `db:"assentos"`
+	TotalCentavos int64     `db:"total_centavos"`
+	Status        string    `db:"status"`
+	ExpiraEm      time.Time `db:"expira_em"`
+}
+
+// "Meus pedidos" (PRD 0031): mais recentes primeiro, paginado.
+func (q *Queries) ListarPedidosDoUsuario(ctx context.Context, arg ListarPedidosDoUsuarioParams) ([]ListarPedidosDoUsuarioRow, error) {
+	rows, err := q.db.Query(ctx, listarPedidosDoUsuario, arg.UsuarioID, arg.Deslocamento, arg.Limite)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListarPedidosDoUsuarioRow
+	for rows.Next() {
+		var i ListarPedidosDoUsuarioRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Codigo,
+			&i.SessaoID,
+			&i.Assentos,
+			&i.TotalCentavos,
+			&i.Status,
+			&i.ExpiraEm,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -448,6 +506,52 @@ func (q *Queries) PendenteDoDono(ctx context.Context, donoHash []byte) ([]Penden
 	for rows.Next() {
 		var i PendenteDoDonoRow
 		if err := rows.Scan(&i.ID, &i.ExpiraEm, &i.PaymentIntentID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const pendenteParaRetomar = `-- name: PendenteParaRetomar :many
+SELECT status, expira_em, payment_intent_id, total_centavos, codigo
+FROM pedidos
+WHERE id = $1 AND dono_hash = $2
+`
+
+type PendenteParaRetomarParams struct {
+	ID       uuid.UUID `db:"id"`
+	DonoHash []byte    `db:"dono_hash"`
+}
+
+type PendenteParaRetomarRow struct {
+	Status          string    `db:"status"`
+	ExpiraEm        time.Time `db:"expira_em"`
+	PaymentIntentID *string   `db:"payment_intent_id"`
+	TotalCentavos   int64     `db:"total_centavos"`
+	Codigo          string    `db:"codigo"`
+}
+
+// Retomada do pagamento (PRD 0031): só o carrinho dono, com a cobrança.
+func (q *Queries) PendenteParaRetomar(ctx context.Context, arg PendenteParaRetomarParams) ([]PendenteParaRetomarRow, error) {
+	rows, err := q.db.Query(ctx, pendenteParaRetomar, arg.ID, arg.DonoHash)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PendenteParaRetomarRow
+	for rows.Next() {
+		var i PendenteParaRetomarRow
+		if err := rows.Scan(
+			&i.Status,
+			&i.ExpiraEm,
+			&i.PaymentIntentID,
+			&i.TotalCentavos,
+			&i.Codigo,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

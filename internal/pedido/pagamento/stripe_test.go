@@ -262,7 +262,7 @@ func (f *rotasFalsas) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = fmt.Fprint(w, `{"error":{"type":"invalid_request_error","code":"payment_intent_unexpected_state"}}`)
 	default:
-		_, _ = fmt.Fprintf(w, `{"id":"pi_1","object":"payment_intent","status":%q,"amount":6000,"currency":"brl"}`, st)
+		_, _ = fmt.Fprintf(w, `{"id":"pi_1","object":"payment_intent","status":%q,"amount":6000,"currency":"brl","client_secret":"pi_1_secret_x"}`, st)
 	}
 }
 
@@ -294,6 +294,9 @@ func TestStripe_ConsultarCancelarEstornar(t *testing.T) {
 	}
 	if err := s.Estornar(ctx, "pi_1", "estorno-abc"); err != nil || f.chaveEstorno != "estorno-abc" || f.piEstorno != "pi_1" {
 		t.Fatalf("estornar: %v chave=%q pi=%q", err, f.chaveEstorno, f.piEstorno)
+	}
+	if seg, err := s.RecuperarSegredo(ctx, "pi_1"); err != nil || seg != "pi_1_secret_x" {
+		t.Fatalf("recuperar segredo: %q %v", seg, err)
 	}
 	// Chave de idempotência vencida (24 h): "já estornado" é sucesso.
 	f.definir("ja_estornado")

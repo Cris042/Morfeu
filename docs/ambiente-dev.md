@@ -82,6 +82,11 @@ npm run e2e                                  # sobe o vite preview (proxy /api) 
 - **Fixe `INGRESSO_TOKEN_SEGREDO_V1` no `.env` de dev** (≥ 32 bytes, ex.: `openssl rand -base64 32`): sem ele cada processo gera um segredo aleatório — links de e-mail deixam de valer após reiniciar e, com `api` e `worker` separados, não batem entre si (a página `/i/{id}.{token}` do E8 valida na API).
 - `BASE_URL_PUBLICA` (padrão `http://localhost:5173`) é a origem dos links do e-mail; em produção precisa ser https.
 
+### Pagamento de teste (task 0031)
+
+- Com `MORFEU_GATEWAY=fake` **e** `STRIPE_WEBHOOK_SECRET` definido (qualquer valor de teste), a API registra `POST /__teste/pagar/{pedido_id}`: monta um `payment_intent.succeeded`, assina com o segredo do webhook e passa pelo mesmo `Verificar` + pivô da rota real (pedido → pago, ingressos, outbox, e-mail). É o "Pagar (teste)" do SPA em modo fake e do E2E do M4.
+- A rota **não existe** com o gateway Stripe, e o boot recusa o gateway fake com `AMBIENTE=producao` (duas travas).
+
 ### Replay da DLQ (task 0027)
 
 Só pelo shell (nenhuma rota HTTP). Liste antes com `-dry-run` (nada é publicado; as mensagens voltam à DLQ):

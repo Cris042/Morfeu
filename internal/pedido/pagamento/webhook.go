@@ -107,3 +107,22 @@ func (w *Webhook) noFuturo(assinatura string) bool {
 	}
 	return true
 }
+
+// EventoAprovadoDeTeste monta e ASSINA um payment_intent.succeeded com o
+// segredo deste webhook — só para a rota de teste do gateway fake (PRD 0031),
+// que o passa pelo mesmo Verificar do webhook real. Nunca registrada em
+// produção (o boot recusa gateway fake).
+func (w *Webhook) EventoAprovadoDeTeste(eventoID, intencaoID string, pedidoID uuid.UUID, valorCentavos int64, moeda string) (corpo []byte, assinatura string, err error) {
+	corpo, err = json.Marshal(map[string]any{
+		"id": eventoID, "object": "event", "type": "payment_intent.succeeded",
+		"data": map[string]any{"object": map[string]any{
+			"id": intencaoID, "object": "payment_intent", "amount": valorCentavos, "currency": moeda,
+			"metadata": map[string]string{metadadoPedido: pedidoID.String()},
+		}},
+	})
+	if err != nil {
+		return nil, "", err
+	}
+	assinado := webhook.GenerateTestSignedPayload(&webhook.UnsignedPayload{Payload: corpo, Secret: w.segredo, Timestamp: w.agora()})
+	return corpo, assinado.Header, nil
+}
