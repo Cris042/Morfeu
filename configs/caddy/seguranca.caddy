@@ -3,9 +3,11 @@
 #   import seguranca.caddy   → dentro do site block, depois: import seguranca
 # A CSP casa com a SPA do ADR 0009: tudo da mesma origem (fontes self-hosted,
 # sem CDN), pôster por hotlink de image.tmdb.org, API em /api (connect-src 'self').
+# Stripe (PRD 0033 — Payment Element): Stripe.js só de js.stripe.com, iframes
+# do Stripe e chamadas a api.stripe.com; sem 'unsafe-inline'/'unsafe-eval'.
 (seguranca) {
 	header {
-		Content-Security-Policy "default-src 'self'; img-src 'self' https://image.tmdb.org; connect-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		Content-Security-Policy "default-src 'self'; img-src 'self' https://image.tmdb.org https://*.stripe.com; connect-src 'self' https://api.stripe.com; script-src 'self' https://js.stripe.com https://*.js.stripe.com; frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com; style-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		-Server

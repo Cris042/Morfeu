@@ -90,6 +90,12 @@ npm run e2e                                  # sobe o vite preview (proxy /api) 
 - Com `MORFEU_GATEWAY=fake` **e** `STRIPE_WEBHOOK_SECRET` definido (qualquer valor de teste), a API registra `POST /__teste/pagar/{pedido_id}`: monta um `payment_intent.succeeded`, assina com o segredo do webhook e passa pelo mesmo `Verificar` + pivô da rota real (pedido → pago, ingressos, outbox, e-mail). É o "Pagar (teste)" do SPA em modo fake e do E2E do M4.
 - A rota **não existe** com o gateway Stripe, e o boot recusa o gateway fake com `AMBIENTE=producao` (duas travas).
 
+### Checkout no SPA (task 0033)
+
+- Variáveis de **build** do SPA (em `web/.env.local`, ignorado pelo git): `VITE_PAGAMENTO_MODO=fake` mostra o botão "Pagar (teste)" (exige a rota acima na API); sem ele, o Payment Element do Stripe com `VITE_STRIPE_PK=pk_test_…` (pública por definição). Sem a chave, o checkout avisa que o cartão está indisponível.
+- O modo é resolvido no build: o bundle de produção não contém o chunk de teste (gate no `web-ci`) e o build fake não carrega o Stripe.js. O `playwright.config.ts` já builda com `VITE_PAGAMENTO_MODO=fake`.
+- O PaymentIntent é criado com `allow_redirects=never`: a confirmação acontece na própria página e o `client_secret` nunca vai para uma URL.
+
 ### Replay da DLQ (task 0027)
 
 Só pelo shell (nenhuma rota HTTP). Liste antes com `-dry-run` (nada é publicado; as mensagens voltam à DLQ):

@@ -54,5 +54,12 @@ jobs:
       - name: Demo fora do bundle de produção
         run: "! grep -rl '_demo/mapa' dist/"
 
+      # Pagamento de teste só em builds com VITE_PAGAMENTO_MODO=fake e nenhum
+      # segredo do Stripe no bundle (PRD 0033; refinamento E8).
+      - name: Sem pagamento de teste nem segredo no bundle de produção
+        run: |
+          ! grep -rl -e '__teste' -e 'Pagar (teste)' dist/
+          ! grep -rlE 'sk_(test|live)_|rk_(test|live)_|whsec_' dist/
+
       - name: Auditoria de dependências (gate)
         run: npm audit --audit-level=high

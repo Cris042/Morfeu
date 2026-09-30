@@ -152,7 +152,7 @@ func TestStripe_CriarCobranca(t *testing.T) {
 	}
 	form, req := f.forms[0], f.reqs[0]
 	if form["amount"] != "6000" || form["currency"] != "brl" || form["metadata[pedido_id]"] != pedido.String() ||
-		form["automatic_payment_methods[enabled]"] != "true" || req.Header.Get("Idempotency-Key") != "pedido-x-cobranca" ||
+		form["automatic_payment_methods[enabled]"] != "true" || form["automatic_payment_methods[allow_redirects]"] != "never" || req.Header.Get("Idempotency-Key") != "pedido-x-cobranca" ||
 		!strings.HasSuffix(req.URL.Path, "/v1/payment_intents") {
 		t.Fatalf("requisição: %s %v %v", req.URL.Path, form, req.Header)
 	}
