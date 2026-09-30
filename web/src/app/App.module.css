@@ -30,3 +30,28 @@
   font-size: 0.8rem;
   color: #7a7096;
 }
+
+.menu {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-4);
+  font-size: var(--texto-sm);
+}
+
+.usuario {
+  color: var(--nevoa);
+}
+
+.sair {
+  padding: var(--espaco-1) var(--espaco-3);
+  font: inherit;
+  color: var(--tela);
+  background: transparent;
+  border: 1px solid var(--veludo);
+  border-radius: var(--raio-chip);
+  cursor: pointer;
+}
+
+.sair:hover {
+  border-color: var(--tungstenio);
+}

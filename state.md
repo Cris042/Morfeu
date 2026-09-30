@@ -8,8 +8,8 @@ Atualizado ao final de cada task e antes de cada PR (regras em `roles.md` §6.11
 
 - **Última task concluída:** **0031 — Backend do checkout e da conta (E8 T1)** — auditoria APROVADA (2026-09-30), PR #62. Antes: E7 concluído (PRs #57–#60); E6 concluído (PRs #51–#56).
 - **Épico E0 refinado (2026-07-09) e perguntas respondidas (2026-07-11):** cerimônia por épico (§6.14) em `docs/refinamentos/E0-walking-skeleton.md` — task 0002 reescopada; **usuário aprovou a reordenação** (E0c dividido em E0c-CI/E0c-CD; ordem: conformidade ✅ → **E0c-CI** → E0b → E0c-CD → E0d; roadmap atualizado) e **autorizou o ADR 0007 de mensageria** (criado). PRDs de E0b/E0c/E0d desbloqueados na nova ordem.
-- **Task atual:** nenhuma aberta; próxima **0032 — SPA: sessão, login/cadastro e "Meus pedidos"** (E8 T2). Usuário autorizou merge de cada PR quando o CI passar. **E0c-CD segue bloqueada** (VM Oracle).
-- **PRD atual:** nenhum (o da 0032 nasce na abertura).
+- **Task atual:** **0032 — SPA: sessão, login/cadastro e "Meus pedidos"** (E8 T2), branch `feature/0032-spa-sessao-conta`. Usuário autorizou merge de cada PR quando o CI passar. **E0c-CD segue bloqueada** (VM Oracle).
+- **PRD atual:** `docs/prd/0032-spa-sessao-conta.md`.
 - **ADRs ativos:** 0001 (Go+Echo) · 0002 (sqlc+pgx) · 0003 (fronteiras/camadas) · 0004 (padrões de código Go) · 0005 (DDD tático + patterns) · 0006 (estratégia de testes) — aceitos em 2026-07-07 — · **0007 (Mensageria: RabbitMQ)** — aceito em 2026-07-11 com autorização explícita (pergunta 2 do refinamento E0). · **0008 (Trava de assento: PG com índice único parcial, expiração lazy e sweeper)** — aceito em 2026-09-29 com autorização explícita (refinamento E4). · **0009 (Frontend SPA: React + TS + Vite, fronteira `/api` por proxy, estáticos pelo Caddy)** — aceito em 2026-09-29 com autorização explícita (refinamento E5). · **0010 (Saga do checkout: pivô síncrono no webhook, estorno como única compensação)** — aceito em 2026-09-30 com autorização explícita (refinamento E6).
 
 ## Últimas decisões relevantes
@@ -61,6 +61,7 @@ Atualizado ao final de cada task e antes de cada PR (regras em `roles.md` §6.11
 - **Achados não-bloqueantes da auditoria 0002 (2026-07-13):** (1) `TestOutbox_PendentesContagem` usa contagem global — adicionar guard-rail/comentário se `t.Parallel()` entrar no arquivo (candidato à task 0005, que tocará a mesma suíte); (2) sugestão de governança ao usuário: 2ª vez que o teto de 30 arquivos (§6.3) é ultrapassado por composição (gerados+controle) — avaliar se a contagem deveria separar superfície autoral.
 
 - **Pendências do E6 (auditorias 0024–0027, não bloqueantes):** (1) backoff por tentativa na varredura de cobranças abertas de expirados (um pedido que falha sempre ocupa vaga do lote de 20); (2) meio-aberto do breaker deixa passar chamadas concorrentes (aceito no volume); (3) rever o teto do webhook por IP atrás do Caddy e o proxy confiável de `RealIP` na **E0c-CD**; (4) limpeza de `processed_messages`, pedidos abandonados e holds terminais no **E11** (retenção de 12 meses da trilha; `processed_messages` é a janela do dedup do replay); (5) `payment_intent.payment_failed` sem dedup só infla o funil (aceito).
+- **Pendência para a E0c-CD (task 0032):** o Caddy precisa reescrever o `Path` do `Set-Cookie` do refresh (`/auth/refresh` → `/api/auth/refresh`, ex.: `header_down Set-Cookie "Path=/auth/refresh" "Path=/api/auth/refresh"` no `reverse_proxy` do `handle_path /api/*`) — sem isso a re-auth silenciosa do SPA quebra em produção (o Vite já faz a reescrita em dev/E2E).
 
 ## Riscos conhecidos
 
