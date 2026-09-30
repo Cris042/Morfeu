@@ -281,3 +281,19 @@ func TestAvisoDeEstorno(t *testing.T) {
 		t.Fatalf("consumidor de estorno: %v tipo=%s", err, tipo)
 	}
 }
+
+// TestConsumidor_TipoPadrao: sem Config.Tipo o consumidor é o de confirmação
+// e mede a latência; o de estorno não mede (auditoria 0030).
+func TestConsumidor_TipoPadrao(t *testing.T) {
+	var tipo string
+	var latencias int
+	msg := outbox.Mensagem{Payload: []byte(`{"pedido_id":"` + uuid.NewString() + `"}`), OccurredAt: time.Now()}
+	conf := NovoConsumidor(Config{
+		Entregar:  func(context.Context, uuid.UUID) error { return nil },
+		Latencia:  func(context.Context, time.Duration) { latencias++ },
+		Resultado: func(_ context.Context, ti, _ string, _ time.Duration) { tipo = ti },
+	}, zap.NewNop())
+	if err := conf.Efeito(context.Background(), nil, msg); err != nil || tipo != TipoConfirmacao || latencias != 1 {
+		t.Fatalf("confirmação: %v tipo=%s latências=%d", err, tipo, latencias)
+	}
+}

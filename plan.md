@@ -4,7 +4,7 @@
 
 ## Estado corrente (2026-09-30)
 
-**Task 0030 — E-mail de estorno (E7 T3, fecha o E7): IMPLEMENTADA; em PR** (branch `feature/0030-email-estorno`, da main `da2dae1`).
+**Task 0030 — E-mail de estorno (E7 T3, fecha o E7): CONCLUÍDA — auditoria APROVADA em 2026-09-30 (`qa`), CI verde (PR #60). **E7 CONCLUÍDO.** (branch `feature/0030-email-estorno`, da main `da2dae1`).
 
 ### Plano da task 0030
 
@@ -12,7 +12,7 @@
 2. ~~Broker~~ — fila `notificacao.pedido_estornado` + DLX/DLQ próprias; DLQ em `FilasReplay` (replay + gauge).
 3. ~~Notificação~~ — consumidor tipado (`Config.Tipo`), `AvisoDeEstorno` + template sem QR/link/token, chave `estorno-{pedido}`; segundo consumidor no worker com as mesmas métricas (`tipo=estorno`).
 4. ~~Testes~~ — 1 evento por estorno, nenhum `pedido.confirmado` no pago-tarde, porta só p/ estornado, aviso sem ingresso.
-5. Suíte completa + lint verdes → CI + passe de julgamento → merge. **Fecha o E7.**
+5. ~~Suíte + lint + CI + passe de julgamento~~ — APROVADO. Resolvidos: comentário do consumidor; teste do tipo padrão (confirmação mede latência). Registrados: prova concorrente do CAS perdido no estorno e teste de integração da fila nova (garantidos por construção — mesma TX e lista fechada).
 
 ---
 

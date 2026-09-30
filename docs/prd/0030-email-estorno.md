@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0030-email-estorno.md
 - **Branch:** feature/0030-email-estorno
 - **Data:** 2026-09-30
-- **Status:** em andamento
+- **Status:** concluído
 
 ## Objetivo
 
@@ -32,11 +32,11 @@ Fechar o E7. Quando o estorno automático (0025) conclui, o cliente recebe um av
 
 ## Critérios de aceite
 
-- [ ] CA01 — Pago tarde → `estorno_pendente` → o aviso ainda é recusado. Estorno executado (2 rodadas) → exatamente 1 `pedido.estornado` e 0 `pedido.confirmado`.
-- [ ] CA02 — A porta devolve e-mail, código e total do estornado; inexistente → não encontrado.
-- [ ] CA03 — Aviso sem anexos, sem `<img`, sem `/i/`, com código e R$ 60,00; assunto e chave corretos.
-- [ ] CA04 — O aviso de pedido não estornado não envia; o consumidor de estorno registra `tipo=estorno`.
-- [ ] CA05 — CI verde (replay e gauge cobrem a DLQ nova pela lista fechada).
+- [x] CA01 — Pago tarde → `estorno_pendente` → o aviso ainda é recusado. Estorno executado (2 rodadas) → exatamente 1 `pedido.estornado` e 0 `pedido.confirmado`.
+- [x] CA02 — A porta devolve e-mail, código e total do estornado; inexistente → não encontrado.
+- [x] CA03 — Aviso sem anexos, sem `<img`, sem `/i/`, com código e R$ 60,00; assunto e chave corretos.
+- [x] CA04 — O aviso de pedido não estornado não envia; o consumidor de estorno registra `tipo=estorno`.
+- [x] CA05 — CI verde (replay e gauge cobrem a DLQ nova pela lista fechada).
 
 ## Arquivos que serão criados
 

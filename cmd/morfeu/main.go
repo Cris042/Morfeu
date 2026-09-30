@@ -425,9 +425,9 @@ func iniciarRotinasDaSaga(ctx context.Context, mode string, cfg *config.Config, 
 	}
 }
 
-// iniciarNotificacao consome pedido.confirmado (PRD 0026/0028): carrega o
-// pedido pelas portas, monta o e-mail com os QRs e envia. O provedor real
-// entra na task 0029; até lá, fake (nenhum e-mail sai).
+// iniciarNotificacao consome pedido.confirmado (ingresso com QRs — PRD
+// 0026/0028) e pedido.estornado (aviso de estorno — PRD 0030): carrega o
+// pedido pelas portas, monta o e-mail e envia pelo provedor da config (0029).
 func iniciarNotificacao(ctx context.Context, cfg *config.Config, cli *broker.Client, dbPool *pgxpool.Pool, fonte fonteDoEmail, wg *sync.WaitGroup, log *logger.Logger) {
 	fatal := func(msg string, err error) {
 		log.ErrorMsg(msg, zap.Error(err))

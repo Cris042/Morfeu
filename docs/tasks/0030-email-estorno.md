@@ -1,7 +1,7 @@
 # Task 0030 — E-mail de estorno (E7, T3)
 
 - **Data:** 2026-09-30
-- **Status:** em andamento
+- **Status:** concluída (auditoria APROVADA em 2026-09-30)
 - **Branch:** `feature/0030-email-estorno` (da main `da2dae1`)
 - **PRD:** docs/prd/0030-email-estorno.md
 - **Item do roadmap:** E7 — Notificação (3ª e última; fecha o E7). Refinamento: `docs/refinamentos/E7-notificacao.md` §T3.
@@ -28,9 +28,9 @@ Nenhuma nova.
 
 ## Critérios de aceite
 
-- [ ] Estorno concluído → exatamente 1 `pedido.estornado`; pago tarde nunca gera `pedido.confirmado`.
-- [ ] Aviso sem QR, sem link de ingresso; só pedido estornado é avisado.
-- [ ] Fila nova no replay e no gauge de DLQ.
+- [x] Estorno concluído → exatamente 1 `pedido.estornado`; pago tarde nunca gera `pedido.confirmado`.
+- [x] Aviso sem QR, sem link de ingresso; só pedido estornado é avisado.
+- [x] Fila nova no replay e no gauge de DLQ.
 
 ## Riscos
 
