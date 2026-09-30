@@ -27,4 +27,5 @@ Convenção: `NNNN-titulo-kebab.md`, numeração sequencial a partir de `0001`. 
 | 0017 | [SPA: fundação (shell, tokens, cliente /api, CI do front)](./0017-spa-fundacao.md) | E5 (T1) | concluída (auditoria APROVADA; merge `cce783c`, PR #45) | `feature/0017-spa-fundacao` | [0017](../prd/0017-spa-fundacao.md) |
 | 0018 | [SPA: cartaz e sessões do filme](./0018-spa-cartaz.md) | E5 (T2) | concluída (auditoria APROVADA; merge `849064b`, PR #46) | `feature/0018-spa-cartaz` | [0018](../prd/0018-spa-cartaz.md) |
 | 0019 | [SPA: mapa de assentos isolado](./0019-spa-mapa.md) | E5 (T3) | concluída (auditoria APROVADA; merge `0117c41`, PR #47) | `feature/0019-spa-mapa` | [0019](../prd/0019-spa-mapa.md) |
-| 0020 | [SPA: mapa integrado à trava](./0020-spa-reserva.md) | E5 (T4a) | em andamento (aberta 2026-09-29) | `feature/0020-spa-reserva` | [0020](../prd/0020-spa-reserva.md) |
+| 0020 | [SPA: mapa integrado à trava](./0020-spa-reserva.md) | E5 (T4a) | concluída (auditoria APROVADA; merge `f355cd8`, PR #48) | `feature/0020-spa-reserva` | [0020](../prd/0020-spa-reserva.md) |
+| 0021 | [E2E do M3: dois navegadores disputam o mesmo assento](./0021-e2e-m3.md) | E5 (T4b) | em andamento (aberta 2026-09-29) | `feature/0021-e2e-m3` | [0021](../prd/0021-e2e-m3.md) |

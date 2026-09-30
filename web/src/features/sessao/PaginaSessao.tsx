@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Link, useParams } from 'react-router'
 
 import { ErroApi } from '../../api/client'
@@ -53,6 +53,12 @@ function Sessao({ id }: { id: number }) {
   const mapa = useMapa(id)
   const ocupacao = useOcupacao(id, mapa.isSuccess)
   const holds = useMeusHolds()
+  const refetchHolds = holds.refetch
+  // Referência estável: o painel reconsulta uma vez quando um hold vence
+  // (auditoria 0020 — antes o efeito rodava a cada render).
+  const aoVencer = useCallback(() => {
+    void refetchHolds()
+  }, [refetchHolds])
   const travar = useTravar(id)
   const liberar = useLiberar(id)
 
@@ -149,7 +155,7 @@ function Sessao({ id }: { id: number }) {
         </button>
       </div>
 
-      <SeusAssentos sessaoID={id} holds={meusHolds} agora={agora} aoVencer={() => void holds.refetch()} />
+      <SeusAssentos sessaoID={id} holds={meusHolds} agora={agora} aoVencer={aoVencer} />
     </section>
   )
 }

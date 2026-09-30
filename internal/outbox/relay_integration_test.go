@@ -468,13 +468,23 @@ func TestRelay_BrokerIndisponivelNaoCrashaEReentrega(t *testing.T) {
 	defer relayCancel()
 	go relay.Run(relayCtx)
 
+	// Broker parado ANTES de enfileirar: com o relay já rodando, parar depois
+	// deixava uma janela em que o evento era publicado antes do Stop terminar
+	// (teste instável no CI do PR #47). Se o teste falhar no meio, o cleanup
+	// religa o broker para não derrubar os testes seguintes do pacote.
+	if err := rmqContainer.Stop(ctx, nil); err != nil {
+		t.Fatalf("parar rabbitmq: %v", err)
+	}
+	brokerParado := true
+	t.Cleanup(func() {
+		if brokerParado {
+			_ = rmqContainer.Start(context.Background())
+		}
+	})
+
 	aggID := uuid.NewString()
 	if err := enqueue(ctx, pool, broker.RoutingKeyFilmeCriado, aggID, []byte(`{"ca03":true}`)); err != nil {
 		t.Fatalf("enqueue: %v", err)
-	}
-
-	if err := rmqContainer.Stop(ctx, nil); err != nil {
-		t.Fatalf("parar rabbitmq: %v", err)
 	}
 
 	// Dá tempo a alguns ciclos de polling falharem sem crash: o evento
@@ -487,6 +497,7 @@ func TestRelay_BrokerIndisponivelNaoCrashaEReentrega(t *testing.T) {
 	if err := rmqContainer.Start(ctx); err != nil {
 		t.Fatalf("religar rabbitmq: %v", err)
 	}
+	brokerParado = false
 
 	published := pollUntil(t, 60*time.Second, func() bool { return countPending(t, pool, aggID) == 0 })
 	if !published {

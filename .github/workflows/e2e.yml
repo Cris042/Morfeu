@@ -1,0 +1,98 @@
+# E2E do M3 (PRD 0021; decisão do usuário no refinamento E5: CI, job próprio).
+# Sobe a stack real pelo compose (API em -mode=all + PG + Redis + RabbitMQ;
+# migrations no boot), semeia a sessão de teste e roda o Playwright contra o
+# `vite preview`, que repete o proxy /api do ADR 0009. Só dispara quando o
+# front ou a trava mudam. Mesmo padrão de supply chain do ci.yml.
+name: E2E
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - "internal/reserva/**"
+      - "internal/sessao/**"
+      - "internal/catalogo/**"
+      - "cmd/**"
+      - "migrations/**"
+      - ".github/workflows/e2e.yml"
+  pull_request:
+    paths:
+      - "web/**"
+      - "internal/reserva/**"
+      - "internal/sessao/**"
+      - "internal/catalogo/**"
+      - "cmd/**"
+      - "migrations/**"
+      - ".github/workflows/e2e.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  m3:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Env do compose (segredo aleatório por execução, sem TMDB)
+        run: |
+          cp .env.docker-compose.example .env.docker-compose
+          sed -i "s/^JWT_SEGREDO=.*/JWT_SEGREDO=$(openssl rand -hex 32)/" .env.docker-compose
+          sed -i "s/^TMDB_API_TOKEN=.*/TMDB_API_TOKEN=/" .env.docker-compose
+
+      - name: Subir a stack (API + PG + Redis + RabbitMQ)
+        run: docker compose --profile app up --build -d
+
+      - name: Esperar a API
+        run: |
+          for i in $(seq 1 60); do
+            curl -fsS http://localhost:8080/health >/dev/null && exit 0
+            sleep 2
+          done
+          docker compose logs app
+          exit 1
+
+      - name: Semear a sessão de teste
+        run: docker compose exec -T postgres psql -U postgres -d morfeu -v ON_ERROR_STOP=1 < web/e2e/seed.sql
+
+      - name: Setup Node (versão do .nvmrc, cache do npm)
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Instalar dependências e o Chromium
+        working-directory: web
+        run: |
+          npm ci --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Playwright (M3 + caminho feliz)
+        working-directory: web
+        run: npx playwright test
+
+      - name: Relatório do Playwright (falha)
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report
+          path: |
+            web/playwright-report
+            web/test-results
+          retention-days: 7
+
+      - name: Logs da stack (falha)
+        if: failure()
+        run: docker compose --profile app logs --no-color --tail=200
+
+      - name: Derrubar a stack
+        if: always()
+        run: docker compose --profile app down -v

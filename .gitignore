@@ -59,3 +59,5 @@ build/
 ### SPA (web/, task 0017) ###
 web/node_modules/
 web/dist/
+web/test-results/
+web/playwright-report/

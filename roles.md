@@ -107,7 +107,7 @@ Avaliadas e consideradas cobertas, redundantes ou prematuras hoje; instalar apen
 | Skill estacionada | Reativar em |
 |---|---|
 | ~~`frontend-patterns`, `design-system`~~ | **reativadas em 2026-09-29** (E5) |
-| `e2e-testing`, `browser-qa` | E5+ (Playwright entra no topo da pirâmide) |
+| ~~`e2e-testing`~~ · `browser-qa` | `e2e-testing` **reativada em 2026-09-29** (task 0021, Playwright do M3); `browser-qa` segue estacionada (E8+) |
 | `benchmark` | E12 (teste de carga) |
 | ~~plugin `frontend-design`~~ | **reabilitado em 2026-09-29** (E5) |
 

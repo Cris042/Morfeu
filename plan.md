@@ -4,9 +4,25 @@
 
 ## Estado corrente (2026-09-29)
 
-**Task 0020 — SPA: mapa integrado à trava (E5 T4a): IMPLEMENTAÇÃO COMPLETA e validada; gate → PR** (branch `feature/0020-spa-reserva`, da main `0117c41`). A T4 do refinamento foi dividida (0020 integração + 0021 E2E do M3) pelo teto de 30 arquivos. O CI do PR #47 revelou um **teste instável no relay do outbox** (`TestRelay_BrokerIndisponivelNaoCrashaEReentrega`: o relay publica o evento antes de o RabbitMQ terminar de parar; ao falhar, não religa o broker e derruba os 2 testes seguintes) — reexecutado verde; **correção entra na 0021**.
+**Task 0021 — E2E do M3 (E5 T4b): IMPLEMENTAÇÃO COMPLETA; 1ª execução real do Playwright no CI** (branch `feature/0021-e2e-m3`, da main `f355cd8`). Fecha o E5 e o marco **M3**. Execução local do Playwright indisponível nesta máquina (sem Chrome; libs nativas ausentes; imagem oficial ~2 GB em pull lento) — o job `E2E` do CI é o gate (decisão do usuário).
 
-### Plano da task 0020
+### Plano da task 0021
+
+1. ~~Playwright~~ — `@playwright/test` 1.63.0 (lib.md); `playwright.config.ts` (Chromium, `baseURL :4173`, `webServer` = build + `vite preview` com o proxy `/api`, trace em falha, `expect` 15 s = polling 4 s + cache 3 s); Vitest restrito a `src/**/*.test.*`.
+2. ~~Jornadas~~ — Page Object `PaginaSessao` (role/nome acessível); **M3** com 2 contextos (B seleciona C4 → A reserva → B recebe a recusa nomeada e vê "ocupado" → A libera → B vê "livre" pelo polling → B reserva → limpeza); caminho feliz cartaz → filme → sessão; `seed.sql` com sala por timestamp (execuções repetidas não colidem) e sessão descoberta pela API.
+3. ~~CI~~ — `e2e.yml` (ARM64, SHAs pinados, env do compose gerado com `JWT_SEGREDO` aleatório, stack pelo compose, espera `/health`, seed, `playwright install --with-deps chromium`, relatório + logs em falha, `down -v` sempre); caminhos duplicados em vez de âncora YAML.
+4. ~~Relay~~ — `TestRelay_BrokerIndisponivelNaoCrashaEReentrega` para o broker **antes** de enfileirar + `t.Cleanup` que religa; pacote `outbox` `-race` verde e o trio afetado 3/3.
+5. ~~Auditoria 0020~~ — `aoVencer` com `useCallback`; teste do hold vencido com **exatamente 1** reconsulta (38 testes verdes).
+6. ~~Docs~~ — `ambiente-dev.md` (E2E local/imagem), roadmap (E5 ✅ M3), skill `e2e-testing` reativada (roles.md §4.4).
+
+---
+
+### Task 0020 — SPA: mapa integrado à trava: CONCLUÍDA e MERGEADA (PR #48, `f355cd8`)
+
+Auditoria APROVADA (2026-09-29, `qa`); não-bloqueantes resolvidos na 0021 (`aoVencer` estável + contagem exata; CAs marcados).
+
+#### Plano executado da 0020
+
 
 1. ~~Dados~~ — tipos `Hold`/`Ocupacao`; `useMapa` (`staleTime: Infinity`), `useOcupacao` (`refetchInterval` 4 s, `refetchIntervalInBackground: false`, só depois do mapa), `useMeusHolds`; mutations travar/estender/liberar que **sempre** (sucesso ou erro) invalidam holds + ocupação — o 409 atualiza o mapa na hora.
 2. ~~Página da sessão~~ — mapa + legenda + "Reservar N assentos" (desabilitado sem seleção/durante envio; o assento só vira "seu" depois do 201 + `GET /holds`); alternar um "seu" libera; mensagens de 409 com os assentos perdidos (saem da seleção), `limite_holds`, 429, genérica; selecionado tomado no polling sai da seleção com aviso (ajuste de estado na renderização, sem effect); 404 → sessão indisponível.
