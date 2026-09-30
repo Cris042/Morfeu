@@ -1,7 +1,7 @@
 # Task 0028 — Notificação: núcleo do e-mail de confirmação com QR (E7, T1)
 
 - **Data:** 2026-09-30
-- **Status:** em andamento
+- **Status:** concluída (auditoria APROVADA em 2026-09-30)
 - **Branch:** `feature/0028-notificacao-nucleo` (da main `43a84fd`)
 - **PRD:** docs/prd/0028-notificacao-nucleo.md
 - **Item do roadmap:** E7 — Notificação: e-mail + QR (1ª de 3). Refinamento: `docs/refinamentos/E7-notificacao.md` §T1; ADR 0005 (Strategy) e 0010 (token HMAC).
@@ -28,10 +28,10 @@ Novas: `github.com/skip2/go-qrcode` (runtime) e `github.com/makiuchi-d/gozxing` 
 
 ## Critérios de aceite
 
-- [ ] Só pedido pago com ingresso ativo gera e-mail; token determinístico por segredo.
-- [ ] Um QR por ingresso, decodificável para `/i/{id}.{token}`.
-- [ ] HTML com escape, sem imagem externa, links só da base configurada; golden estável.
-- [ ] Não notificável = ack sem envio; inexistente = DLQ.
+- [x] Só pedido pago com ingresso ativo gera e-mail; token determinístico por segredo.
+- [x] Um QR por ingresso, decodificável para `/i/{id}.{token}`.
+- [x] HTML com escape, sem imagem externa, links só da base configurada; golden estável.
+- [x] Não notificável = ack sem envio; inexistente = DLQ.
 
 ## Riscos
 

@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0028-notificacao-nucleo.md
 - **Branch:** feature/0028-notificacao-nucleo
 - **Data:** 2026-09-30
-- **Status:** em andamento
+- **Status:** concluído
 
 ## Objetivo
 
@@ -62,14 +62,14 @@ Token HMAC, três portas de leitura, adapter `FonteDoEmail`, `EmailSender` + fak
 
 ## Critérios de aceite
 
-- [ ] CA01 — Porta do pedido: aguardando → não notificável; inexistente → não encontrado; pago → 2 ingressos com token = `TokenIngresso(segredo, id)`, 43 caracteres, sem o id em claro, dependente do segredo, distinto entre ingressos; ingressos cancelados → não notificável.
-- [ ] CA02 — Um QR por ingresso, `image/png`, `cid:ingresso-{assento}` referenciado no HTML e decodificado para `https://…/i/{id}.{token}`.
-- [ ] CA03 — Golden do HTML + texto (20:30 em Brasília para 23:30 UTC; R$ 1.234,56), assunto fixo, chave de idempotência, destinatário.
-- [ ] CA04 — Título hostil escapado; toda `src` começa com `cid:`; todo `href` começa com a base; base não http(s) recusada.
-- [ ] CA05 — `Entregar`: envia 1; não notificável e inexistente não enviam; falha do sender sobe.
-- [ ] CA06 — Consumidor: não notificável = ack sem latência; inexistente = permanente.
-- [ ] CA07 — Config: segredo curto recusado; produção sem segredo ou com base http recusada.
-- [ ] CA08 — Suíte completa e CI verdes.
+- [x] CA01 — Porta do pedido: aguardando → não notificável; inexistente → não encontrado; pago → 2 ingressos com token = `TokenIngresso(segredo, id)`, 43 caracteres, sem o id em claro, dependente do segredo, distinto entre ingressos; ingressos cancelados → não notificável.
+- [x] CA02 — Um QR por ingresso, `image/png`, `cid:ingresso-{assento}` referenciado no HTML e decodificado para `https://…/i/{id}.{token}`.
+- [x] CA03 — Golden do HTML + texto (20:30 em Brasília para 23:30 UTC; R$ 1.234,56), assunto fixo, chave de idempotência, destinatário.
+- [x] CA04 — Título hostil escapado; toda `src` começa com `cid:`; todo `href` começa com a base; base não http(s) recusada.
+- [x] CA05 — `Entregar`: envia 1; não notificável e inexistente não enviam; falha do sender sobe.
+- [x] CA06 — Consumidor: não notificável = ack sem latência; inexistente = permanente.
+- [x] CA07 — Config: segredo curto recusado; produção sem segredo ou com base http recusada.
+- [x] CA08 — Suíte completa e CI verdes.
 
 ## Plano de testes
 
@@ -103,7 +103,7 @@ Token HMAC, três portas de leitura, adapter `FonteDoEmail`, `EmailSender` + fak
 - `go.mod`, `go.sum`, `lib.md`, `.golangci.yml`
 - `docs/tasks/README.md`, `plan.md`, `state.md`
 
-Total: 30. O roadmap é atualizado no fechamento do E7.
+Total: 30 (+ `docs/ambiente-dev.md` no fechamento, nota da auditoria; `internal/notificacao/testdata/confirmacao.golden`). O roadmap é atualizado no fechamento do E7.
 
 ## Dependências utilizadas
 

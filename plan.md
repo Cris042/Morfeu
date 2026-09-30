@@ -4,7 +4,7 @@
 
 ## Estado corrente (2026-09-30)
 
-**Task 0028 — Notificação: núcleo do e-mail de confirmação com QR (E7 T1): IMPLEMENTADA; em PR** (branch `feature/0028-notificacao-nucleo`, da main `43a84fd`). Refinamento E7 mergeado (PR #57).
+**Task 0028 — Notificação: núcleo do e-mail de confirmação com QR (E7 T1): CONCLUÍDA — auditoria APROVADA em 2026-09-30 (`security`), CI verde (PR #58)** (branch `feature/0028-notificacao-nucleo`, da main `43a84fd`). Refinamento E7 mergeado (PR #57).
 
 ### Plano da task 0028
 
@@ -12,7 +12,7 @@
 2. ~~E-mail~~ — `notificacao.Entregador` (carregar → montar → enviar), templates `html/template` + texto (Brasília, BRL), QR PNG inline por CID (skip2), fake do `EmailSender`; consumidor trata não notificável (ack) e inexistente (DLQ).
 3. ~~Config~~ — `INGRESSO_TOKEN_SEGREDO_V1` (≥ 32 bytes; obrigatório em produção; dev gera aleatório) e `BASE_URL_PUBLICA` (https em produção).
 4. ~~Testes~~ — QR decodificado (gozxing), golden, escape/sem imagem externa, entregador, consumidor, porta do pedido com PG real, config. **Bug achado pelos testes:** o `html/template` trocava `cid:` vindo de dado por `#ZgotmplZ` (QR não apareceria) → prefixo literal no template.
-5. Lint + suíte completa → CI + passe de julgamento → merge.
+5. ~~Lint + suíte + CI + passe de julgamento~~ — APROVADO. Nota operacional no `ambiente-dev.md` (fixar o segredo do token no dev). **Transferido à 0029:** recusar o fake do e-mail em produção como critério explícito. Registrado: se o formato do código de assento mudar, sanitizar o `cid`.
 
 ---
 
