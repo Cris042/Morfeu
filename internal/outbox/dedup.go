@@ -3,6 +3,7 @@ package outbox
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -25,6 +26,7 @@ type Mensagem struct {
 	EventType   string
 	AggregateID string
 	Payload     []byte
+	OccurredAt  time.Time // instante do evento no produtor (segundos)
 }
 
 // Efeito aplica a mensagem ao domínio usando exclusivamente tx — a mesma
@@ -67,7 +69,7 @@ func NovoHandler(pool Pool, consumidor string, efeito Efeito, log *zap.Logger) b
 			return fmt.Errorf("message_id %q inválido: %w", e.MessageID, ErrPermanente)
 		}
 
-		msg := Mensagem{MessageID: id, EventType: e.Type, AggregateID: e.AggregateID, Payload: e.Body}
+		msg := Mensagem{MessageID: id, EventType: e.Type, AggregateID: e.AggregateID, Payload: e.Body, OccurredAt: e.OccurredAt}
 		duplicada, err := ProcessarUmaVez(ctx, pool, consumidor, msg, efeito)
 		if err != nil {
 			return err

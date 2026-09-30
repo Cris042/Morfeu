@@ -184,6 +184,19 @@ linters:
             - github.com/google/uuid
             - github.com/stripe/stripe-go/v86
 
+        # Módulo notificacao (PRD 0026): consome pedido.confirmado só pela
+        # outbox (dedup) — não importa pedido nem o cliente AMQP.
+        notificacao-domain:
+          files:
+            - "**/internal/notificacao/*.go"
+            - "!$test"
+          list-mode: strict
+          allow:
+            - $gostd
+            - github.com/google/uuid
+            - go.uber.org/zap
+            - github.com/mclovin137/morfeu/internal/outbox
+
         # Módulo identidade (PRD 0009 RNF01): transaction script sem driver.
         identidade-domain:
           files:

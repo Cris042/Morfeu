@@ -253,6 +253,9 @@ func (f *rotasFalsas) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
 	switch {
+	case r.URL.Path == "/v1/refunds" && st == "ja_estornado":
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = fmt.Fprint(w, `{"error":{"type":"invalid_request_error","code":"charge_already_refunded"}}`)
 	case r.URL.Path == "/v1/refunds":
 		_, _ = fmt.Fprint(w, `{"id":"re_1","object":"refund","status":"succeeded"}`)
 	case strings.HasSuffix(r.URL.Path, "/cancel") && st == "succeeded":
@@ -291,6 +294,11 @@ func TestStripe_ConsultarCancelarEstornar(t *testing.T) {
 	}
 	if err := s.Estornar(ctx, "pi_1", "estorno-abc"); err != nil || f.chaveEstorno != "estorno-abc" || f.piEstorno != "pi_1" {
 		t.Fatalf("estornar: %v chave=%q pi=%q", err, f.chaveEstorno, f.piEstorno)
+	}
+	// Chave de idempotência vencida (24 h): "já estornado" é sucesso.
+	f.definir("ja_estornado")
+	if err := s.Estornar(ctx, "pi_1", "estorno-abc"); err != nil {
+		t.Fatalf("já estornado deveria ser sucesso: %v", err)
 	}
 	if !slices.Contains(f.vistos, "GET /v1/payment_intents/pi_1") || !slices.Contains(f.vistos, "POST /v1/payment_intents/pi_1/cancel") {
 		t.Fatalf("rotas: %v", f.vistos)

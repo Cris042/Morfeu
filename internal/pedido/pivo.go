@@ -38,6 +38,10 @@ const (
 	EtapaPagamentoRecusado = "pagamento_recusado"
 	EtapaEstornoNecessario = "estorno_necessario"
 	EtapaEstornado         = "estornado"
+	EtapaExpirado          = "expirado"
+	// Passos de compensação (saga_compensacoes_total{passo}, doc.md §6.1).
+	PassoCobranca = "cobranca" // gateway não criou a cobrança → assentos devolvidos
+	PassoEstorno  = "estorno"  // pago sem venda possível → dinheiro devolvido
 )
 
 // Pagamento é a confirmação de um pagamento aprovado, venha do webhook ou da

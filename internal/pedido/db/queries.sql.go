@@ -62,6 +62,28 @@ func (q *Queries) BuscarPedidoDoDono(ctx context.Context, arg BuscarPedidoDoDono
 	return items, nil
 }
 
+const contarPresos = `-- name: ContarPresos :one
+SELECT
+    count(*) FILTER (WHERE status = 'aguardando_pagamento' AND expira_em <= $1)::bigint AS aguardando_vencido,
+    count(*) FILTER (WHERE status = 'estorno_pendente')::bigint AS estorno_pendente
+FROM pedidos
+WHERE status IN ('aguardando_pagamento', 'estorno_pendente')
+`
+
+type ContarPresosRow struct {
+	AguardandoVencido int64 `db:"aguardando_vencido"`
+	EstornoPendente   int64 `db:"estorno_pendente"`
+}
+
+// Gauge pedidos_presos (PRD 0026): vencidos além da margem do hold (a
+// reconciliação deveria tê-los resolvido) e estornos ainda pendentes.
+func (q *Queries) ContarPresos(ctx context.Context, limiteVencido time.Time) (ContarPresosRow, error) {
+	row := q.db.QueryRow(ctx, contarPresos, limiteVencido)
+	var i ContarPresosRow
+	err := row.Scan(&i.AguardandoVencido, &i.EstornoPendente)
+	return i, err
+}
+
 const definirCobranca = `-- name: DefinirCobranca :execrows
 UPDATE pedidos
 SET payment_intent_id = $1, atualizado_em = $2

@@ -39,6 +39,7 @@ import (
 	"github.com/mclovin137/morfeu/internal/identidade"
 	identidadedb "github.com/mclovin137/morfeu/internal/identidade/db"
 	"github.com/mclovin137/morfeu/internal/logger"
+	"github.com/mclovin137/morfeu/internal/notificacao"
 	"github.com/mclovin137/morfeu/internal/outbox"
 	"github.com/mclovin137/morfeu/internal/pedido"
 	"github.com/mclovin137/morfeu/internal/pedido/pagamento"
@@ -257,6 +258,30 @@ func startConsumer(ctx context.Context, brokerClient *broker.Client, dbPool *pgx
 		}
 	}()
 	log.Info("Consumer de catalogo.filme_criado iniciado")
+
+	// pedido.confirmado → notificação (PRD 0026): stub até o e-mail do E7.
+	latencia, err := otel.Meter("morfeu/notificacao").Float64Histogram("checkout_confirmado_ate_notificado_segundos",
+		// Sem WithUnit: o exporter anexaria "_seconds" ao nome já em PT.
+		metric.WithDescription("Pagamento confirmado → notificação processada (SLI do checkout fim a fim). "+
+			"O instante do evento tem resolução de segundo: a medida superestima em até 1 s."),
+		// Buckets finos em torno do alvo de 5 s (os padrões do OTel pulam de 0 a 5).
+		metric.WithExplicitBucketBoundaries(0.5, 1, 2, 3, 5, 10, 30, 60))
+	if err != nil {
+		log.ErrorMsg("métrica de latência da notificação", zap.Error(err))
+		os.Exit(1)
+	}
+	notif := notificacao.NovoConsumidor(notificacao.Config{
+		Latencia: func(ctx context.Context, d time.Duration) { latencia.Record(ctx, d.Seconds()) },
+	}, log.Logger)
+	handlerPedidos := outbox.NovoHandler(dbPool, notificacao.Consumidor, notif.Efeito, log.Logger)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := brokerClient.Consumir(ctx, broker.QueuePedidoConfirmado, handlerPedidos); err != nil {
+			log.ErrorMsg("consumer de pedido.confirmado encerrado com erro", zap.Error(err))
+		}
+	}()
+	log.Info("Consumer de pedido.confirmado iniciado")
 }
 
 // conectarTMDB liga o adapter do TMDB ao catálogo quando há token (PRD
@@ -410,6 +435,11 @@ func montarPedido(cfg *config.Config, dbPool *pgxpool.Pool, sessoes pedido.Fonte
 	if err != nil {
 		fatal("métrica do funil", err)
 	}
+	compensacoes, err := meter.Int64Counter("saga_compensacoes_total",
+		metric.WithDescription("Compensações da saga do checkout por passo (cobranca|estorno) — disparo = problema no checkout."))
+	if err != nil {
+		fatal("métrica de compensações", err)
+	}
 	pc := pedido.Config{
 		Sessoes:    sessoes,
 		Reserva:    reservaDoPedido{r},
@@ -418,6 +448,9 @@ func montarPedido(cfg *config.Config, dbPool *pgxpool.Pool, sessoes pedido.Fonte
 		LimiteDono: novoLimitador("pedido-dono", limitePedidosDono),
 		Funil: func(ctx context.Context, etapa string) {
 			funil.Add(ctx, 1, metric.WithAttributes(attribute.String("etapa", etapa)))
+		},
+		Compensacao: func(ctx context.Context, passo string) {
+			compensacoes.Add(ctx, 1, metric.WithAttributes(attribute.String("passo", passo)))
 		},
 	}
 	if cfg.StripeWebhookSegredo == "" {
@@ -432,7 +465,36 @@ func montarPedido(cfg *config.Config, dbPool *pgxpool.Pool, sessoes pedido.Fonte
 	if err != nil {
 		fatal("serviço de pedido", err)
 	}
+	if err := registrarPedidosPresos(meter, servico); err != nil {
+		fatal("métrica de pedidos presos", err)
+	}
+	// As séries nascem em 0: sem isso o increase() não enxerga o 1º estorno.
+	for _, passo := range []string{pedido.PassoCobranca, pedido.PassoEstorno} {
+		compensacoes.Add(context.Background(), 0, metric.WithAttributes(attribute.String("passo", passo)))
+	}
 	return pedido.NovoHandler(servico, log.Logger), servico
+}
+
+// registrarPedidosPresos expõe pedidos_presos{estado} (PRD 0026): lido do
+// banco a cada coleta — índices parciais mantêm a contagem barata.
+func registrarPedidosPresos(meter metric.Meter, s *pedido.Servico) error {
+	presos, err := meter.Int64ObservableGauge("pedidos_presos",
+		metric.WithDescription("Pedidos que a saga deveria ter resolvido: pendentes vencidos além da margem e estornos pendentes."))
+	if err != nil {
+		return err
+	}
+	vencido := metric.WithAttributes(attribute.String("estado", "aguardando_vencido"))
+	estorno := metric.WithAttributes(attribute.String("estado", "estorno_pendente"))
+	_, err = meter.RegisterCallback(func(ctx context.Context, o metric.Observer) error {
+		v, e, err := s.Presos(ctx)
+		if err != nil {
+			return err
+		}
+		o.ObserveInt64(presos, v, vencido)
+		o.ObserveInt64(presos, e, estorno)
+		return nil
+	}, presos)
+	return err
 }
 
 // montarGateway escolhe o adapter (ADR 0005 Strategy): Stripe em modo de
@@ -444,7 +506,8 @@ func montarGateway(cfg *config.Config, meter metric.Meter, log *logger.Logger) p
 		return pagamento.NovoFake()
 	}
 	requisicoes, err1 := meter.Int64Counter("gateway_requests_total", metric.WithDescription("Chamadas ao gateway por operação e resultado."))
-	duracao, err2 := meter.Float64Histogram("gateway_duration_seconds", metric.WithDescription("Duração das chamadas ao gateway."), metric.WithUnit("s"))
+	// Sem WithUnit: o exporter anexaria "_seconds" ao nome (ficaria _seconds_seconds).
+	duracao, err2 := meter.Float64Histogram("gateway_duration_seconds", metric.WithDescription("Duração das chamadas ao gateway, em segundos."))
 	breaker, err3 := meter.Int64Gauge("gateway_breaker_state", metric.WithDescription("Circuit breaker do gateway (1 = aberto)."))
 	if err := errors.Join(err1, err2, err3); err != nil {
 		log.ErrorMsg("métricas do gateway", zap.Error(err))

@@ -47,6 +47,13 @@ var LabelsPermitidos = []attribute.Key{
 	// TMDB (task 0012): valores fechados — operação e classe de status.
 	"operacao",
 	"classe_status",
+	// Checkout (tasks 0023–0026, auditoria 0026): valores fechados — etapa do
+	// funil, operação do gateway, passo da compensação e estado dos presos.
+	// Fora da lista, os alertas da saga liam séries sem label (nunca disparavam).
+	"etapa",
+	"op",
+	"passo",
+	"estado",
 }
 
 // Config parametriza Iniciar.

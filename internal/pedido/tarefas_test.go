@@ -73,8 +73,8 @@ func TestEstorno_Executa(t *testing.T) {
 	if r := a.servico.ExecutarEstornos(context.Background()); r.Estornados != 0 || len(a.gateway.Estornos()) != 1 {
 		t.Fatalf("2ª rodada: %+v", r)
 	}
-	if a.etapa(EtapaEstornado) != 1 {
-		t.Fatal("funil sem estornado")
+	if a.etapa(EtapaEstornado) != 1 || a.compensacoes(PassoEstorno) != 1 {
+		t.Fatal("funil/compensação sem estornado")
 	}
 }
 
@@ -236,5 +236,31 @@ func TestReconciliar_Adiamentos(t *testing.T) {
 	fim()
 	if r := a.servico.Reconciliar(cancelado); r.Expirados+r.Confirmados != 0 {
 		t.Fatalf("com o contexto encerrado nada é processado: %+v", r)
+	}
+}
+
+// TestPresos cobre o gauge pedidos_presos (PRD 0026): vencido só conta
+// depois da margem do hold; estorno pendente conta até concluir.
+func TestPresos(t *testing.T) {
+	semPendenciasAlheias(t)
+	a := novoAmbiente(t)
+	ctx := context.Background()
+	p, _, _ := a.pedidoCom(t, "C8")
+	divergente, _, _ := a.pedidoCom(t, "C9")
+	ev := aprovado(divergente)
+	ev.valor = 1
+	_ = a.webhook(ev)
+	a.rel.avancar(TTLPedido)
+	if v, e, err := a.servico.Presos(ctx); err != nil || v != 0 || e != 1 {
+		t.Fatalf("no fim do prazo: vencidos=%d estornos=%d %v", v, e, err)
+	}
+	a.rel.avancar(MargemHold)
+	if v, _, _ := a.servico.Presos(ctx); v != 1 {
+		t.Fatalf("depois da margem: vencidos=%d", v)
+	}
+	_ = a.servico.Reconciliar(ctx)
+	_ = a.servico.ExecutarEstornos(ctx)
+	if v, e, _ := a.servico.Presos(ctx); v != 0 || e != 0 {
+		t.Fatalf("depois das tarefas: vencidos=%d estornos=%d (pedido %s)", v, e, p.ID)
 	}
 }

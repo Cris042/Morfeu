@@ -168,6 +168,7 @@ type ambiente struct {
 	servico *Servico
 	gateway *pagamento.Fake
 	funil   *sync.Map
+	compens *sync.Map
 }
 
 type limites struct{ ip, dono int }
@@ -201,7 +202,16 @@ func montarAmbiente(t *testing.T, lim limites) *ambiente {
 		t.Fatalf("reserva: %v", err)
 	}
 	gw := pagamento.NovoFake()
-	funil := &sync.Map{}
+	funil, compens := &sync.Map{}, &sync.Map{}
+	contar := func(m *sync.Map) func(context.Context, string) {
+		var mu sync.Mutex
+		return func(_ context.Context, chave string) {
+			mu.Lock()
+			defer mu.Unlock()
+			n, _ := m.LoadOrStore(chave, new(int))
+			*(n.(*int))++
+		}
+	}
 	wh, err := pagamento.NovoWebhook(segredoWebhookTeste)
 	if err != nil {
 		t.Fatal(err)
@@ -210,17 +220,15 @@ func montarAmbiente(t *testing.T, lim limites) *ambiente {
 		Sessoes: sessoes, Reserva: reservaAdapter{res}, Gateway: gw,
 		LimiteIP: limitador("ip", lim.ip), LimiteDono: limitador("dono", lim.dono), Agora: rel.agora,
 		Webhook: wh, LimiteWebhook: limitador("webhook", 100000),
-		Funil: func(_ context.Context, etapa string) {
-			n, _ := funil.LoadOrStore(etapa, new(int))
-			*(n.(*int))++
-		},
+		Funil:       contar(funil),
+		Compensacao: contar(compens),
 	}, logTeste)
 	if err != nil {
 		t.Fatalf("serviço: %v", err)
 	}
 	e := echo.New()
 	NovoHandler(s, logTeste).RegistrarRotas(e)
-	return &ambiente{e: e, rel: rel, reserva: res, servico: s, gateway: gw, funil: funil}
+	return &ambiente{e: e, rel: rel, reserva: res, servico: s, gateway: gw, funil: funil, compens: compens}
 }
 
 // segredoWebhookTeste assina os eventos gerados nos testes (sem rede).
@@ -330,8 +338,12 @@ func trilha(t *testing.T, id uuid.UUID) string {
 	return strings.Join(out, " ")
 }
 
-func (a *ambiente) etapa(nome string) int {
-	if n, ok := a.funil.Load(nome); ok {
+func (a *ambiente) etapa(nome string) int { return lerContador(a.funil, nome) }
+
+func (a *ambiente) compensacoes(passo string) int { return lerContador(a.compens, passo) }
+
+func lerContador(m *sync.Map, chave string) int {
+	if n, ok := m.Load(chave); ok {
 		return *(n.(*int))
 	}
 	return 0
@@ -488,8 +500,8 @@ func TestCriar_GatewayFalha(t *testing.T) {
 	if err != nil || len(o.Ocupados) != 0 {
 		t.Fatalf("ocupação após desfazer: %+v %v", o, err)
 	}
-	if a.etapa(EtapaGatewayFalhou) != 1 || a.etapa(EtapaCobrancaCriada) != 0 {
-		t.Fatal("funil do gateway fora")
+	if a.etapa(EtapaGatewayFalhou) != 1 || a.etapa(EtapaCobrancaCriada) != 0 || a.compensacoes(PassoCobranca) != 1 {
+		t.Fatal("funil/compensação do gateway fora")
 	}
 	// O carrinho não fica bloqueado: trava de novo e compra.
 	d, _ := reserva.DonoDoToken(car)
