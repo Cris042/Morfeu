@@ -1,0 +1,125 @@
+.sessao {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--espaco-4);
+}
+
+.eyebrow {
+  margin: 0;
+  font-family: var(--fonte-mono);
+  font-size: var(--texto-xs);
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--tungstenio);
+}
+
+.titulo {
+  margin: 0 0 var(--espaco-4);
+  font-size: var(--texto-xl);
+}
+
+.aviso {
+  min-height: 1.5em;
+  margin: 0;
+  color: var(--tungstenio);
+  text-align: center;
+}
+
+.acoes {
+  display: flex;
+  justify-content: center;
+}
+
+.primario {
+  padding: 13px 28px;
+  font: inherit;
+  font-weight: 700;
+  color: var(--tinta-papoula);
+  background: var(--papoula);
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: filter var(--transicao), box-shadow var(--transicao);
+}
+
+.primario:hover:not(:disabled) {
+  filter: brightness(1.06);
+  box-shadow: 0 10px 30px rgb(255 92 69 / 28%);
+}
+
+.primario:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.painel {
+  width: min(100%, 560px);
+  margin-top: var(--espaco-6);
+  padding: var(--espaco-4) var(--espaco-6);
+  background: var(--sala);
+  border: 1px solid var(--veludo);
+  border-radius: var(--raio-card);
+}
+
+.subtitulo {
+  margin: 0 0 var(--espaco-3);
+  font-size: var(--texto-lg);
+}
+
+.urgente {
+  margin: 0 0 var(--espaco-3);
+  color: var(--papoula);
+}
+
+.lista {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hold {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-3);
+}
+
+.codigo,
+.relogio {
+  font-family: var(--fonte-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.codigo {
+  min-width: 3ch;
+  font-weight: 500;
+}
+
+.relogio {
+  color: var(--nevoa);
+  margin-right: auto;
+}
+
+.secundario {
+  padding: var(--espaco-1) var(--espaco-3);
+  font: inherit;
+  font-size: var(--texto-sm);
+  color: var(--tela);
+  background: transparent;
+  border: 1px solid var(--veludo);
+  border-radius: var(--raio-chip);
+  cursor: pointer;
+}
+
+.secundario:hover:not(:disabled) {
+  border-color: var(--tungstenio);
+}
+
+.secundario:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

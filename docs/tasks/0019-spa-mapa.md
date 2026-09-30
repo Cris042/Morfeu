@@ -1,7 +1,7 @@
 # Task 0019 — SPA: mapa de assentos isolado (dados fake) (E5, T3)
 
 - **Data:** 2026-09-29
-- **Status:** em andamento
+- **Status:** concluída
 - **Branch:** `feature/0019-spa-mapa` (da main `849064b`)
 - **PRD:** docs/prd/0019-spa-mapa.md
 - **Item do roadmap:** E5 — SPA cliente, parte 1 (task 3/4). Refinamento: `docs/refinamentos/E5-spa-cliente.md` §T3.
@@ -28,11 +28,11 @@ Nenhuma nova.
 
 ## Critérios de aceite
 
-- [ ] Grade fiel ao layout (fileiras × colunas, vãos vazios e fora do foco, PCD marcado).
-- [ ] Teclado: Tab único entra na grade; setas movem entre assentos pulando vãos; Home/End; Enter/Espaço alternam.
-- [ ] `aria-label` completo por assento; `aria-pressed` no selecionado; ocupado/meu/limite com `aria-disabled`; estados distinguíveis sem cor.
-- [ ] Limite de 6 (selecionados + meus) bloqueia novos assentos com aviso.
-- [ ] Testes com user-event; `web-ci` verde.
+- [x] Grade fiel ao layout (fileiras × colunas, vãos vazios e fora do foco, PCD marcado).
+- [x] Teclado: Tab único entra na grade; setas movem entre assentos pulando vãos; Home/End; Enter/Espaço alternam.
+- [x] `aria-label` completo por assento; `aria-pressed` no selecionado; ocupado/meu/limite com `aria-disabled`; estados distinguíveis sem cor.
+- [x] Limite de 6 (selecionados + meus) bloqueia novos assentos com aviso.
+- [x] Testes com user-event; `web-ci` verde.
 
 ## Riscos
 

@@ -29,9 +29,10 @@ describe('shell', () => {
     expect(screen.getByText(/fornecidos pelo TMDB/)).toBeInTheDocument()
   })
 
-  it('sessão ainda sem mapa mostra o aviso', () => {
+  it('sessão indisponível (404 do mapa) avisa e volta ao cartaz', async () => {
+    apiFalsa({ '/api/sessoes/11/mapa': { status: 404, corpo: { erro: 'nao_encontrado' } }, '/api/holds': { corpo: [] } })
     renderizarEm('/sessoes/11')
-    expect(screen.getByRole('heading', { name: 'Escolha de assentos' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Esta sessão não está mais disponível' })).toBeInTheDocument()
   })
 
   it('rota desconhecida mostra o 404 amigável com volta ao cartaz', () => {

@@ -37,3 +37,11 @@ export function duracao(minutos: number): string {
   }
   return m === 0 ? `${String(h)}h` : `${String(h)}h ${String(m)}min`
 }
+
+/** "09:41" — tempo restante de um hold (nunca negativo). */
+export function contagem(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000))
+  const min = Math.floor(total / 60)
+  const seg = total % 60
+  return `${String(min).padStart(2, '0')}:${String(seg).padStart(2, '0')}`
+}

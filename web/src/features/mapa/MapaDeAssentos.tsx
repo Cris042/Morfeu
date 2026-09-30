@@ -118,9 +118,9 @@ export function MapaDeAssentos({ mapa, ocupados, meus, selecionados, maximo = MA
       <div role="grid" aria-label={`Assentos da ${mapa.sala_nome}`} className={styles.grade}>
         {fileiras.map((f) => (
           <div role="row" key={f} className={styles.fileira}>
-            <span className={styles.letra} aria-hidden="true">
+            <div role="rowheader" className={styles.letra} aria-label={`Fileira ${f}`}>
               {f}
-            </span>
+            </div>
             {Array.from({ length: mapa.colunas }, (_, c) => {
               const a = porFileira.get(f)?.find((x) => x.coluna === c + 1)
               if (!a) {
@@ -162,9 +162,6 @@ export function MapaDeAssentos({ mapa, ocupados, meus, selecionados, maximo = MA
                 </div>
               )
             })}
-            <span className={styles.letra} aria-hidden="true">
-              {f}
-            </span>
           </div>
         ))}
       </div>

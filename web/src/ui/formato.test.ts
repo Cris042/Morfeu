@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { chaveDia, dia, duracao, hora, preco } from './formato'
+import { chaveDia, contagem, dia, duracao, hora, preco } from './formato'
 
 describe('formato (fuso do cinema)', () => {
   it('hora em America/Sao_Paulo, qualquer que seja o fuso da máquina', () => {
@@ -29,5 +29,12 @@ describe('formato (fuso do cinema)', () => {
     expect(duracao(142)).toBe('2h 22min')
     expect(duracao(120)).toBe('2h')
     expect(duracao(45)).toBe('45min')
+  })
+
+  it('contagem mm:ss arredonda para cima e nunca fica negativa', () => {
+    expect(contagem(10 * 60 * 1000)).toBe('10:00')
+    expect(contagem(9 * 60 * 1000 + 41_000)).toBe('09:41')
+    expect(contagem(500)).toBe('00:01')
+    expect(contagem(-3000)).toBe('00:00')
   })
 })
