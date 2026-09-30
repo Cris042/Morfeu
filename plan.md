@@ -4,9 +4,15 @@
 
 ## Estado corrente (2026-09-29)
 
-**Task 0016 — Reserva: ocupação pública, cache e alertas (E4 T2): IMPLEMENTAÇÃO COMPLETA e validada; gate → PR** (branch `feature/0016-reserva-ocupacao`, da main `36613c3`). Fecha o E4.
+**Chore — refinamento do E5 + ADR 0009** (branch `chore/e5-refinamento-adr-0009`, da main `b9ad75a`; só documentação — §6.14.6). Registra `docs/refinamentos/E5-spa-cliente.md` (5 pareceres, debate, 4 respostas do usuário), `docs/adr/0009-frontend-spa.md`, roadmap (E4 ✅, E5 em 4 tasks, telas do operador → E9) e fecha o status da 0016. Próximo: task 0017 (E5 T1 — fundação da SPA).
 
-### Plano da task 0016
+---
+
+### Task 0016 — Reserva: ocupação pública, cache e alertas: CONCLUÍDA e MERGEADA (PR #42, `b9ad75a`)
+
+Auditoria APROVADA (2026-09-29, `qa`), sem não-bloqueantes novos.
+
+#### Plano executado da 0016
 
 1. ~~Query~~ — `OcupadosDaSessao` (só códigos de holds vivos, pelo índice único parcial).
 2. ~~Serviço/rota~~ — `ocupacao.go`: cache `reserva:ocupacao:{id}` TTL 3 s sem invalidação; no hit nem a porta é consultada; no miss, sessão indisponível → 404 e nada é cacheado; falha do cache cai no banco. `GET /sessoes/:id/ocupacao` com `Cache-Control: public, max-age=2`. `Config.Cache` injetado no `main`; depguard `reserva-domain` + `internal/cache`.
