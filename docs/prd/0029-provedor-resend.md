@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0029-provedor-resend.md
 - **Branch:** feature/0029-provedor-resend
 - **Data:** 2026-09-30
-- **Status:** em andamento
+- **Status:** concluído
 
 ## Objetivo
 
@@ -58,12 +58,12 @@ Adapter por HTTP cru, classes de erro, resultado por entrega, config e boot, mé
 
 ## Critérios de aceite
 
-- [ ] CA01 — Requisição: método, caminho, `Authorization`, `Idempotency-Key`, `Content-Type`, remetente, destinatário, assunto, HTML, texto e 2 anexos com `content_id`, `image/png` e PNG válido em base64.
-- [ ] CA02 — Classificação: cota diária e mensal → cota; taxa, 503 e concorrente → transitório; 422, 403 e idempotência com outro corpo → permanente; timeout → transitório; nenhum erro contém o e-mail ecoado pelo provedor; sem chave → recusado.
-- [ ] CA03 — Consumidor: cada classe → resultado da métrica e ack/DLQ/redelivery corretos.
-- [ ] CA04 — Config: Resend completo aceito; sem chave recusado; provedor desconhecido recusado; fake em produção recusado.
-- [ ] CA05 — `/metrics` com `provedor` e `tipo`; stack com 16 alertas.
-- [ ] CA06 — CI verde; gitleaks detecta a chave `re_`.
+- [x] CA01 — Requisição: método, caminho, `Authorization`, `Idempotency-Key`, `Content-Type`, remetente, destinatário, assunto, HTML, texto e 2 anexos com `content_id`, `image/png` e PNG válido em base64.
+- [x] CA02 — Classificação: cota diária e mensal → cota; taxa, 503 e concorrente → transitório; 422, 403 e idempotência com outro corpo → permanente; timeout → transitório; nenhum erro contém o e-mail ecoado pelo provedor; sem chave → recusado.
+- [x] CA03 — Consumidor: cada classe → resultado da métrica e ack/DLQ/redelivery corretos.
+- [x] CA04 — Config: Resend completo aceito; sem chave recusado; provedor desconhecido recusado; fake em produção recusado.
+- [x] CA05 — `/metrics` com `provedor` e `tipo`; stack com 16 alertas.
+- [x] CA06 — CI verde; gitleaks detecta a chave `re_`.
 
 ## Plano de testes
 
@@ -85,7 +85,7 @@ Adapter por HTTP cru, classes de erro, resultado por entrega, config e boot, mé
 - `configs/grafana/provisioning/alerting/alertas.yml`, `test/observabilidade/stack_integration_test.go`, `.env.example`, `.gitleaks.toml`
 - `docs/tasks/README.md`, `plan.md`, `state.md`
 
-Total: 19.
+Total: 17.
 
 ## Dependências utilizadas
 

@@ -116,16 +116,31 @@ func classificar(resp *http.Response) error {
 		Name string `json:"name"`
 	}
 	_ = json.NewDecoder(io.LimitReader(resp.Body, limiteRespostaAPI)).Decode(&e)
-	desc := fmt.Sprintf("Resend %d %s", resp.StatusCode, e.Name)
+	nome := nomeSeguro(e.Name)
+	desc := fmt.Sprintf("Resend %d %s", resp.StatusCode, nome)
 	switch {
-	case resp.StatusCode == http.StatusTooManyRequests && (e.Name == "daily_quota_exceeded" || e.Name == "monthly_quota_exceeded"):
+	case resp.StatusCode == http.StatusTooManyRequests && (nome == "daily_quota_exceeded" || nome == "monthly_quota_exceeded"):
 		return fmt.Errorf("%w: %s", ErrCotaEsgotada, desc)
 	case resp.StatusCode == http.StatusTooManyRequests, resp.StatusCode >= http.StatusInternalServerError,
-		resp.StatusCode == http.StatusConflict && e.Name == "concurrent_idempotent_requests":
+		resp.StatusCode == http.StatusConflict && nome == "concurrent_idempotent_requests":
 		return fmt.Errorf("notificacao: falha transitória: %s", desc)
 	default:
 		return fmt.Errorf("%w: %s", ErrEnvioPermanente, desc)
 	}
+}
+
+// nomeSeguro aceita só o formato dos códigos de erro do Resend ([a-z_],
+// até 64): o texto vai para o log e nada vindo de fora entra sem filtro.
+func nomeSeguro(n string) string {
+	if n == "" || len(n) > 64 {
+		return "desconhecido"
+	}
+	for _, r := range n {
+		if (r < 'a' || r > 'z') && r != '_' {
+			return "desconhecido"
+		}
+	}
+	return n
 }
 
 // semURL tira a URL do erro de rede (evita repetir host/caminho no log).

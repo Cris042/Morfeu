@@ -123,6 +123,9 @@ func TestResend_Classificacao(t *testing.T) {
 	if err == nil || errors.Is(err, ErrEnvioPermanente) || errors.Is(err, ErrCotaEsgotada) {
 		t.Fatalf("timeout deveria ser transitório: %v", err)
 	}
+	if err := resendTeste(t, &resendFalso{status: 400, nome: "x\nforjado"}).Enviar(context.Background(), mensagemTeste(t)); err == nil || strings.Contains(err.Error(), "forjado") {
+		t.Fatalf("nome fora do formato deveria ser filtrado: %v", err)
+	}
 	if _, err := NovoResend(ConfigResend{Remetente: "x"}); err == nil {
 		t.Fatal("sem chave deveria falhar")
 	}

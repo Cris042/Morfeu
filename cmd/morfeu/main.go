@@ -457,6 +457,11 @@ func iniciarNotificacao(ctx context.Context, cfg *config.Config, cli *broker.Cli
 	if err := errors.Join(err1, err2); err != nil {
 		fatal("métricas de e-mail", err)
 	}
+	// As séries do alerta de recusa/cota nascem em 0 (o increase() não vê a 1ª).
+	for _, r := range []string{notificacao.ResultadoPermanente, notificacao.ResultadoCota} {
+		envios.Add(context.Background(), 0, metric.WithAttributes(attribute.String("provedor", provedor),
+			attribute.String("tipo", notificacao.TipoConfirmacao), attribute.String("resultado", r)))
+	}
 	notif := notificacao.NovoConsumidor(notificacao.Config{
 		Latencia: func(ctx context.Context, d time.Duration) { latencia.Record(ctx, d.Seconds()) },
 		Entregar: entregador.Entregar,

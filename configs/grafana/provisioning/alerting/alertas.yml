@@ -437,7 +437,7 @@ groups:
           severity: warning
         annotations:
           summary: "E-mail recusado ou cota esgotada"
-          description: "O provedor recusou um e-mail (4xx) ou a cota do plano grátis acabou (Resend: 100/dia): a mensagem foi para a DLQ notificacao.pedido_confirmado.dlq. Cota → replay-dlq no dia seguinte; recusa → ver o log pelo pedido_id. A venda segue válida (pós-pivô)."
+          description: "O provedor recusou um e-mail (4xx) ou a cota do plano grátis acabou (Resend: 100/dia): a mensagem foi para a DLQ notificacao.pedido_confirmado.dlq. Cota → replay-dlq no dia seguinte; recusa → ver o log pelo pedido_id (401/403 em série = chave revogada: trocar RESEND_API_KEY e fazer o replay). A venda segue válida (pós-pivô)."
       - uid: morfeu-email-falhando
         title: "Falhas de envio de e-mail acima de 20%"
         condition: C

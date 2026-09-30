@@ -4,7 +4,7 @@
 
 ## Estado corrente (2026-09-30)
 
-**Task 0029 — Provedor Resend, config, métricas e alertas de e-mail (E7 T2): IMPLEMENTADA; em PR** (branch `feature/0029-provedor-resend`, da main `1088c66`).
+**Task 0029 — Provedor Resend, config, métricas e alertas de e-mail (E7 T2): CONCLUÍDA — auditoria APROVADA em 2026-09-30 (`security`), CI verde (PR #59)** (branch `feature/0029-provedor-resend`, da main `1088c66`).
 
 ### Plano da task 0029
 
@@ -12,7 +12,7 @@
 2. ~~Consumidor~~ — resultado por entrega (ok/ignorado/transitorio/permanente/cota); cota e recusa → DLQ.
 3. ~~Config/wiring~~ — `EMAIL_PROVEDOR` (fake proibido em produção — auditoria 0028 N2), `RESEND_API_KEY`, `EMAIL_REMETENTE`; métricas `morfeu_email_*` com `provedor`/`tipo` na allowlist; 2 alertas (16); gitleaks `re_`; `.env.example`.
 4. ~~Testes~~ — adapter contra servidor falso (requisição + 8 classes + timeout + sem eco de PII), resultados do consumidor, config, labels.
-5. Lint + suíte completa → CI + passe de julgamento → merge.
+5. ~~Lint + suíte + CI + passe de julgamento~~ — APROVADO. Resolvidos: `name` do erro do provedor filtrado (`[a-z_]{1,64}`); séries de recusa/cota nascem em 0; runbook do alerta cita chave revogada; contagem do PRD (17).
 
 ---
 

@@ -1,7 +1,7 @@
 # Task 0029 — Provedor Resend, config, métricas e alertas de e-mail (E7, T2)
 
 - **Data:** 2026-09-30
-- **Status:** em andamento
+- **Status:** concluída (auditoria APROVADA em 2026-09-30)
 - **Branch:** `feature/0029-provedor-resend` (da main `1088c66`)
 - **PRD:** docs/prd/0029-provedor-resend.md
 - **Item do roadmap:** E7 — Notificação (2ª de 3). Refinamento: `docs/refinamentos/E7-notificacao.md` §T2.
@@ -20,7 +20,7 @@ E-mail de estorno (0030); domínio verificado (deploy — decisão do usuário: 
 
 ## Arquivos esperados
 
-19 (lista no PRD).
+17 (lista no PRD).
 
 ## Dependências esperadas
 
@@ -28,10 +28,10 @@ Nenhuma nova (HTTP cru, stdlib).
 
 ## Critérios de aceite
 
-- [ ] POST /emails com Authorization, Idempotency-Key e QRs inline.
-- [ ] Cota → DLQ + `resultado=cota`; recusa → DLQ; taxa/5xx/timeout → redelivery; erro sem o corpo da resposta.
-- [ ] Boot recusa fake em produção e Resend sem chave/remetente.
-- [ ] 16 alertas provisionados; labels `provedor`/`tipo` no /metrics.
+- [x] POST /emails com Authorization, Idempotency-Key e QRs inline.
+- [x] Cota → DLQ + `resultado=cota`; recusa → DLQ; taxa/5xx/timeout → redelivery; erro sem o corpo da resposta.
+- [x] Boot recusa fake em produção e Resend sem chave/remetente.
+- [x] 16 alertas provisionados; labels `provedor`/`tipo` no /metrics.
 
 ## Riscos
 
