@@ -4,7 +4,7 @@
 
 ## Estado corrente (2026-09-30)
 
-**Task 0026 — Observabilidade da saga + consumidor de notificação + integração ponta a ponta (E6 T5): IMPLEMENTADA; em PR** (branch `feature/0026-observabilidade-saga`, da main `b3a496f`).
+**Task 0026 — Observabilidade da saga + consumidor de notificação + integração ponta a ponta (E6 T5): CONCLUÍDA — auditoria APROVADA na revalidação (itens 1 e 7), CI verde (PR #55)** (branch `feature/0026-observabilidade-saga`, da main `b3a496f`).
 
 ### Plano da task 0026
 
@@ -13,7 +13,7 @@
 3. ~~Métricas da saga~~ — `saga_compensacoes_total{passo}` (cobranca|estorno, só quando compensa de fato), `pedidos_presos{estado}`, funil `expirado`; `gateway_duration_seconds` sem `WithUnit` (bug da 0024: viraria `_seconds_seconds`).
 4. ~~Alertas~~ — 5 regras (9 → 14) + teste da stack.
 5. ~~Ponta a ponta~~ — `test/checkout` com PG/Redis/RabbitMQ reais: jornada da API até a notificação; notificação falhando → DLQ sem desfazer a venda. Stripe "já estornado" = sucesso.
-6. ~~Lint + suíte~~ → **1º passe de julgamento REPROVADO** (`qa`): (1) a allowlist fechada de labels da telemetria descartava `passo`/`estado` (e `etapa`/`op` desde 0023/0024) — 3 alertas nunca disparariam; (2) corrida no teste ponta a ponta (lia o dedup antes do commit — o CI pegou). **Corrigido:** labels permitidas + teste do `/metrics`; espera pelo dedup commitado; DLQ conferida pelo `aggregate_id` e ≥ 3 tentativas; séries de compensação nascem em 0; buckets finos no histograma. Revalidação dos itens 1 e 7.
+6. ~~Lint + suíte~~ → **1º passe de julgamento REPROVADO** (`qa`): (1) a allowlist fechada de labels da telemetria descartava `passo`/`estado` (e `etapa`/`op` desde 0023/0024) — 3 alertas nunca disparariam; (2) corrida no teste ponta a ponta (lia o dedup antes do commit — o CI pegou). **Corrigido:** labels permitidas + teste do `/metrics`; espera pelo dedup commitado; DLQ conferida pelo `aggregate_id` e ≥ 3 tentativas; séries de compensação nascem em 0; buckets finos no histograma. Revalidação dos itens 1 e 7: **APROVADA**. Pendente para a 0027: alerta de profundidade da DLQ nova (`notificacao.pedido_confirmado.dlq`).
 
 **Desvios registrados:** limpeza de pedidos abandonados → E11 (FK + retenção de 12 meses da trilha); varredura de `expirado` com cobrança aprovada → 0027.
 

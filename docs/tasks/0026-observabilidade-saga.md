@@ -1,7 +1,7 @@
 # Task 0026 — Observabilidade da saga + consumidor de notificação + integração ponta a ponta (E6, T5)
 
 - **Data:** 2026-09-30
-- **Status:** em andamento
+- **Status:** concluída (auditoria APROVADA na revalidação, 2026-09-30)
 - **Branch:** `feature/0026-observabilidade-saga` (da main `b3a496f`)
 - **PRD:** docs/prd/0026-observabilidade-saga.md
 - **Item do roadmap:** E6 — Saga do checkout (5ª de 6). Refinamento: `docs/refinamentos/E6-saga-checkout.md` §T5; ADR 0010.
@@ -28,10 +28,10 @@ Nenhuma nova.
 
 ## Critérios de aceite
 
-- [ ] Trava → pedido → webhook → pivô → outbox → relay → RabbitMQ → consumidor, com dedup e latência medida.
-- [ ] Notificação falhando → DLQ; pedido segue pago com ingressos.
-- [ ] Métricas de compensação e presos corretas; 14 regras de alerta provisionadas.
-- [ ] "Já estornado" do Stripe tratado como sucesso.
+- [x] Trava → pedido → webhook → pivô → outbox → relay → RabbitMQ → consumidor, com dedup e latência medida.
+- [x] Notificação falhando → DLQ; pedido segue pago com ingressos.
+- [x] Métricas de compensação e presos corretas; 14 regras de alerta provisionadas.
+- [x] "Já estornado" do Stripe tratado como sucesso.
 
 ## Riscos
 

@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0026-observabilidade-saga.md
 - **Branch:** feature/0026-observabilidade-saga
 - **Data:** 2026-09-30
-- **Status:** em andamento
+- **Status:** concluído
 
 ## Objetivo
 
@@ -70,17 +70,17 @@ Métricas, 5 alertas, topologia da fila nova, módulo `notificacao` (stub), test
 
 ## Critérios de aceite
 
-- [ ] CA01 — Gateway fora → `saga_compensacoes_total{passo=cobranca}` = 1. Estorno concluído → `{passo=estorno}` = 1.
-- [ ] CA02 — `pedidos_presos`: vencido só conta depois da margem; estorno pendente conta até concluir; depois das tarefas, 0/0.
-- [ ] CA03 — Stack de observabilidade com 14 regras provisionadas.
-- [ ] CA04 — Consumidor: entrega + latência; falha de entrega transitória; payload inválido permanente; stub sem `Entregar`.
-- [ ] CA05 — Ponta a ponta:
+- [x] CA01 — Gateway fora → `saga_compensacoes_total{passo=cobranca}` = 1. Estorno concluído → `{passo=estorno}` = 1.
+- [x] CA02 — `pedidos_presos`: vencido só conta depois da margem; estorno pendente conta até concluir; depois das tarefas, 0/0.
+- [x] CA03 — Stack de observabilidade com 14 regras provisionadas.
+- [x] CA04 — Consumidor: entrega + latência; falha de entrega transitória; payload inválido permanente; stub sem `Entregar`.
+- [x] CA05 — Ponta a ponta:
   - trava (HTTP) → pedido (HTTP) → webhook assinado → `pago` com 2 ingressos;
   - relay → RabbitMQ → consumidor entrega;
   - 1 registro de dedup para o evento do pedido e a latência medida.
-- [ ] CA06 — Entrega sempre falhando → mensagem na DLQ própria; pedido segue `pago` com o ingresso.
-- [ ] CA07 — "Já estornado" do Stripe → sucesso.
-- [ ] CA08 — CI verde.
+- [x] CA06 — Entrega sempre falhando → mensagem na DLQ própria; pedido segue `pago` com o ingresso.
+- [x] CA07 — "Já estornado" do Stripe → sucesso.
+- [x] CA08 — CI verde.
 
 ## Plano de testes
 
