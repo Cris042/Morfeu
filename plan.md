@@ -4,7 +4,22 @@
 
 ## Estado corrente (2026-09-30)
 
-**Task 0022 — Reserva: holds vendidos ocupam o assento + portas transacionais do pedido (E6 T1): CONCLUÍDA — auditoria APROVADA em 2026-09-30 (`qa`), CI verde (PR #51)** (branch `feature/0022-reserva-portas-pedido`, da main `4fbe8ec`). Refinamento E6 e ADR 0010 mergeados (PR #50).
+**Task 0023 — Pedido: aggregate, máquina de estados e criação com gateway fake (E6 T2): IMPLEMENTADA; em PR** (branch `feature/0023-pedido-criacao`, da main `ad2e1b0`).
+
+### Plano da task 0023
+
+1. ~~Dados~~ — migration 011 (`pedidos` com índice "1 pendente por carrinho", `pedido_eventos` append-only, `ingressos` com índice da 2ª linha de defesa); queries com CAS e `ON CONFLICT DO NOTHING` na inserção; preço no mapa da `sessao` + porta `PrecoDaSessaoAberta`.
+2. ~~Pagamento~~ — porta `pagamento.Gateway` + fake programável (falha na N-ésima, latência, registro).
+3. ~~Domínio~~ — aggregate `Pedido` (total no servidor, código base32 80 bits), máquina por tabela, repositório com CAS + trilha, serviço (expiração lazy em TX própria → abertura em TX → cobrança fora da TX → desfazer em falha), handler.
+4. ~~Wiring~~ — adapter `reservaDoPedido` no `main`, limitadores 10/5 por min, `checkout_funil_total{etapa}`, depguard `pedido-domain`/`pedido-pagamento`.
+5. ~~Testes~~ — unit (matriz completa, validação) + integração (CA01–CA12), 3/3 com `-race`.
+6. Lint + CI + passe de julgamento → merge.
+
+**Decisão registrada (RN03):** o pedido fixa o prazo do hold (`expira_em + 2 min`) mesmo que encurte uma extensão do cliente — pendência da auditoria 0022.
+
+---
+
+### Task 0022 — Reserva: holds vendidos ocupam o assento + portas transacionais: CONCLUÍDA e MERGEADA (PR #51, `ad2e1b0`)
 
 ### Plano da task 0022
 
