@@ -325,9 +325,10 @@ func (s *Servico) Presos(ctx context.Context) (aguardandoVencido, estornoPendent
 	return r.AguardandoVencido, r.EstornoPendente, nil
 }
 
-// Obter devolve o pedido só para o carrinho que o criou (RF06).
-func (s *Servico) Obter(ctx context.Context, id uuid.UUID, donoHash []byte) (Visao, error) {
-	v, ok, err := repositorio{q: db.New(s.pool)}.doDono(ctx, id, donoHash)
+// Obter devolve o pedido ao carrinho que o criou ou à conta vinculada a ele
+// (RF06 da 0023; PRD 0031). Pedido alheio → não encontrado (404, nunca 403).
+func (s *Servico) Obter(ctx context.Context, id uuid.UUID, donoHash []byte, usuarioID *uuid.UUID) (Visao, error) {
+	v, ok, err := repositorio{q: db.New(s.pool)}.doDono(ctx, id, donoHash, usuarioID)
 	if err != nil {
 		return Visao{}, err
 	}
@@ -335,4 +336,47 @@ func (s *Servico) Obter(ctx context.Context, id uuid.UUID, donoHash []byte) (Vis
 		return Visao{}, ErrPedidoNaoEncontrado
 	}
 	return v, nil
+}
+
+// TamanhoPaginaPedidos: "Meus pedidos" em páginas de 20.
+const TamanhoPaginaPedidos = 20
+
+// MeusPedidos lista os pedidos da conta, mais recentes primeiro (PRD 0031).
+func (s *Servico) MeusPedidos(ctx context.Context, usuarioID uuid.UUID, pagina int) ([]Visao, error) {
+	if pagina < 1 || pagina > 1000 {
+		pagina = 1
+	}
+	return repositorio{q: db.New(s.pool)}.doUsuario(ctx, usuarioID, TamanhoPaginaPedidos, int32((pagina-1)*TamanhoPaginaPedidos)) //nolint:gosec // página limitada acima
+}
+
+// Retomar devolve o segredo do cliente de um pedido ainda aguardando
+// pagamento, direto do gateway (PRD 0031 — o segredo nunca é persistido). Só
+// o carrinho dono; fora do prazo, sem cobrança ou em outro estado → não
+// encontrado (o SPA volta ao mapa).
+func (s *Servico) Retomar(ctx context.Context, id uuid.UUID, donoHash []byte) (Retomada, error) {
+	linhas, err := db.New(s.pool).PendenteParaRetomar(ctx, db.PendenteParaRetomarParams{ID: id, DonoHash: donoHash})
+	if err != nil {
+		return Retomada{}, fmt.Errorf("pedido: retomar: %w", err)
+	}
+	if len(linhas) == 0 {
+		return Retomada{}, ErrPedidoNaoEncontrado
+	}
+	p := linhas[0]
+	if Status(p.Status) != AguardandoPagamento || !p.ExpiraEm.After(s.cfg.Agora()) || p.PaymentIntentID == nil {
+		return Retomada{}, ErrPedidoNaoEncontrado
+	}
+	segredo, err := s.cfg.Gateway.RecuperarSegredo(ctx, *p.PaymentIntentID)
+	if err != nil {
+		s.logger.Warn("pedido: recuperar cobrança para retomada", zap.String("pedido_id", id.String()), zap.Error(err))
+		return Retomada{}, ErrGatewayIndisponivel
+	}
+	return Retomada{Codigo: p.Codigo, TotalCentavos: p.TotalCentavos, ExpiraEm: p.ExpiraEm, SegredoCliente: segredo}, nil
+}
+
+// Retomada é o pagamento retomado: dados para o checkout + segredo do cliente.
+type Retomada struct {
+	Codigo         string
+	TotalCentavos  int64
+	ExpiraEm       time.Time
+	SegredoCliente string
 }

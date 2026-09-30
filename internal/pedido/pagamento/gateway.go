@@ -59,4 +59,7 @@ type Gateway interface {
 	CancelarCobranca(ctx context.Context, intencaoID string) error
 	// Estornar devolve o valor integral da cobrança aprovada.
 	Estornar(ctx context.Context, intencaoID, chaveIdempotencia string) error
+	// RecuperarSegredo devolve o segredo do cliente de uma cobrança existente
+	// — retomada do pagamento sem persistir o segredo (PRD 0031).
+	RecuperarSegredo(ctx context.Context, intencaoID string) (string, error)
 }

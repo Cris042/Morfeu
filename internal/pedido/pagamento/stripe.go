@@ -26,6 +26,7 @@ const (
 	opConsultarCobranca = "consultar_cobranca"
 	opCancelarCobranca  = "cancelar_cobranca"
 	opEstornar          = "estornar"
+	opRecuperarSegredo  = "recuperar_segredo"
 	resultadoOK         = "ok"
 	resultadoFalha      = "falha"
 	resultadoRecusado   = "recusado"
@@ -162,6 +163,21 @@ func (s *Stripe) Estornar(ctx context.Context, intencaoID, chave string) error {
 func jaEstornado(err error) bool {
 	var se *stripe.Error
 	return errors.As(err, &se) && se.Code == stripe.ErrorCodeChargeAlreadyRefunded
+}
+
+// RecuperarSegredo lê o client_secret do PaymentIntent (retomada — nunca
+// persistido do nosso lado).
+func (s *Stripe) RecuperarSegredo(ctx context.Context, intencaoID string) (string, error) {
+	var pi *stripe.PaymentIntent
+	err := s.chamar(ctx, opRecuperarSegredo, func(ctx context.Context) error {
+		var err error
+		pi, err = s.sc.V1PaymentIntents.Retrieve(ctx, intencaoID, &stripe.PaymentIntentRetrieveParams{})
+		return err
+	})
+	if err != nil {
+		return "", err
+	}
+	return pi.ClientSecret, nil
 }
 
 // chamar aplica o breaker, o prazo total e as métricas a uma chamada.

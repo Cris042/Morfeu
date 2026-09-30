@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -29,7 +30,40 @@ const (
 type Handler struct {
 	servico *Servico
 	logger  *zap.Logger
+	// Conta (PRD 0031): middlewares e leitura do usuário injetados pelo main
+	// (o pedido não importa autenticacao — ADR 0003).
+	opcional     echo.MiddlewareFunc
+	exigirConta  echo.MiddlewareFunc
+	usuarioDe    func(echo.Context) (uuid.UUID, bool)
+	rotasDeTeste bool
 }
+
+// ComConta liga a conta: Bearer opcional no checkout e na leitura do pedido,
+// obrigatório em "Meus pedidos".
+func (h *Handler) ComConta(opcional, exigir echo.MiddlewareFunc, usuarioDe func(echo.Context) (uuid.UUID, bool)) *Handler {
+	h.opcional, h.exigirConta, h.usuarioDe = opcional, exigir, usuarioDe
+	return h
+}
+
+// ComRotasDeTeste registra POST /__teste/pagar/:id — SÓ com o gateway fake
+// (o main decide; o boot recusa fake em produção).
+func (h *Handler) ComRotasDeTeste() *Handler {
+	h.rotasDeTeste = true
+	return h
+}
+
+// usuario devolve a conta autenticada da requisição (nil = convidado).
+func (h *Handler) usuario(c echo.Context) *uuid.UUID {
+	if h.usuarioDe == nil {
+		return nil
+	}
+	if id, ok := h.usuarioDe(c); ok {
+		return &id
+	}
+	return nil
+}
+
+func semMiddleware(next echo.HandlerFunc) echo.HandlerFunc { return next }
 
 // NovoHandler cria o handler HTTP do módulo.
 func NovoHandler(s *Servico, logger *zap.Logger) *Handler {
@@ -38,8 +72,19 @@ func NovoHandler(s *Servico, logger *zap.Logger) *Handler {
 
 // RegistrarRotas monta as rotas do checkout.
 func (h *Handler) RegistrarRotas(e *echo.Echo) {
-	e.POST("/pedidos", h.criar, middleware.BodyLimit(limiteCorpo), exigirAntiCSRF)
-	e.GET("/pedidos/:id", h.obter)
+	opcional := h.opcional
+	if opcional == nil {
+		opcional = semMiddleware
+	}
+	e.POST("/pedidos", h.criar, middleware.BodyLimit(limiteCorpo), exigirAntiCSRF, opcional)
+	e.GET("/pedidos/:id", h.obter, opcional)
+	e.POST("/pedidos/:id/retomar", h.retomar, exigirAntiCSRF)
+	if h.exigirConta != nil {
+		e.GET("/pedidos", h.meusPedidos, h.exigirConta)
+	}
+	if h.rotasDeTeste {
+		e.POST("/__teste/pagar/:id", h.pagarParaTeste)
+	}
 	if h.servico.cfg.Webhook != nil {
 		// Rota pública, fora do anti-CSRF: a autenticidade é a assinatura.
 		e.POST("/webhooks/stripe", h.webhook, middleware.BodyLimit(limiteWebhook))
@@ -118,7 +163,7 @@ func (h *Handler) criar(c echo.Context) error {
 	if err := dec.Decode(&in); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"erro": "requisicao_invalida"})
 	}
-	criado, err := h.servico.Criar(ctx, dono, Entrada{Email: in.Email, SessaoID: in.SessaoID, Assentos: in.Assentos})
+	criado, err := h.servico.Criar(ctx, dono, Entrada{Email: in.Email, SessaoID: in.SessaoID, Assentos: in.Assentos, UsuarioID: h.usuario(c)})
 	if err != nil {
 		return h.responderErro(c, err)
 	}
@@ -134,17 +179,72 @@ func (h *Handler) criar(c echo.Context) error {
 
 func (h *Handler) obter(c echo.Context) error {
 	id, err := uuid.Parse(c.Param("id"))
-	dono, ok := h.donoDaRequisicao(c)
-	if err != nil || !ok {
+	dono, temCarrinho := h.donoDaRequisicao(c)
+	usuario := h.usuario(c)
+	if err != nil || (!temCarrinho && usuario == nil) {
 		return naoEncontrado(c)
 	}
-	v, err := h.servico.Obter(c.Request().Context(), id, dono)
+	v, err := h.servico.Obter(c.Request().Context(), id, dono, usuario)
 	if err != nil {
 		return h.responderErro(c, err)
 	}
 	c.Response().Header().Set(echo.HeaderCacheControl, "no-store")
-	return c.JSON(http.StatusOK, pedidoDTO{ID: v.ID, Codigo: v.Codigo, SessaoID: v.SessaoID, Assentos: v.Assentos,
-		TotalCentavos: v.TotalCentavos, Status: v.Status, ExpiraEm: v.ExpiraEm.UTC()})
+	return c.JSON(http.StatusOK, paraPedidoDTO(v))
+}
+
+func paraPedidoDTO(v Visao) pedidoDTO {
+	return pedidoDTO{ID: v.ID, Codigo: v.Codigo, SessaoID: v.SessaoID, Assentos: v.Assentos,
+		TotalCentavos: v.TotalCentavos, Status: v.Status, ExpiraEm: v.ExpiraEm.UTC()}
+}
+
+// meusPedidos: "Meus pedidos" da conta logada (PRD 0031), ?pagina=N.
+func (h *Handler) meusPedidos(c echo.Context) error {
+	usuario := h.usuario(c)
+	if usuario == nil {
+		return naoEncontrado(c)
+	}
+	pagina, _ := strconv.Atoi(c.QueryParam("pagina"))
+	lista, err := h.servico.MeusPedidos(c.Request().Context(), *usuario, pagina)
+	if err != nil {
+		return h.responderErro(c, err)
+	}
+	out := make([]pedidoDTO, 0, len(lista))
+	for _, v := range lista {
+		out = append(out, paraPedidoDTO(v))
+	}
+	c.Response().Header().Set(echo.HeaderCacheControl, "no-store")
+	return c.JSON(http.StatusOK, map[string]any{"pedidos": out})
+}
+
+// retomar devolve o client_secret de um pedido pendente ao carrinho dono
+// (PRD 0031) — lido do gateway, nunca guardado; resposta sem cache.
+func (h *Handler) retomar(c echo.Context) error {
+	id, err := uuid.Parse(c.Param("id"))
+	dono, ok := h.donoDaRequisicao(c)
+	if err != nil || !ok {
+		return naoEncontrado(c)
+	}
+	r, err := h.servico.Retomar(c.Request().Context(), id, dono)
+	if err != nil {
+		return h.responderErro(c, err)
+	}
+	c.Response().Header().Set(echo.HeaderCacheControl, "no-store")
+	return c.JSON(http.StatusOK, map[string]any{
+		"pedido_id": id, "codigo": r.Codigo, "total_centavos": r.TotalCentavos,
+		"expira_em": r.ExpiraEm.UTC(), "client_secret": r.SegredoCliente,
+	})
+}
+
+// pagarParaTeste: só registrada com gateway fake (ver ComRotasDeTeste).
+func (h *Handler) pagarParaTeste(c echo.Context) error {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return naoEncontrado(c)
+	}
+	if err := h.servico.PagarParaTeste(c.Request().Context(), id); err != nil {
+		return h.responderErro(c, err)
+	}
+	return c.NoContent(http.StatusNoContent)
 }
 
 func (h *Handler) responderErro(c echo.Context, err error) error {

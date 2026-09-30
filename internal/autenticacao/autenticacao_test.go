@@ -379,3 +379,43 @@ func nomesELabelsFora(familias []*dto.MetricFamily, permitidos ...string) (map[s
 	}
 	return vistos, fora
 }
+
+// TestOpcional cobre o PRD 0031: sem header segue anônimo; header presente e
+// inválido → 401 (nunca cai para anônimo); válido → usuário no contexto.
+func TestOpcional(t *testing.T) {
+	r := novoRelogio()
+	e := emissorTeste(t, r)
+	id := uuid.New()
+	cliente, _, _ := e.Emitir(id, PapelCliente)
+	expirado, _, _ := emissorTeste(t, &relogio{t: r.t.Add(-time.Hour)}).Emitir(uuid.New(), PapelCliente)
+	casos := map[string]struct {
+		header  string
+		status  int
+		usuario *uuid.UUID
+	}{
+		"sem header": {"", http.StatusOK, nil},
+		"válido":     {"Bearer " + cliente, http.StatusOK, &id},
+		"expirado":   {"Bearer " + expirado, http.StatusUnauthorized, nil},
+		"adulterado": {"Bearer " + cliente[:len(cliente)-2] + "xx", http.StatusUnauthorized, nil},
+		"basic":      {"Basic dXNlcjpzZW5oYQ==", http.StatusUnauthorized, nil},
+	}
+	for nome, c := range casos {
+		srv := echo.New()
+		var visto *uuid.UUID
+		srv.GET("/x", func(ctx echo.Context) error {
+			if u, ok := UsuarioID(ctx); ok {
+				visto = &u
+			}
+			return ctx.NoContent(http.StatusOK)
+		}, Opcional(e))
+		req := httptest.NewRequest(http.MethodGet, "/x", nil)
+		if c.header != "" {
+			req.Header.Set(echo.HeaderAuthorization, c.header)
+		}
+		rec := httptest.NewRecorder()
+		srv.ServeHTTP(rec, req)
+		if rec.Code != c.status || (c.usuario == nil) != (visto == nil) || (c.usuario != nil && *visto != *c.usuario) {
+			t.Errorf("%s: %d usuário=%v", nome, rec.Code, visto)
+		}
+	}
+}

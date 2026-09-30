@@ -162,3 +162,13 @@ func (f *Fake) Estornar(_ context.Context, intencaoID, chave string) error {
 	}
 	return nil
 }
+
+// RecuperarSegredo devolve o mesmo segredo determinístico da criação.
+func (f *Fake) RecuperarSegredo(_ context.Context, intencaoID string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, ok := f.cobrancas[intencaoID]; !ok {
+		return "", ErrCobrancaDesconhecida
+	}
+	return intencaoID + "_secret_fake", nil
+}

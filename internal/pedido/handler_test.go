@@ -95,7 +95,7 @@ func TestMain(m *testing.M) {
 		defer pool.Close()
 		for _, arq := range []string{"001_initial_schema.up.sql", "002_outbox_events.up.sql", "007_filmes.up.sql",
 			"008_salas_sessoes.up.sql", "009_holds.up.sql", "010_holds_pedido.up.sql", "011_pedidos.up.sql",
-			"012_stripe_eventos.up.sql", "013_pedidos_tarefas.up.sql", "014_pedidos_cobranca_encerrada.up.sql"} {
+			"012_stripe_eventos.up.sql", "013_pedidos_tarefas.up.sql", "014_pedidos_cobranca_encerrada.up.sql", "015_pedidos_usuario.up.sql"} {
 			ddl, err := os.ReadFile("../../migrations/" + arq)
 			if err == nil {
 				_, err = pool.Exec(ctx, string(ddl))
@@ -169,6 +169,7 @@ type ambiente struct {
 	gateway *pagamento.Fake
 	funil   *sync.Map
 	compens *sync.Map
+	emissor *autenticacao.Emissor
 }
 
 type limites struct{ ip, dono int }
@@ -228,8 +229,14 @@ func montarAmbiente(t *testing.T, lim limites) *ambiente {
 		t.Fatalf("serviço: %v", err)
 	}
 	e := echo.New()
-	NovoHandler(s, logTeste).RegistrarRotas(e)
-	return &ambiente{e: e, rel: rel, reserva: res, servico: s, gateway: gw, funil: funil, compens: compens}
+	emissor, err := autenticacao.NovoEmissor(autenticacao.ConfigJWT{Segredo: []byte("segredo-jwt-de-teste-com-32-bytes!!"), Kid: "k1", TTL: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	NovoHandler(s, logTeste).
+		ComConta(autenticacao.Opcional(emissor), autenticacao.Exigir(emissor, autenticacao.PapelCliente, autenticacao.PapelOperador), autenticacao.UsuarioID).
+		ComRotasDeTeste().RegistrarRotas(e)
+	return &ambiente{e: e, rel: rel, reserva: res, servico: s, gateway: gw, funil: funil, compens: compens, emissor: emissor}
 }
 
 // segredoTokenTeste é o segredo do HMAC do ingresso na suíte (32 bytes).

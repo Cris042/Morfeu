@@ -4,7 +4,20 @@
 
 ## Estado corrente (2026-09-30)
 
-**Épico E8 — SPA checkout + convidado/conta: REFINADO** (`docs/refinamentos/E8-spa-checkout.md`; 5 tasks 0031–0035; sem ADR). **E7 concluído** (PRs #57–#60). Próxima: **task 0031** (backend do checkout e da conta).
+**Task 0031 — Backend do checkout e da conta (E8 T1): CONCLUÍDA — auditoria APROVADA em 2026-09-30 (`security`), CI verde (PR #62)** (branch `feature/0031-backend-checkout-conta`, da main `6e9f880`). Refinamento E8 mergeado (PR #61).
+
+### Plano da task 0031
+
+1. ~~Auth opcional~~ — `autenticacao.Opcional` (sem header → anônimo; inválido → 401; válido → contexto).
+2. ~~Conta no pedido~~ — `usuario_id` só do JWT no `POST /pedidos`; `GET /pedidos/{id}` pelo carrinho ou pela conta; `GET /pedidos` ("Meus pedidos", paginado, migration 015).
+3. ~~Retomada~~ — `Gateway.RecuperarSegredo` (Stripe Retrieve / fake) + `POST /pedidos/{id}/retomar` (dono, aguardando no prazo, `no-store`).
+4. ~~Pagamento de teste~~ — `POST /__teste/pagar/{id}` só com gateway fake: evento assinado com o segredo do webhook → `Verificar` + pivô reais.
+5. ~~Testes~~ — Opcional (5 casos), vínculo, meus pedidos, retomada, rota de teste presente/ausente, Stripe RecuperarSegredo.
+6. ~~Lint + suíte + CI + passe de julgamento~~ — APROVADO, sem correções. Registrados: retomada só pelo carrinho (intencional); `PagarParaTeste` lê com `FOR UPDATE` fora de TX (inofensivo, rota só com fake).
+
+---
+
+### Refinamento E8 — CONCLUÍDO (PR #61, `6e9f880`)
 
 ---
 

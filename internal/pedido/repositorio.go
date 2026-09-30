@@ -20,7 +20,7 @@ type repositorio struct {
 // (índice único parcial decide, sem pré-check).
 func (r repositorio) inserir(ctx context.Context, p Pedido, agora time.Time) (bool, error) {
 	ids, err := r.q.InserirPedido(ctx, db.InserirPedidoParams{
-		ID: p.id, Codigo: p.codigo, Email: p.email, DonoHash: p.donoHash, SessaoID: p.sessaoID,
+		ID: p.id, Codigo: p.codigo, Email: p.email, UsuarioID: p.usuarioID, DonoHash: p.donoHash, SessaoID: p.sessaoID,
 		Assentos: p.assentos, TotalCentavos: p.totalCentavos, ExpiraEm: p.expiraEm, Agora: agora,
 	})
 	if err != nil {
@@ -115,8 +115,8 @@ type Visao struct {
 	ExpiraEm      time.Time
 }
 
-func (r repositorio) doDono(ctx context.Context, id uuid.UUID, donoHash []byte) (Visao, bool, error) {
-	linhas, err := r.q.BuscarPedidoDoDono(ctx, db.BuscarPedidoDoDonoParams{ID: id, DonoHash: donoHash})
+func (r repositorio) doDono(ctx context.Context, id uuid.UUID, donoHash []byte, usuarioID *uuid.UUID) (Visao, bool, error) {
+	linhas, err := r.q.BuscarPedidoDoDono(ctx, db.BuscarPedidoDoDonoParams{ID: id, DonoHash: donoHash, UsuarioID: usuarioID})
 	if err != nil {
 		return Visao{}, false, fmt.Errorf("pedido: buscar: %w", err)
 	}
@@ -126,4 +126,17 @@ func (r repositorio) doDono(ctx context.Context, id uuid.UUID, donoHash []byte) 
 	l := linhas[0]
 	return Visao{ID: l.ID, Codigo: l.Codigo, SessaoID: l.SessaoID, Assentos: l.Assentos,
 		TotalCentavos: l.TotalCentavos, Status: Status(l.Status), ExpiraEm: l.ExpiraEm}, true, nil
+}
+
+func (r repositorio) doUsuario(ctx context.Context, usuarioID uuid.UUID, limite, deslocamento int32) ([]Visao, error) {
+	linhas, err := r.q.ListarPedidosDoUsuario(ctx, db.ListarPedidosDoUsuarioParams{UsuarioID: &usuarioID, Limite: limite, Deslocamento: deslocamento})
+	if err != nil {
+		return nil, fmt.Errorf("pedido: listar da conta: %w", err)
+	}
+	out := make([]Visao, 0, len(linhas))
+	for _, l := range linhas {
+		out = append(out, Visao{ID: l.ID, Codigo: l.Codigo, SessaoID: l.SessaoID, Assentos: l.Assentos,
+			TotalCentavos: l.TotalCentavos, Status: Status(l.Status), ExpiraEm: l.ExpiraEm})
+	}
+	return out, nil
 }
