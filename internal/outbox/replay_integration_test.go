@@ -6,6 +6,7 @@ package outbox_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -95,11 +96,14 @@ func TestReplayDLQ(t *testing.T) {
 	}) {
 		t.Fatal("limite não respeitado ou mensagens não republicadas")
 	}
+	vistos := map[string]bool{}
 	for range 2 {
 		d, ok, err := ch.Get(broker.QueueFilmeCriado, true)
-		if err != nil || !ok || (d.MessageId != ids[0] && d.MessageId != ids[1]) || d.Headers["aggregate_id"] != "42" {
+		// A ordem do requeue do dry-run não é garantida: basta serem 2 dos 3 ids.
+		if err != nil || !ok || !slices.Contains(ids, d.MessageId) || vistos[d.MessageId] || d.Headers["aggregate_id"] != "42" {
 			t.Fatalf("mensagem republicada: ok=%v id=%s headers=%v err=%v", ok, d.MessageId, d.Headers, err)
 		}
+		vistos[d.MessageId] = true
 		if _, temXDeath := d.Headers["x-death"]; temXDeath {
 			t.Fatal("x-death não deveria ser copiado (a contagem recomeça)")
 		}

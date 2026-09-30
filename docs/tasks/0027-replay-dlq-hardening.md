@@ -1,7 +1,7 @@
 # Task 0027 — Replay da DLQ + hardening do worker (E6, T6)
 
 - **Data:** 2026-09-30
-- **Status:** em andamento
+- **Status:** concluída (auditoria APROVADA em 2026-09-30)
 - **Branch:** `feature/0027-replay-dlq-hardening` (da main `cd139d7`)
 - **PRD:** docs/prd/0027-replay-dlq-hardening.md
 - **Item do roadmap:** E6 — Saga do checkout (6ª e última; fecha o E6). Refinamento: `docs/refinamentos/E6-saga-checkout.md` §T6; ADR 0007 (replay adiado ao E6) e 0010.
@@ -28,10 +28,10 @@ Nenhuma nova.
 
 ## Critérios de aceite
 
-- [ ] Dry-run lista sem publicar; replay republica com o mesmo `message_id` até o limite; fila fora da lista recusada.
-- [ ] Panic no handler → DLQ, consumidor segue vivo.
-- [ ] Outbox publicada > 7 dias apagada; pendente nunca.
-- [ ] Expirado com cobrança paga (webhook perdido + cancelamento recusado) → estorno.
+- [x] Dry-run lista sem publicar; replay republica com o mesmo `message_id` até o limite; fila fora da lista recusada.
+- [x] Panic no handler → DLQ, consumidor segue vivo.
+- [x] Outbox publicada > 7 dias apagada; pendente nunca.
+- [x] Expirado com cobrança paga (webhook perdido + cancelamento recusado) → estorno.
 
 ## Riscos
 

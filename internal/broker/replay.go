@@ -9,6 +9,12 @@ import (
 	"go.uber.org/zap"
 )
 
+// filaDeOrigem de cada DLQ: conferida (declaração passiva) antes do lote.
+var filaDeOrigem = map[string]string{
+	QueueFilmeCriadoDLQ:      QueueFilmeCriado,
+	QueuePedidoConfirmadoDLQ: QueuePedidoConfirmado,
+}
+
 // FilasReplay lista as DLQs aceitas pelo replay e a routing key da
 // fila de origem de cada uma (PRD 0027) — lista fechada: nada de publicar em
 // routing key vinda do operador.
@@ -54,6 +60,11 @@ func (c *Client) Reprocessar(ctx context.Context, dlq string, limite int, dryRun
 	}
 	// Fechar o canal devolve à DLQ tudo que não foi ack'ado (dry-run e erro).
 	defer func() { _ = ch.Close() }()
+	// Sem a fila de origem, o publish seria confirmado e descartado (sem
+	// rota) e a mensagem sairia da DLQ para lugar nenhum (auditoria 0027).
+	if _, err := ch.QueueDeclarePassive(filaDeOrigem[dlq], true, false, false, false, nil); err != nil {
+		return out, fmt.Errorf("broker: fila de origem de %s indisponível: %w", dlq, err)
+	}
 	if err := ch.Confirm(false); err != nil {
 		return out, fmt.Errorf("broker: confirm no canal de replay: %w", err)
 	}

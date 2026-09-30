@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -180,7 +181,9 @@ func (c *Client) processar(ctx context.Context, fila string, d amqp.Delivery, h 
 func executarProtegido(ctx context.Context, h Handler, e Entrega) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("panic no handler: %v: %w", r, ErrPermanente)
+			// Tipo + stack para achar o bug; nunca o valor do panic (pode
+			// carregar dado de negócio — auditoria 0027).
+			err = fmt.Errorf("panic no handler (%T): %w\n%s", r, ErrPermanente, debug.Stack())
 		}
 	}()
 	return h(ctx, e)

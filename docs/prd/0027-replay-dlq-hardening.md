@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0027-replay-dlq-hardening.md
 - **Branch:** feature/0027-replay-dlq-hardening
 - **Data:** 2026-09-30
-- **Status:** em andamento
+- **Status:** concluído
 
 ## Objetivo
 
@@ -37,6 +37,7 @@ Replay, recuperação de panic, gauge de DLQ multi-fila, limpeza da outbox, `sto
   - Preserva `message_id` (chave do dedup), `type`, `timestamp`, `content_type` e os headers de negócio (`aggregate_id`, `occurred_at`, `traceparent`).
   - Não copia `x-death`: a contagem de entregas recomeça.
   - Queda entre o publish e o ack duplica, e o dedup do consumidor absorve. Nunca perde.
+- RF03b — Antes do lote, a fila de origem é conferida (declaração passiva): sem ela o publish seria confirmado e descartado (auditoria 0027).
 - RF04 — `-dry-run` lê e lista sem publicar. Ao fechar o canal, as mensagens voltam à DLQ.
 - RF05 — Saída e log: fila, dry-run, lidas, republicadas e `message_id`s. Nunca payload.
 - RF06 — **Recuperação de panic** no processamento de cada entrega: vira erro permanente → DLQ, e o consumidor segue vivo.
@@ -63,14 +64,14 @@ Replay, recuperação de panic, gauge de DLQ multi-fila, limpeza da outbox, `sto
 
 ## Critérios de aceite
 
-- [ ] CA01 — Dry-run: 3 lidas, 0 republicadas; DLQ continua com 3; fila de origem vazia.
-- [ ] CA02 — Replay com limite 2: 2 republicadas na fila de origem com o **mesmo** `message_id` e `aggregate_id`, sem `x-death`; 1 fica na DLQ.
-- [ ] CA03 — Fila fora da lista → `ErrFilaNaoPermitida`.
-- [ ] CA04 — Handler em panic → entrega na DLQ; a mensagem seguinte é processada.
-- [ ] CA05 — Limpeza: publicados há 10 dias saem; publicado há 1 dia e pendente ficam.
-- [ ] CA06 — Pago com o pedido expirado e o cancelamento recusado → varredura → `estorno_pendente`/`tardio` → estornado. O abandonado com cobrança cancelada não é varrido; 2ª rodada sem trabalho.
-- [ ] CA07 — Gauge de DLQ com uma série por fila.
-- [ ] CA08 — CI verde.
+- [x] CA01 — Dry-run: 3 lidas, 0 republicadas; DLQ continua com 3; fila de origem vazia.
+- [x] CA02 — Replay com limite 2: 2 republicadas na fila de origem com o **mesmo** `message_id` e `aggregate_id`, sem `x-death`; 1 fica na DLQ.
+- [x] CA03 — Fila fora da lista → `ErrFilaNaoPermitida`.
+- [x] CA04 — Handler em panic → entrega na DLQ; a mensagem seguinte é processada.
+- [x] CA05 — Limpeza: publicados há 10 dias saem; publicado há 1 dia e pendente ficam.
+- [x] CA06 — Pago com o pedido expirado e o cancelamento recusado → varredura → `estorno_pendente`/`tardio` → estornado. O abandonado com cobrança cancelada não é varrido; 2ª rodada sem trabalho.
+- [x] CA07 — Gauge de DLQ com uma série por fila.
+- [x] CA08 — CI verde.
 
 ## Plano de testes
 
