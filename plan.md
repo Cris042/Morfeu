@@ -12,7 +12,7 @@
 2. ~~Sessão~~ — `sessao.ts` (token só em memória, `criarRefreshUnico` com Web Locks + releitura no lock, BroadcastChannel para resultado/saída) + `client.ts` (Autenticador injetado, Bearer, 1 retry após 401).
 3. ~~Telas~~ — `/entrar`, `/cadastro`, `/conta/pedidos`, `/conta/pedidos/:id`, menu da conta, boot no `main.tsx`.
 4. ~~Testes~~ — unit do refresh único e do módulo; componentes das telas; E2E de duas abas.
-5. Lint + typecheck + build + E2E + CI + passe de julgamento.
+5. Lint + typecheck + build + E2E local (3/3, imagem oficial do Playwright) + CI + passe de julgamento — **auditoria APROVADA em 2026-09-30** (`security`, sem bloqueantes). Resolvidos: `/auth/*` sem Bearer imposto pelo caminho no cliente; contagem do PRD (22). Registrados: `BroadcastChannel` não fechado entre instâncias de teste (inofensivo); `sair()` com refresh em voo pode causar 1 refresh redundante (benigno); 2º refresh quando a mensagem do canal chega após o lock é seguro (cookie já rotacionado no jar).
 
 ---
 

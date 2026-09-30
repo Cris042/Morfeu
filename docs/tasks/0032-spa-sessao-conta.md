@@ -1,7 +1,7 @@
 # Task 0032 — SPA: sessão, login/cadastro e "Meus pedidos" (E8, T2)
 
 - **Data:** 2026-09-30
-- **Status:** em andamento
+- **Status:** concluída (auditoria APROVADA em 2026-09-30)
 - **Branch:** `feature/0032-spa-sessao-conta` (da main `802e374`)
 - **PRD:** docs/prd/0032-spa-sessao-conta.md
 - **Item do roadmap:** E8 — SPA checkout + convidado/conta (2ª de 5). Refinamento: `docs/refinamentos/E8-spa-checkout.md` §T2.
@@ -28,12 +28,12 @@ Nenhuma nova.
 
 ## Critérios de aceite
 
-- [ ] Token só em memória (assert de storage vazio no teste unitário e no E2E).
-- [ ] N chamadas simultâneas → 1 refresh; falha propagada e nova tentativa depois; lock entre abas sem reuso do cookie.
-- [ ] 401 com token → 1 refresh + 1 retry; refresh 401 → deslogado sem laço.
-- [ ] Sessão restaurada no boot; logout propagado entre abas.
-- [ ] Login, cadastro, "Meus pedidos" (lista, paginação, detalhe, 404) e redirecionamento só para caminho local.
-- [ ] E2E: duas abas restauram juntas sem nenhum refresh recusado.
+- [x] Token só em memória (assert de storage vazio no teste unitário e no E2E).
+- [x] N chamadas simultâneas → 1 refresh; falha propagada e nova tentativa depois; lock entre abas sem reuso do cookie.
+- [x] 401 com token → 1 refresh + 1 retry; refresh 401 → deslogado sem laço.
+- [x] Sessão restaurada no boot; logout propagado entre abas.
+- [x] Login, cadastro, "Meus pedidos" (lista, paginação, detalhe, 404) e redirecionamento só para caminho local.
+- [x] E2E: duas abas restauram juntas sem nenhum refresh recusado.
 
 ## Riscos
 

@@ -88,7 +88,8 @@ async function enviar(metodo: Metodo, caminho: string, corpo: unknown, token: st
 }
 
 export async function requisitar<T>(metodo: Metodo, caminho: string, corpo?: unknown, opcoes: Opcoes = {}): Promise<T> {
-  const aut = opcoes.autenticar === false ? undefined : autenticador
+  // /auth/* nunca leva o Bearer automático (nem renova): imposto pelo caminho.
+  const aut = opcoes.autenticar === false || caminho.startsWith('/auth/') ? undefined : autenticador
   const token = opcoes.token ?? (await aut?.token())
   let resposta = await enviar(metodo, caminho, corpo, token)
   // Só um 401 de requisição que levou o token automático renova — e uma vez.

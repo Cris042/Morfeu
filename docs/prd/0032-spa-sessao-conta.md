@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0032-spa-sessao-conta.md
 - **Branch:** feature/0032-spa-sessao-conta
 - **Data:** 2026-09-30
-- **Status:** em andamento
+- **Status:** concluído
 
 ## Objetivo
 
@@ -52,11 +52,11 @@ Conta opcional no SPA sobre a API do E1 e da 0031. O access token (JWT de 10 min
 
 ## Critérios de aceite
 
-- [ ] CA01 — Unit (puro): 5 chamadas → 1 refresh; falha propagada + retry; duas "abas" com lock e servidor que detecta reuso → 1 chamada, nenhuma revogação; sem lock → família derrubada (documenta a falha segura).
-- [ ] CA02 — Unit (módulo): login → Bearer nas chamadas, storage vazio, `/auth/*` sem Bearer; 401 → 1 refresh para 3 chamadas + retry com o token novo; refresh 401 → anônimo e nenhuma nova tentativa depois; boot restaura / vira visitante; token vencido renovado antes; logout propagado a outra instância via BroadcastChannel.
-- [ ] CA03 — Telas: login com volta; mensagem única de credenciais; campos inválidos e 429 no cadastro; cadastro entra; visitante redirecionado com volta; lista, paginação, detalhe com Bearer, 404; sair limpa e volta ao cartaz; `destinoSeguro` recusa `//`, `/\` e URL absoluta.
-- [ ] CA04 — E2E: login numa aba; duas abas recarregam juntas → todas as respostas do refresh 200, ambas logadas, recarga posterior ainda logada; logout em uma desloga a outra e a recarga vira visitante.
-- [ ] CA05 — Lint, typecheck, testes, build e CI (web-ci + E2E) verdes.
+- [x] CA01 — Unit (puro): 5 chamadas → 1 refresh; falha propagada + retry; duas "abas" com lock e servidor que detecta reuso → 1 chamada, nenhuma revogação; sem lock → família derrubada (documenta a falha segura).
+- [x] CA02 — Unit (módulo): login → Bearer nas chamadas, storage vazio, `/auth/*` sem Bearer; 401 → 1 refresh para 3 chamadas + retry com o token novo; refresh 401 → anônimo e nenhuma nova tentativa depois; boot restaura / vira visitante; token vencido renovado antes; logout propagado a outra instância via BroadcastChannel.
+- [x] CA03 — Telas: login com volta; mensagem única de credenciais; campos inválidos e 429 no cadastro; cadastro entra; visitante redirecionado com volta; lista, paginação, detalhe com Bearer, 404; sair limpa e volta ao cartaz; `destinoSeguro` recusa `//`, `/\` e URL absoluta.
+- [x] CA04 — E2E: login numa aba; duas abas recarregam juntas → todas as respostas do refresh 200, ambas logadas, recarga posterior ainda logada; logout em uma desloga a outra e a recarga vira visitante.
+- [x] CA05 — Lint, typecheck, testes, build e CI (web-ci + E2E) verdes.
 
 ## Plano de testes
 
@@ -89,7 +89,7 @@ Conta opcional no SPA sobre a API do E1 e da 0031. O access token (JWT de 10 min
 - `.github/workflows/e2e.yml` (paths de identidade/pedido)
 - `docs/tasks/README.md`, `docs/ambiente-dev.md`, `plan.md`, `state.md`
 
-Total: 24.
+Total: 22.
 
 ## Dependências utilizadas
 

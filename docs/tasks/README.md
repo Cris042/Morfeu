@@ -39,4 +39,4 @@ Convenção: `NNNN-titulo-kebab.md`, numeração sequencial a partir de `0001`. 
 | 0029 | [Provedor Resend, config, métricas e alertas de e-mail](./0029-provedor-resend.md) | E7 (T2) | concluída (auditoria APROVADA; PR #59) | `feature/0029-provedor-resend` | [0029](../prd/0029-provedor-resend.md) |
 | 0030 | [E-mail de estorno](./0030-email-estorno.md) | E7 (T3) | concluída (auditoria APROVADA; PR #60) | `feature/0030-email-estorno` | [0030](../prd/0030-email-estorno.md) |
 | 0031 | [Backend do checkout e da conta](./0031-backend-checkout-conta.md) | E8 (T1) | concluída (auditoria APROVADA; PR #62) | `feature/0031-backend-checkout-conta` | [0031](../prd/0031-backend-checkout-conta.md) |
-| 0032 | [SPA: sessão, login/cadastro e "Meus pedidos"](./0032-spa-sessao-conta.md) | E8 (T2) | em andamento | `feature/0032-spa-sessao-conta` | [0032](../prd/0032-spa-sessao-conta.md) |
+| 0032 | [SPA: sessão, login/cadastro e "Meus pedidos"](./0032-spa-sessao-conta.md) | E8 (T2) | concluída (auditoria APROVADA; PR #63) | `feature/0032-spa-sessao-conta` | [0032](../prd/0032-spa-sessao-conta.md) |
