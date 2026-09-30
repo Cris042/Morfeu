@@ -49,7 +49,7 @@ var LabelsPermitidos = []attribute.Key{
 	"classe_status",
 	// Checkout (tasks 0023–0026, auditoria 0026): valores fechados — etapa do
 	// funil, operação do gateway, passo da compensação e estado dos presos.
-	// Sem eles os alertas da saga liam séries sem label (nunca disparavam).
+	// Fora da lista, os alertas da saga liam séries sem label (nunca disparavam).
 	"etapa",
 	"op",
 	"passo",
