@@ -6,10 +6,10 @@ Atualizado ao final de cada task e antes de cada PR (regras em `roles.md` §6.11
 
 **Descoberta concluída (2026-07-06).** Morfeu definido: **venda de ingressos de cinema online** (portfólio/aprendizado, dev solo, 10–12h/sem, horizonte 7–9 meses). Stack: Go + Echo, sqlc + pgx/v5, PostgreSQL (fonte da verdade, inclusive trava de assento), Redis (cache), RabbitMQ (saga do checkout), React + Vite, VM Oracle Always Free (PAYG), observabilidade self-hosted, k6. Artefatos gerados: `doc.md` (mini-UML), `lib.md` (stack `planejada`, validada Context7/OSV), `docs/roadmap.md` (E0–E12, marcos M1–M5).
 
-- **Última task concluída:** **0018 — SPA: cartaz e sessões do filme (E5 T2)** — mergeada (PR #46, `849064b`, 2026-09-29; auditoria APROVADA). Antes: 0017 fundação da SPA (PR #45), **E4 concluído**.
+- **Última task concluída:** **0019 — SPA: mapa de assentos isolado (E5 T3)** — mergeada (PR #47, `0117c41`, 2026-09-29; auditoria APROVADA). Antes: 0018 cartaz (PR #46), 0017 fundação (PR #45), **E4 concluído**.
 - **Épico E0 refinado (2026-07-09) e perguntas respondidas (2026-07-11):** cerimônia por épico (§6.14) em `docs/refinamentos/E0-walking-skeleton.md` — task 0002 reescopada; **usuário aprovou a reordenação** (E0c dividido em E0c-CI/E0c-CD; ordem: conformidade ✅ → **E0c-CI** → E0b → E0c-CD → E0d; roadmap atualizado) e **autorizou o ADR 0007 de mensageria** (criado). PRDs de E0b/E0c/E0d desbloqueados na nova ordem.
-- **Task atual:** **0019 — SPA: mapa de assentos isolado (E5 T3)** (`docs/tasks/0019-spa-mapa.md`, branch `feature/0019-spa-mapa`, da main `849064b`) — implementação completa e validada, em PR. Usuário autorizou merge de cada PR quando o CI passar. **E0c-CD segue bloqueada** (VM Oracle). Pendência do usuário (não bloqueia): token TMDB v4.
-- **PRD atual:** **`docs/prd/0019-spa-mapa.md`** (ativo).
+- **Task atual:** **0020 — SPA: mapa integrado à trava (E5 T4a)** (`docs/tasks/0020-spa-reserva.md`, branch `feature/0020-spa-reserva`, da main `0117c41`) — implementação completa e validada, em PR. Depois: **0021 (E2E do M3 no CI + correção do teste instável do relay)**, que fecha o E5. Usuário autorizou merge de cada PR quando o CI passar. **E0c-CD segue bloqueada** (VM Oracle).
+- **PRD atual:** **`docs/prd/0020-spa-reserva.md`** (ativo).
 - **ADRs ativos:** 0001 (Go+Echo) · 0002 (sqlc+pgx) · 0003 (fronteiras/camadas) · 0004 (padrões de código Go) · 0005 (DDD tático + patterns) · 0006 (estratégia de testes) — aceitos em 2026-07-07 — · **0007 (Mensageria: RabbitMQ)** — aceito em 2026-07-11 com autorização explícita (pergunta 2 do refinamento E0). · **0008 (Trava de assento: PG com índice único parcial, expiração lazy e sweeper)** — aceito em 2026-09-29 com autorização explícita (refinamento E4). · **0009 (Frontend SPA: React + TS + Vite, fronteira `/api` por proxy, estáticos pelo Caddy)** — aceito em 2026-09-29 com autorização explícita (refinamento E5). Restante (saga) nasce no refinamento E6.
 
 ## Últimas decisões relevantes
@@ -38,6 +38,7 @@ Atualizado ao final de cada task e antes de cada PR (regras em `roles.md` §6.11
 
 ## Pendências técnicas
 
+- **Teste instável `TestRelay_BrokerIndisponivelNaoCrashaEReentrega`** (visto no CI do PR #47, 2026-09-29): corrida — o relay pode publicar antes de o RabbitMQ parar; em falha não religa o broker e cascateia. Correção planejada na task 0021 (parar o broker antes de enfileirar + `t.Cleanup` que religa).
 - ~~Débito de lint da E0a (43 issues) + `time.Sleep` nos testes~~ → **quitado na task 0004 (2026-07-12)**: `golangci-lint run ./...` = 0 issues (6 commits mecânicos, asserts intactos); `time.Sleep(1s)` substituído por `wait.ForLog(...).WithOccurrence(2)` (PG) e timeouts explícitos (Redis).
 - **Ambiente de build local (registro 2026-07-10):** Go 1.24.5 instalado user-level em `~/.local/go/bin` (fora do PATH padrão — exportar no shell); **sem gcc no WSL** → `go test -race` roda via container `golang:1.25` com socket Docker montado (`TESTCONTAINERS_HOST_OVERRIDE` = IP do host). Instalar gcc (apt) e adicionar Go ao PATH ficam a critério do usuário.
 

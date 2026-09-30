@@ -50,5 +50,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      # A demonstração do mapa (/_demo/mapa) só existe em dev (PRD 0019 RF06).
+      - name: Demo fora do bundle de produção
+        run: "! grep -rl '_demo/mapa' dist/"
+
       - name: Auditoria de dependências (gate)
         run: npm audit --audit-level=high

@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0019-spa-mapa.md
 - **Branch:** feature/0019-spa-mapa
 - **Data:** 2026-09-29
-- **Status:** ativo
+- **Status:** concluído
 
 ## Objetivo
 
@@ -71,18 +71,18 @@ Rede, polling, holds, contagem regressiva, extensão, E2E (0020); zoom/arrastar;
 
 ## Critérios de aceite
 
-- [ ] CA01 — `estado.test.ts`: precedência, meu dentro de ocupados, limite e rótulo completo.
-- [ ] CA02 — Grade fiel: 6 fileiras, vãos sem botão, 1 tab stop.
-- [ ] CA03 — Teclado:
+- [x] CA01 — `estado.test.ts`: precedência, meu dentro de ocupados, limite e rótulo completo.
+- [x] CA02 — Grade fiel: 6 fileiras, vãos sem botão, 1 tab stop.
+- [x] CA03 — Teclado:
   - Tab entra no primeiro assento;
   - → pula o corredor;
   - ↓ vai à fileira de baixo na mesma coluna ou no assento mais próximo;
   - Home/End funcionam;
   - Espaço/Enter chamam `onAlternar`;
   - o foco segue com roving tabindex.
-- [ ] CA04 — Ocupado e bloqueado não chamam `onAlternar`; selecionado tem `aria-pressed`; PCD no rótulo; aviso de limite visível ao atingir 6.
-- [ ] CA05 — Demonstração fora do build de produção (a rota não existe com `DEV=false`, verificado pelo bundle).
-- [ ] CA06 — lint/typecheck/test/build/audit; `web-ci` verde.
+- [x] CA04 — Ocupado e bloqueado não chamam `onAlternar`; selecionado tem `aria-pressed`; PCD no rótulo; aviso de limite visível ao atingir 6.
+- [x] CA05 — Demonstração fora do build de produção (a rota não existe com `DEV=false`, verificado pelo bundle).
+- [x] CA06 — lint/typecheck/test/build/audit; `web-ci` verde.
 
 ## Plano de testes
 

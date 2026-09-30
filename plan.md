@@ -4,9 +4,24 @@
 
 ## Estado corrente (2026-09-29)
 
-**Task 0019 — SPA: mapa de assentos isolado (E5 T3): IMPLEMENTAÇÃO COMPLETA e validada; gate → PR** (branch `feature/0019-spa-mapa`, da main `849064b`).
+**Task 0020 — SPA: mapa integrado à trava (E5 T4a): IMPLEMENTAÇÃO COMPLETA e validada; gate → PR** (branch `feature/0020-spa-reserva`, da main `0117c41`). A T4 do refinamento foi dividida (0020 integração + 0021 E2E do M3) pelo teto de 30 arquivos. O CI do PR #47 revelou um **teste instável no relay do outbox** (`TestRelay_BrokerIndisponivelNaoCrashaEReentrega`: o relay publica o evento antes de o RabbitMQ terminar de parar; ao falhar, não religa o broker e derruba os 2 testes seguintes) — reexecutado verde; **correção entra na 0021**.
 
-### Plano da task 0019
+### Plano da task 0020
+
+1. ~~Dados~~ — tipos `Hold`/`Ocupacao`; `useMapa` (`staleTime: Infinity`), `useOcupacao` (`refetchInterval` 4 s, `refetchIntervalInBackground: false`, só depois do mapa), `useMeusHolds`; mutations travar/estender/liberar que **sempre** (sucesso ou erro) invalidam holds + ocupação — o 409 atualiza o mapa na hora.
+2. ~~Página da sessão~~ — mapa + legenda + "Reservar N assentos" (desabilitado sem seleção/durante envio; o assento só vira "seu" depois do 201 + `GET /holds`); alternar um "seu" libera; mensagens de 409 com os assentos perdidos (saem da seleção), `limite_holds`, 429, genérica; selecionado tomado no polling sai da seleção com aviso (ajuste de estado na renderização, sem effect); 404 → sessão indisponível.
+3. ~~Painel "Seus assentos"~~ — contagem mm:ss por `expira_em` (`useAgora` de 1 s só com holds), aviso ≤ 60 s, "Mais 10 minutos" uma vez, "Liberar"; vencido → reconsulta.
+4. ~~Auditoria 0019~~ — letra da fileira como `role="rowheader"` (a da direita saiu); `web-ci` com "demo fora do bundle de produção".
+5. ~~Testes~~ — 38 verdes (3/3 execuções): polling 4 s + pausa sem foco (`focusManager`) + mapa 1×, reserva sem otimismo, 409 com recarga imediata, limite/429, tomado no polling, painel (contagem, aviso, extensão única, liberar), vencido some; lint/typecheck 0; build 97,6 KB gzip; audit 0. Conferência visual pendente da imagem do Playwright (pull lento; Chrome ausente e libs nativas faltando p/ o headless shell).
+
+---
+
+### Task 0019 — SPA: mapa de assentos isolado: CONCLUÍDA e MERGEADA (PR #47, `0117c41`)
+
+Auditoria APROVADA (2026-09-29, `qa`); não-bloqueantes resolvidos na 0020 (rowheader, verificação do bundle no CI, checkboxes marcados no fechamento).
+
+#### Plano executado da 0019
+
 
 1. ~~Estado puro~~ — `estado.ts`: precedência meu > selecionado > ocupado > bloqueado > livre (o hold próprio também vem na ocupação pública), `alternavel`, `rotuloDoAssento` ("Fileira C, assento 7, PCD, ocupado").
 2. ~~Componente~~ — `MapaDeAssentos` puro (sem I/O): "Tela", `role=grid`/`row`/`gridcell`, vão = célula vazia sem botão, roving tabindex (1 tab stop), setas pulando vãos, ↑/↓ para a mesma coluna ou o assento mais próximo, Home/End, Enter/Espaço; `aria-pressed` (selecionado/meu), `aria-disabled` (ocupado/limite — continua focável), marcas ✓ ● × ♿ redundantes à cor; limite de 6 (selecionados + meus) com aviso `aria-live`; `Legenda`.

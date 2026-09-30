@@ -3,6 +3,7 @@ import { Link, Route, Routes } from 'react-router'
 
 import { Cartaz } from '../features/cartaz/Cartaz'
 import { PaginaFilme } from '../features/filme/PaginaFilme'
+import { PaginaSessao } from '../features/sessao/PaginaSessao'
 import styles from './App.module.css'
 
 // Demonstração do mapa só em dev (PRD 0019 RF06): em produção a constante é
@@ -24,7 +25,7 @@ export function App() {
         <Routes>
           <Route path="/" element={<Cartaz />} />
           <Route path="/filmes/:id" element={<PaginaFilme />} />
-          <Route path="/sessoes/:id" element={<EscolhaEmBreve />} />
+          <Route path="/sessoes/:id" element={<PaginaSessao />} />
           {DemoMapa && (
             <Route
               path="/_demo/mapa"
@@ -45,18 +46,6 @@ export function App() {
         </p>
       </footer>
     </div>
-  )
-}
-
-// Placeholder até a task 0020 (mapa integrado à trava).
-function EscolhaEmBreve() {
-  return (
-    <section>
-      <h1>Escolha de assentos</h1>
-      <p>
-        A escolha de assentos abre em breve. <Link to="/">Voltar ao cartaz</Link>
-      </p>
-    </section>
   )
 }
 

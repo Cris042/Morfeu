@@ -35,3 +35,18 @@ export interface MapaSessao {
   colunas: number
   assentos: Assento[]
 }
+
+/** GET /sessoes/{id}/ocupacao — só os códigos ocupados (sem dono). */
+export interface Ocupacao {
+  sessao_id: number
+  ocupados: string[]
+}
+
+/** Hold do carrinho (cookie HttpOnly): trava de um assento por 10 min. */
+export interface Hold {
+  id: string
+  sessao_id: number
+  assento: string
+  expira_em: string
+  extensoes_usadas: number
+}
