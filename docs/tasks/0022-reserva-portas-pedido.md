@@ -1,7 +1,7 @@
 # Task 0022 — Reserva: holds vendidos ocupam o assento + portas transacionais do pedido (E6, T1)
 
 - **Data:** 2026-09-30
-- **Status:** em andamento
+- **Status:** concluída (auditoria APROVADA em 2026-09-30)
 - **Branch:** `feature/0022-reserva-portas-pedido` (da main `4fbe8ec`)
 - **PRD:** docs/prd/0022-reserva-portas-pedido.md
 - **Item do roadmap:** E6 — Saga do checkout (1ª de 6). Refinamento: `docs/refinamentos/E6-saga-checkout.md` §T1; ADR 0010.
@@ -28,11 +28,11 @@ Nenhuma nova.
 
 ## Critérios de aceite
 
-- [ ] Hold `convertido` não é roubado nem sobrescrito por nova trava (409) e aparece na ocupação.
-- [ ] Hold preso para um pedido não é roubado antes do novo prazo; o cliente não o estende nem libera (409 `hold_em_pedido`).
-- [ ] `ConverterDoPedido` é idempotente; `LiberarDoPedido` devolve os assentos.
-- [ ] Sweeper não toca `convertido`.
-- [ ] Suíte do E4 e E2E do M3 verdes.
+- [x] Hold `convertido` não é roubado nem sobrescrito por nova trava (409) e aparece na ocupação.
+- [x] Hold preso para um pedido não é roubado antes do novo prazo; o cliente não o estende nem libera (409 `hold_em_pedido`).
+- [x] `ConverterDoPedido` é idempotente; `LiberarDoPedido` devolve os assentos.
+- [x] Sweeper não toca `convertido`.
+- [x] Suíte do E4 e E2E do M3 verdes.
 
 ## Riscos
 

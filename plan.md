@@ -4,7 +4,7 @@
 
 ## Estado corrente (2026-09-30)
 
-**Task 0022 — Reserva: holds vendidos ocupam o assento + portas transacionais do pedido (E6 T1): IMPLEMENTADA; em PR** (branch `feature/0022-reserva-portas-pedido`, da main `4fbe8ec`). Refinamento E6 e ADR 0010 mergeados (PR #50).
+**Task 0022 — Reserva: holds vendidos ocupam o assento + portas transacionais do pedido (E6 T1): CONCLUÍDA — auditoria APROVADA em 2026-09-30 (`qa`), CI verde (PR #51)** (branch `feature/0022-reserva-portas-pedido`, da main `4fbe8ec`). Refinamento E6 e ADR 0010 mergeados (PR #50).
 
 ### Plano da task 0022
 
@@ -12,7 +12,7 @@
 2. ~~Queries~~ — trava com o mesmo predicado do índice e roubo só de `ativo` vencido (zera `pedido_id`); ocupação conta `convertido`; estender/liberar do cliente só sem pedido; `PrenderParaPedido`/`ConverterDoPedido`/`ConvertidosDoPedido`/`LiberarDoPedido`.
 3. ~~Portas~~ — `pedido.go` com os 3 métodos que recebem `outbox.Tx` (únicos); `Hold.EmPedido` + 409 `hold_em_pedido`; `Dono.Hash`/`DonoDoHash`; métrica `reserva_holds_convertidos_total`.
 4. ~~Testes~~ — `pedido_test.go` (CA01–CA08: vendido sob corrida de 20, preso não roubável até o prazo, cobertura, idempotência, liberar); suíte do E4 intacta; 3/3 com `-race`.
-5. Lint + CI + passe de julgamento → merge.
+5. ~~Lint + CI + passe de julgamento~~ — APROVADO. Não-bloqueantes: texto do RNF02 e `sqlc.yaml` no PRD (corrigidos); **transferidos à 0023**: teste de que o hold preso conta no teto de 6, ocupação após `LiberarDoPedido`, e a regra de `ate` (a 0022 fixa exatamente o prazo do pedido — pode encurtar um hold estendido; a 0023 confirma ou troca por `GREATEST`).
 
 ---
 

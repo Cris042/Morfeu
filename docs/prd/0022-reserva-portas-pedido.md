@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0022-reserva-portas-pedido.md
 - **Branch:** feature/0022-reserva-portas-pedido
 - **Data:** 2026-09-30
-- **Status:** em andamento
+- **Status:** concluído
 
 ## Objetivo
 
@@ -33,7 +33,7 @@ Módulo `pedido`, tabelas `pedidos`/`ingressos` e o adapter no `main` (0023); St
 ## Requisitos não funcionais
 
 - RNF01 — Só estes 3 métodos recebem `Tx` (ADR 0010, "Estratégias"). O `pedido` não importa a `reserva`: a porta é declarada no consumidor, na 0023.
-- RNF02 — Migration com down. O down recria o índice antigo e remove a coluna. Fica documentado que ele falha se houver hold `convertido` ativo no mesmo assento de um `ativo`, o que não ocorre antes da 0023.
+- RNF02 — Migration com down: recria o índice antigo (só `ativo`) e remove a coluna. O down nunca falha, mas reabre a venda dupla de assentos já `convertido` — só é seguro antes de haver pedidos pagos.
 - RNF03 — Nenhum dado novo em logs além de contagens e `sessao_id`.
 
 ## Regras de negócio
@@ -80,11 +80,11 @@ Módulo `pedido`, tabelas `pedidos`/`ingressos` e o adapter no `main` (0023); St
 
 ## Arquivos que serão modificados
 
-- `internal/reserva/queries.sql`, `internal/reserva/db/queries.sql.go`, `internal/reserva/db/models.go` (gerados), `internal/reserva/service.go`, `internal/reserva/errors.go`, `internal/reserva/handler.go`, `internal/reserva/carrinho.go`, `internal/reserva/handler_test.go` (migration nova no `TestMain`)
+- `sqlc.yaml` (schema 010 + override de uuid anulável), `internal/reserva/queries.sql`, `internal/reserva/db/queries.sql.go`, `internal/reserva/db/models.go` (gerados), `internal/reserva/service.go`, `internal/reserva/errors.go`, `internal/reserva/handler.go`, `internal/reserva/carrinho.go`, `internal/reserva/handler_test.go` (migration nova no `TestMain`)
 - `cmd/morfeu/main.go` (métrica)
 - `docs/tasks/README.md`, `docs/tasks/0021-e2e-m3.md`, `docs/prd/0021-e2e-m3.md` (status), `plan.md`, `state.md`
 
-Total: ~21.
+Total: 23.
 
 ## Dependências utilizadas
 

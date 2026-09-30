@@ -29,4 +29,4 @@ Convenção: `NNNN-titulo-kebab.md`, numeração sequencial a partir de `0001`. 
 | 0019 | [SPA: mapa de assentos isolado](./0019-spa-mapa.md) | E5 (T3) | concluída (auditoria APROVADA; merge `0117c41`, PR #47) | `feature/0019-spa-mapa` | [0019](../prd/0019-spa-mapa.md) |
 | 0020 | [SPA: mapa integrado à trava](./0020-spa-reserva.md) | E5 (T4a) | concluída (auditoria APROVADA; merge `f355cd8`, PR #48) | `feature/0020-spa-reserva` | [0020](../prd/0020-spa-reserva.md) |
 | 0021 | [E2E do M3: dois navegadores disputam o mesmo assento](./0021-e2e-m3.md) | E5 (T4b) | concluída (merge `38aa433`, PR #49) | `feature/0021-e2e-m3` | [0021](../prd/0021-e2e-m3.md) |
-| 0022 | [Reserva: holds vendidos ocupam o assento + portas transacionais do pedido](./0022-reserva-portas-pedido.md) | E6 (T1) | em andamento (aberta 2026-09-30) | `feature/0022-reserva-portas-pedido` | [0022](../prd/0022-reserva-portas-pedido.md) |
+| 0022 | [Reserva: holds vendidos ocupam o assento + portas transacionais do pedido](./0022-reserva-portas-pedido.md) | E6 (T1) | concluída (auditoria APROVADA; PR #51) | `feature/0022-reserva-portas-pedido` | [0022](../prd/0022-reserva-portas-pedido.md) |
