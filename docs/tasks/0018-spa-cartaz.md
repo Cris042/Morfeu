@@ -1,7 +1,7 @@
 # Task 0018 — SPA: cartaz e sessões do filme (E5, T2)
 
 - **Data:** 2026-09-29
-- **Status:** em andamento
+- **Status:** concluída
 - **Branch:** `feature/0018-spa-cartaz` (da main `cce783c`)
 - **PRD:** docs/prd/0018-spa-cartaz.md
 - **Item do roadmap:** E5 — SPA cliente, parte 1 (task 2/4). Refinamento: `docs/refinamentos/E5-spa-cliente.md` §T2.

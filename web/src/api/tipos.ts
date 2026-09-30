@@ -17,3 +17,21 @@ export interface SessaoPublica {
   fim: string
   preco_centavos: number
 }
+
+/** Cadeira real da sala (vãos não geram assento). */
+export interface Assento {
+  codigo: string
+  fileira: string
+  coluna: number
+  pcd: boolean
+}
+
+/** GET /sessoes/{id}/mapa — layout da sala da sessão. */
+export interface MapaSessao {
+  sessao_id: number
+  sala_id: number
+  sala_nome: string
+  fileiras: number
+  colunas: number
+  assentos: Assento[]
+}
