@@ -150,6 +150,8 @@ func TestLabelsDaSaga(t *testing.T) {
 	funil.Add(ctx, 1, metric.WithAttributes(attribute.String("etapa", "pago")))
 	gw, _ := m.Int64Counter("gateway_requests_total")
 	gw.Add(ctx, 1, metric.WithAttributes(attribute.String("op", "estornar"), attribute.String("resultado", "ok")))
+	envios, _ := m.Int64Counter("morfeu_email_envios_total")
+	envios.Add(ctx, 1, metric.WithAttributes(attribute.String("provedor", "resend"), attribute.String("tipo", "confirmacao"), attribute.String("resultado", "cota")))
 	presos, _ := m.Int64ObservableGauge("pedidos_presos")
 	_, _ = m.RegisterCallback(func(_ context.Context, o metric.Observer) error {
 		o.ObserveInt64(presos, 2, metric.WithAttributes(attribute.String("estado", "estorno_pendente")))
@@ -159,7 +161,7 @@ func TestLabelsDaSaga(t *testing.T) {
 	corpo := get(t, e, "/metrics")
 	for _, serie := range []string{
 		`saga_compensacoes_total{passo="estorno"} 1`,
-		`etapa="pago"`, `op="estornar"`,
+		`etapa="pago"`, `op="estornar"`, `provedor="resend"`, `tipo="confirmacao"`,
 		`pedidos_presos{estado="estorno_pendente"`, `pedidos_presos{estado="aguardando_vencido"`,
 	} {
 		if !strings.Contains(corpo, serie) {

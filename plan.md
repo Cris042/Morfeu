@@ -4,7 +4,19 @@
 
 ## Estado corrente (2026-09-30)
 
-**Task 0028 — Notificação: núcleo do e-mail de confirmação com QR (E7 T1): CONCLUÍDA — auditoria APROVADA em 2026-09-30 (`security`), CI verde (PR #58)** (branch `feature/0028-notificacao-nucleo`, da main `43a84fd`). Refinamento E7 mergeado (PR #57).
+**Task 0029 — Provedor Resend, config, métricas e alertas de e-mail (E7 T2): IMPLEMENTADA; em PR** (branch `feature/0029-provedor-resend`, da main `1088c66`).
+
+### Plano da task 0029
+
+1. ~~Adapter~~ — `notificacao.Resend` por HTTP cru (POST /emails, Bearer, Idempotency-Key, anexos inline base64 + content_id, timeout 5 s, resposta ≤ 64 KB); classes `ErrCotaEsgotada`/`ErrEnvioPermanente` pelo `name` do erro (Context7); erro nunca carrega o corpo.
+2. ~~Consumidor~~ — resultado por entrega (ok/ignorado/transitorio/permanente/cota); cota e recusa → DLQ.
+3. ~~Config/wiring~~ — `EMAIL_PROVEDOR` (fake proibido em produção — auditoria 0028 N2), `RESEND_API_KEY`, `EMAIL_REMETENTE`; métricas `morfeu_email_*` com `provedor`/`tipo` na allowlist; 2 alertas (16); gitleaks `re_`; `.env.example`.
+4. ~~Testes~~ — adapter contra servidor falso (requisição + 8 classes + timeout + sem eco de PII), resultados do consumidor, config, labels.
+5. Lint + suíte completa → CI + passe de julgamento → merge.
+
+---
+
+### Task 0028 — Notificação: núcleo: CONCLUÍDA e MERGEADA (PR #58, `1088c66`)
 
 ### Plano da task 0028
 

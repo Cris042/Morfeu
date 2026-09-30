@@ -442,14 +442,29 @@ func iniciarNotificacao(ctx context.Context, cfg *config.Config, cli *broker.Cli
 	if err != nil {
 		fatal("métrica de latência da notificação", err)
 	}
-	log.Warn("envio de e-mail FAKE ativo (nenhum e-mail sai) — provedor real na task 0029")
-	entregador, err := notificacao.NovoEntregador(fonte, notificacao.NovoFake(), cfg.BaseURLPublica)
+	sender, provedor := montarEmailSender(cfg, log)
+	entregador, err := notificacao.NovoEntregador(fonte, sender, cfg.BaseURLPublica)
 	if err != nil {
 		fatal("entregador de e-mail", err)
+	}
+	meter := otel.Meter("morfeu/notificacao")
+	envios, err1 := meter.Int64Counter("morfeu_email_envios_total",
+		metric.WithDescription("Entregas de e-mail por provedor, tipo e resultado (ok|ignorado|transitorio|permanente|cota)."))
+	duracao, err2 := meter.Float64Histogram("morfeu_email_envio_duracao_segundos",
+		// Sem WithUnit: o exporter anexaria "_seconds" ao nome já em PT.
+		metric.WithDescription("Duração de cada entrega de e-mail (carregar + montar + enviar)."),
+		metric.WithExplicitBucketBoundaries(0.1, 0.25, 0.5, 1, 2, 5, 10))
+	if err := errors.Join(err1, err2); err != nil {
+		fatal("métricas de e-mail", err)
 	}
 	notif := notificacao.NovoConsumidor(notificacao.Config{
 		Latencia: func(ctx context.Context, d time.Duration) { latencia.Record(ctx, d.Seconds()) },
 		Entregar: entregador.Entregar,
+		Resultado: func(ctx context.Context, tipo, resultado string, d time.Duration) {
+			envios.Add(ctx, 1, metric.WithAttributes(attribute.String("provedor", provedor),
+				attribute.String("tipo", tipo), attribute.String("resultado", resultado)))
+			duracao.Record(ctx, d.Seconds(), metric.WithAttributes(attribute.String("provedor", provedor)))
+		},
 	}, log.Logger)
 	handler := outbox.NovoHandler(dbPool, notificacao.Consumidor, notif.Efeito, log.Logger)
 	wg.Add(1)
@@ -460,6 +475,21 @@ func iniciarNotificacao(ctx context.Context, cfg *config.Config, cli *broker.Cli
 		}
 	}()
 	log.Info("Consumer de pedido.confirmado iniciado")
+}
+
+// montarEmailSender escolhe o provedor (ADR 0005 Strategy): Resend ou o
+// fake (dev/CI/load-test — o boot já recusou fake em produção).
+func montarEmailSender(cfg *config.Config, log *logger.Logger) (notificacao.EmailSender, string) {
+	if cfg.EmailProvedor != "resend" {
+		log.Warn("envio de e-mail FAKE ativo (nenhum e-mail sai)")
+		return notificacao.NovoFake(), "fake"
+	}
+	r, err := notificacao.NovoResend(notificacao.ConfigResend{Chave: cfg.ResendChave, Remetente: cfg.EmailRemetente})
+	if err != nil {
+		log.ErrorMsg("provedor de e-mail", zap.Error(err))
+		os.Exit(1)
+	}
+	return r, "resend"
 }
 
 // fonteDoEmail compõe as portas de pedido, sessão e catálogo para a

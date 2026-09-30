@@ -12,6 +12,13 @@ description = "Segredo de assinatura de webhook do Stripe"
 regex = '''\bwhsec_[a-zA-Z0-9]{24,}\b'''
 keywords = ["whsec_"]
 
+# Chave de API do Resend (task 0029).
+[[rules]]
+id = "resend-api-key"
+description = "Chave de API do Resend"
+regex = '''\bre_[a-zA-Z0-9]{8,}_[a-zA-Z0-9]{16,}\b'''
+keywords = ["re_"]
+
 [[allowlists]]
 description = "Exemplo didático de API key em skill vendorizada — falso positivo conhecido, registrado nas auditorias de 2026-07-07 e 2026-07-10"
 paths = ['''\.claude/skills/api-design/SKILL\.md''']

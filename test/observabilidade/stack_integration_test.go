@@ -157,7 +157,7 @@ func getJSON(t *testing.T, url string, autenticado bool, destino any) int {
 }
 
 // TestGrafana_Provisionamento cobre CA03: o provisioning do repo é aceito no
-// boot e expõe 3 dashboards, 2 datasources, 14 alertas e o contact point.
+// boot e expõe 3 dashboards, 2 datasources, 16 alertas e o contact point.
 func TestGrafana_Provisionamento(t *testing.T) {
 	t.Parallel() // containers próprios e portas efêmeras: isolados entre si
 	files := append(arquivosDe(t, "configs/grafana/provisioning", "/etc/grafana/provisioning"),
@@ -184,7 +184,7 @@ func TestGrafana_Provisionamento(t *testing.T) {
 		getJSON(t, base+"/api/search?type=dash-db&folderUIDs=morfeu", true, &dashboards)
 		getJSON(t, base+"/api/v1/provisioning/alert-rules", true, &regras)
 		getJSON(t, base+"/api/v1/provisioning/contact-points", true, &contatos)
-		if (len(dashboards) == 3 && len(regras) == 14 && len(contatos) > 0) || time.Now().After(deadline) {
+		if (len(dashboards) == 3 && len(regras) == 16 && len(contatos) > 0) || time.Now().After(deadline) {
 			break
 		}
 		time.Sleep(time.Second)
@@ -199,8 +199,8 @@ func TestGrafana_Provisionamento(t *testing.T) {
 		}
 	}
 
-	if len(regras) != 14 {
-		t.Errorf("esperava 14 regras de alerta (6 do E0d + reuso de refresh do E1 + 2 da reserva do E4 + 5 da saga do E6), recebi %d", len(regras))
+	if len(regras) != 16 {
+		t.Errorf("esperava 16 regras de alerta (6 do E0d + reuso de refresh do E1 + 2 da reserva do E4 + 5 da saga do E6 + 2 do e-mail do E7), recebi %d", len(regras))
 	}
 
 	achou := false

@@ -8,8 +8,8 @@ Atualizado ao final de cada task e antes de cada PR (regras em `roles.md` §6.11
 
 - **Última task concluída:** **0028 — Notificação: núcleo do e-mail de confirmação com QR (E7 T1)** — auditoria APROVADA (2026-09-30), PR #58. Antes: E6 concluído (0022–0027, PRs #51–#56); refinamento E7 (PR #57).
 - **Épico E0 refinado (2026-07-09) e perguntas respondidas (2026-07-11):** cerimônia por épico (§6.14) em `docs/refinamentos/E0-walking-skeleton.md` — task 0002 reescopada; **usuário aprovou a reordenação** (E0c dividido em E0c-CI/E0c-CD; ordem: conformidade ✅ → **E0c-CI** → E0b → E0c-CD → E0d; roadmap atualizado) e **autorizou o ADR 0007 de mensageria** (criado). PRDs de E0b/E0c/E0d desbloqueados na nova ordem.
-- **Task atual:** nenhuma aberta; próxima **0029 — Provedor Resend, config, métricas e alertas** (E7 T2). Usuário autorizou merge de cada PR quando o CI passar. **E0c-CD segue bloqueada** (VM Oracle).
-- **PRD atual:** nenhum (o da 0029 nasce na abertura).
+- **Task atual:** **0029 — Provedor Resend, config, métricas e alertas de e-mail (E7 T2)** (`docs/tasks/0029-provedor-resend.md`, branch `feature/0029-provedor-resend`, da main `1088c66`). Usuário autorizou merge de cada PR quando o CI passar. **E0c-CD segue bloqueada** (VM Oracle).
+- **PRD atual:** **`docs/prd/0029-provedor-resend.md`** (ativo).
 - **ADRs ativos:** 0001 (Go+Echo) · 0002 (sqlc+pgx) · 0003 (fronteiras/camadas) · 0004 (padrões de código Go) · 0005 (DDD tático + patterns) · 0006 (estratégia de testes) — aceitos em 2026-07-07 — · **0007 (Mensageria: RabbitMQ)** — aceito em 2026-07-11 com autorização explícita (pergunta 2 do refinamento E0). · **0008 (Trava de assento: PG com índice único parcial, expiração lazy e sweeper)** — aceito em 2026-09-29 com autorização explícita (refinamento E4). · **0009 (Frontend SPA: React + TS + Vite, fronteira `/api` por proxy, estáticos pelo Caddy)** — aceito em 2026-09-29 com autorização explícita (refinamento E5). · **0010 (Saga do checkout: pivô síncrono no webhook, estorno como única compensação)** — aceito em 2026-09-30 com autorização explícita (refinamento E6).
 
 ## Últimas decisões relevantes
