@@ -82,6 +82,11 @@ func (h *Handler) RegistrarRotas(e *echo.Echo) {
 	if h.exigirConta != nil {
 		e.GET("/pedidos", h.meusPedidos, h.exigirConta)
 	}
+	if h.servico.cfg.Consulta != nil {
+		e.POST("/pedidos/consulta", h.consultar, middleware.BodyLimit(limiteCorpo), exigirAntiCSRF)
+		e.GET("/i/:ref", h.ingresso, cabecalhosIngresso)
+		e.GET("/i/:ref/qr.png", h.qrIngresso, cabecalhosIngresso)
+	}
 	if h.rotasDeTeste {
 		e.POST("/__teste/pagar/:id", h.pagarParaTeste)
 	}
@@ -233,6 +238,85 @@ func (h *Handler) retomar(c echo.Context) error {
 		"pedido_id": id, "codigo": r.Codigo, "total_centavos": r.TotalCentavos,
 		"expira_em": r.ExpiraEm.UTC(), "client_secret": r.SegredoCliente,
 	})
+}
+
+// consultar: pedido de convidado por e-mail + código (PRD 0034). Todo "não
+// encontrado" (código inexistente, malformado ou e-mail errado) sai idêntico.
+func (h *Handler) consultar(c echo.Context) error {
+	c.Response().Header().Set(echo.HeaderCacheControl, "no-store")
+	var in struct {
+		Email  string `json:"email"`
+		Codigo string `json:"codigo"`
+	}
+	dec := json.NewDecoder(c.Request().Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&in); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"erro": "requisicao_invalida"})
+	}
+	ctx := c.Request().Context()
+	if err := h.servico.ContarConsulta(ctx, c.RealIP(), in.Email); err != nil {
+		return h.responderErro(c, err)
+	}
+	r, err := h.servico.Consultar(ctx, in.Email, in.Codigo)
+	if err != nil {
+		return h.responderErro(c, err)
+	}
+	ingressos := make([]map[string]string, 0, len(r.Ingressos))
+	for _, i := range r.Ingressos {
+		ingressos = append(ingressos, map[string]string{"assento": i.Assento, "ref": i.Ref})
+	}
+	return c.JSON(http.StatusOK, map[string]any{"pedido": paraPedidoDTO(r.Pedido), "ingressos": ingressos})
+}
+
+// cabecalhosIngresso: a página e o QR do ingresso nunca vão para cache nem
+// vazam o link por Referer (refinamento E7/E8) — inclusive no 404/410.
+func cabecalhosIngresso(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		h := c.Response().Header()
+		h.Set("Referrer-Policy", "no-referrer")
+		h.Set(echo.HeaderCacheControl, "no-store")
+		h.Set(echo.HeaderXContentTypeOptions, "nosniff")
+		return next(c)
+	}
+}
+
+// ingresso: GET idempotente (scanners de e-mail abrem o link) — só lê.
+func (h *Handler) ingresso(c echo.Context) error {
+	ctx := c.Request().Context()
+	if err := h.servico.ContarIngresso(ctx, c.RealIP()); err != nil {
+		return h.responderErro(c, err)
+	}
+	i, err := h.servico.Ingresso(ctx, c.Param("ref"))
+	if err != nil {
+		return h.responderErroIngresso(c, err)
+	}
+	return c.JSON(http.StatusOK, map[string]any{
+		"assento": i.Assento, "status": i.Status, "filme": i.Filme, "sala": i.Sala, "inicio": i.Inicio.UTC(),
+	})
+}
+
+func (h *Handler) qrIngresso(c echo.Context) error {
+	ctx := c.Request().Context()
+	if err := h.servico.ContarIngresso(ctx, c.RealIP()); err != nil {
+		return h.responderErro(c, err)
+	}
+	png, err := h.servico.QRDoIngresso(ctx, c.Param("ref"))
+	if err != nil {
+		return h.responderErroIngresso(c, err)
+	}
+	return c.Blob(http.StatusOK, "image/png", png)
+}
+
+func (h *Handler) responderErroIngresso(c echo.Context, err error) error {
+	switch {
+	case errors.Is(err, ErrIngressoInvalido):
+		return naoEncontrado(c)
+	case errors.Is(err, ErrIngressoIndisponivel):
+		return c.JSON(http.StatusGone, map[string]string{"erro": "ingresso_indisponivel"})
+	default:
+		// Nunca o link no log: só o erro (sem ref/token).
+		return h.responderErro(c, err)
+	}
 }
 
 // pagarParaTeste: só registrada com gateway fake (ver ComRotasDeTeste).

@@ -4,7 +4,19 @@
 
 ## Estado corrente (2026-09-30)
 
-**Task 0033 — SPA: checkout e pagamento (E8 T3): CONCLUÍDA — auditoria APROVADA em 2026-09-30 (`security`), CI verde (PR #64)** (branch `feature/0033-spa-checkout`, da main `f539bdf`).
+**Task 0034 — Backend: consulta de convidado e página do ingresso (E8 T4): CONCLUÍDA — auditoria APROVADA em 2026-09-30 (`security`), CI verde (PR #65)** (branch `feature/0034-consulta-ingresso`, da main `93b49fd`).
+
+### Plano da task 0034
+
+1. ~~Queries~~ — `PedidoPorCodigo`, `IngressoParaPagina` (sqlc).
+2. ~~Serviço/rotas~~ — `consulta.go` (e-mail em tempo constante contra fantasma; HMAC sempre calculado; 410 só após token válido), `POST /pedidos/consulta`, `GET /i/:ref`, `GET /i/:ref/qr.png`, headers, limitadores.
+3. ~~Main~~ — porta `infoSessao` (sessao + catalogo), `notificacao.QR` injetado, redação do link no access log e no span.
+4. ~~Testes~~ — 6 de integração (consulta, limites, ingresso com 10 variantes, revogado, versão do token) + redação (mutação conferida).
+5. ~~Lint + suíte `-race` + CI + passe de julgamento~~ — APROVADO, sem bloqueantes. Resolvidos: versão de token sem segredo → HMAC com a v1 e 404 (antes 500 = oráculo de existência) + teste; godoc do `QR`. Registrados: lockout da consulta por e-mail conhecido (inerente ao teto por e-mail, aceito); 404 de rota não casada em `/i/a/b` sem os headers (sem token em jogo); limitador não atômico (padrão existente); teste de ordem dos middlewares no `setupRouter` (candidato); `RealIP` atrás do Caddy (E0c-CD).
+
+---
+
+### Task 0033 — SPA: checkout e pagamento: CONCLUÍDA e MERGEADA (PR #64, `93b49fd`)
 
 ### Plano da task 0033
 

@@ -172,11 +172,11 @@ type ambiente struct {
 	emissor *autenticacao.Emissor
 }
 
-type limites struct{ ip, dono int }
+type limites struct{ ip, dono, consulta int }
 
 func novoAmbiente(t *testing.T) *ambiente {
 	t.Helper()
-	return montarAmbiente(t, limites{ip: 100000, dono: 100000})
+	return montarAmbiente(t, limites{ip: 100000, dono: 100000, consulta: 100000})
 }
 
 func montarAmbiente(t *testing.T, lim limites) *ambiente {
@@ -224,6 +224,19 @@ func montarAmbiente(t *testing.T, lim limites) *ambiente {
 		SegredosToken: map[int16][]byte{1: segredoTokenTeste},
 		Funil:         contar(funil),
 		Compensacao:   contar(compens),
+		Consulta: &ConfigConsulta{
+			LimiteIP: limitador("c-ip", lim.consulta), LimiteEmail: limitador("c-email", lim.consulta),
+			LimiteIngresso: limitador("i-ip", lim.consulta),
+			Sessao: func(ctx context.Context, id int64) (InfoSessao, error) {
+				s, ok, err := sessoes.DadosParaIngresso(ctx, id)
+				if err != nil || !ok {
+					return InfoSessao{}, fmt.Errorf("sessão %d: %t %w", id, ok, err)
+				}
+				return InfoSessao{Filme: "Filme de teste", Sala: s.Sala, Inicio: s.Inicio}, nil
+			},
+			QR:      func(c string) ([]byte, error) { return []byte("PNG:" + c), nil },
+			BaseURL: baseURLTeste,
+		},
 	}, logTeste)
 	if err != nil {
 		t.Fatalf("serviço: %v", err)
@@ -238,6 +251,9 @@ func montarAmbiente(t *testing.T, lim limites) *ambiente {
 		ComRotasDeTeste().RegistrarRotas(e)
 	return &ambiente{e: e, rel: rel, reserva: res, servico: s, gateway: gw, funil: funil, compens: compens, emissor: emissor}
 }
+
+// baseURLTeste é a origem pública dos links na suíte.
+const baseURLTeste = "https://morfeu.exemplo"
 
 // segredoTokenTeste é o segredo do HMAC do ingresso na suíte (32 bytes).
 var segredoTokenTeste = []byte("segredo-de-teste-do-token-32byte")
@@ -615,7 +631,7 @@ func TestTetoContaHoldPreso(t *testing.T) {
 
 // TestCriar_RateLimit cobre CA11 (5/min por carrinho).
 func TestCriar_RateLimit(t *testing.T) {
-	a := montarAmbiente(t, limites{ip: 100, dono: 2})
+	a := montarAmbiente(t, limites{ip: 100, dono: 2, consulta: 100})
 	sessaoID := novaSessao(t)
 	car := a.carrinho(t, sessaoID)
 	for i := range 2 {

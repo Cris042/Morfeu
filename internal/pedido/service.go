@@ -65,7 +65,10 @@ type Config struct {
 	SegredosToken map[int16][]byte
 	// Compensacao conta cada compensação executada (saga_compensacoes_total{passo}).
 	Compensacao func(ctx context.Context, passo string)
-	Agora       func() time.Time
+	// Consulta liga a consulta de convidado e a página do ingresso (PRD
+	// 0034); nil = rotas desligadas.
+	Consulta *ConfigConsulta
+	Agora    func() time.Time
 }
 
 // Servico implementa os casos de uso do pedido.
@@ -82,6 +85,14 @@ func NovoServico(pool outbox.Pool, cfg Config, logger *zap.Logger) (*Servico, er
 	}
 	if cfg.Webhook != nil && cfg.LimiteWebhook == nil {
 		return nil, errors.New("pedido: webhook sem limitador")
+	}
+	if cfg.Consulta != nil {
+		if err := cfg.Consulta.validar(); err != nil {
+			return nil, err
+		}
+		if _, ok := cfg.SegredosToken[1]; !ok {
+			return nil, errors.New("pedido: consulta sem o segredo da versão 1 do token")
+		}
 	}
 	if cfg.Agora == nil {
 		cfg.Agora = time.Now

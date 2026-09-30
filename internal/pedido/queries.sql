@@ -134,3 +134,17 @@ SELECT id, assento_codigo, versao_token
 FROM ingressos
 WHERE pedido_id = @pedido_id AND status = 'ativo'
 ORDER BY assento_codigo;
+
+-- name: PedidoPorCodigo :many
+-- Consulta de convidado (PRD 0034): o código é único; o e-mail é conferido
+-- fora do SQL, em tempo constante, pelo mesmo caminho do "não encontrado".
+SELECT id, email, codigo, sessao_id, assentos::text[] AS assentos, total_centavos, status, expira_em
+FROM pedidos
+WHERE codigo = @codigo;
+
+-- name: IngressoParaPagina :many
+-- Página pública do ingresso (PRD 0034): o HMAC é conferido no serviço.
+SELECT i.assento_codigo, i.status, i.versao_token, i.sessao_id, p.status AS status_pedido
+FROM ingressos i
+JOIN pedidos p ON p.id = i.pedido_id
+WHERE i.id = @id;

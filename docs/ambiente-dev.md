@@ -96,6 +96,11 @@ npm run e2e                                  # sobe o vite preview (proxy /api) 
 - O modo é resolvido no build: o bundle de produção não contém o chunk de teste (gate no `web-ci`) e o build fake não carrega o Stripe.js. O `playwright.config.ts` já builda com `VITE_PAGAMENTO_MODO=fake`.
 - O PaymentIntent é criado com `allow_redirects=never`: a confirmação acontece na própria página e o `client_secret` nunca vai para uma URL.
 
+### Consulta de convidado e ingresso (task 0034)
+
+- `POST /pedidos/consulta {email, codigo}` e `GET /i/{id}.{token}` (+ `/qr.png`) validam o token com o segredo da versão (`INGRESSO_TOKEN_SEGREDO_V1`) — fixe-o no dev (ver acima) ou os links antigos viram 404.
+- O link vale até início da sessão + 24 h (depois → 410). O path `/i/…` sai do access log e do span como `/i/:ref`.
+
 ### Replay da DLQ (task 0027)
 
 Só pelo shell (nenhuma rota HTTP). Liste antes com `-dry-run` (nada é publicado; as mensagens voltam à DLQ):
