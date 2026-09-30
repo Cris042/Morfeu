@@ -4,7 +4,11 @@
 
 ## Estado corrente (2026-09-30)
 
-**Task 0030 — E-mail de estorno (E7 T3, fecha o E7): CONCLUÍDA — auditoria APROVADA em 2026-09-30 (`qa`), CI verde (PR #60). **E7 CONCLUÍDO.** (branch `feature/0030-email-estorno`, da main `da2dae1`).
+**Épico E8 — SPA checkout + convidado/conta: REFINADO** (`docs/refinamentos/E8-spa-checkout.md`; 5 tasks 0031–0035; sem ADR). **E7 concluído** (PRs #57–#60). Próxima: **task 0031** (backend do checkout e da conta).
+
+---
+
+### Task 0030 — E-mail de estorno: CONCLUÍDA e MERGEADA (PR #60, `11a4bdc`) — **E7 concluído**
 
 ### Plano da task 0030
 
