@@ -74,7 +74,21 @@ npm run e2e                                  # sobe o vite preview (proxy /api) 
 
 - Padrão: `MORFEU_GATEWAY=fake` — nenhuma cobrança real. O fake guarda as cobranças **em memória do processo**: use `-mode=all` (o compose já usa). Com API e worker separados, ou após reinício, o worker não conhece as cobranças do fake e a reconciliação/estorno ficam adiando.
 - Stripe de teste: `MORFEU_GATEWAY=stripe` + `STRIPE_SECRET_KEY` (`rk_test_…`/`sk_test_…`) **e** `STRIPE_WEBHOOK_SECRET` — exigidos na API **e no worker** (o boot recusa sem eles). Webhooks locais: `docker compose --profile app --profile stripe up` e copie o `whsec_` de `docker compose logs stripe-cli`.
-- As tarefas da saga (reconciliação + estornos) rodam a cada 1 min em `-mode=worker|all`.
+- As tarefas da saga (reconciliação + estornos + cobranças abertas de expirados) rodam a cada 1 min em `-mode=worker|all`; a limpeza da outbox publicada (> 7 dias), a cada 1 h.
+
+### Replay da DLQ (task 0027)
+
+Só pelo shell (nenhuma rota HTTP). Liste antes com `-dry-run` (nada é publicado; as mensagens voltam à DLQ):
+
+```bash
+# no compose local (na VM, o mesmo via `docker compose exec`)
+docker compose --profile app exec app /app replay-dlq -fila notificacao.pedido_confirmado.dlq -dry-run
+docker compose --profile app exec app /app replay-dlq -fila notificacao.pedido_confirmado.dlq -limite 10
+```
+
+- DLQs aceitas: `catalogo.filme_criado.dlq` e `notificacao.pedido_confirmado.dlq` (lista fechada em `broker.FilasReplay`).
+- Cada mensagem é republicada com confirm **antes** do ack, com o **mesmo `message_id`**: queda no meio duplica e o dedup do consumidor absorve; nunca perde. Mensagem que continua falhando volta à DLQ depois de 3 entregas (sem loop).
+- A saída e o log trazem só contagens e `message_id` — nunca payload.
 
 ## Lições registradas (por que este arquivo existe)
 

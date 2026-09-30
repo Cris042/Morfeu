@@ -181,7 +181,7 @@ func (s *Servico) Criar(ctx context.Context, donoHash []byte, in Entrada) (Criad
 // ao pedido vencido. Depois do commit, cancela a cobrança dele no gateway
 // (melhor esforço: se falhar, a reconciliação/estorno cobrem o pagamento).
 func (s *Servico) expirarPendenteVencido(ctx context.Context, donoHash []byte, agora time.Time) error {
-	var cancelar []string
+	var cancelar []pendente
 	err := outbox.WithTx(ctx, s.pool, func(tx outbox.Tx) error {
 		var err error
 		cancelar, err = s.expirarVencidosDoDono(ctx, tx, donoHash, agora)
@@ -190,21 +190,21 @@ func (s *Servico) expirarPendenteVencido(ctx context.Context, donoHash []byte, a
 	if err != nil {
 		return err
 	}
-	for _, id := range cancelar {
-		s.cancelarCobranca(ctx, id)
+	for _, pe := range cancelar {
+		s.cancelarCobranca(ctx, pe.id, *pe.intencao)
 	}
 	return nil
 }
 
 // expirarVencidosDoDono expira na TX os pendentes vencidos do carrinho e
-// devolve as cobranças deles, a cancelar depois do commit.
-func (s *Servico) expirarVencidosDoDono(ctx context.Context, tx outbox.Tx, donoHash []byte, agora time.Time) ([]string, error) {
+// devolve os que têm cobrança, a cancelar depois do commit.
+func (s *Servico) expirarVencidosDoDono(ctx context.Context, tx outbox.Tx, donoHash []byte, agora time.Time) ([]pendente, error) {
 	r := repositorio{q: db.New(tx)}
 	pendentes, err := r.pendenteDoDono(ctx, donoHash)
 	if err != nil {
 		return nil, err
 	}
-	var cancelar []string
+	var cancelar []pendente
 	for _, pe := range pendentes {
 		if pe.expiraEm.After(agora) {
 			continue
@@ -214,18 +214,23 @@ func (s *Servico) expirarVencidosDoDono(ctx context.Context, tx outbox.Tx, donoH
 			return nil, err
 		}
 		if expirou && pe.intencao != nil {
-			cancelar = append(cancelar, *pe.intencao)
+			cancelar = append(cancelar, pe)
 		}
 	}
 	return cancelar, nil
 }
 
-// cancelarCobranca cancela a cobrança de um pedido vencido (melhor esforço).
-func (s *Servico) cancelarCobranca(ctx context.Context, intencaoID string) {
+// cancelarCobranca cancela a cobrança de um pedido vencido (melhor esforço):
+// sucesso a encerra; falha deixa para a varredura de cobranças abertas.
+func (s *Servico) cancelarCobranca(ctx context.Context, pedidoID uuid.UUID, intencaoID string) {
 	ctx, fim := ctxPosCobranca(ctx)
 	defer fim()
 	if err := s.cfg.Gateway.CancelarCobranca(ctx, intencaoID); err != nil {
 		s.logger.Warn("pedido: cancelar cobrança de pedido vencido", zap.Error(err))
+		return
+	}
+	if err := s.encerrarCobranca(ctx, pedidoID); err != nil {
+		s.logger.Warn("pedido: encerrar cobrança", zap.Error(err))
 	}
 }
 

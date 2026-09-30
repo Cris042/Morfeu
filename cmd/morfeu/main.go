@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sort"
 	"strings"
 	"sync"
 	"syscall"
@@ -53,6 +54,45 @@ import (
 // resource OTel (service.version).
 var versao = "dev"
 
+// runReplayDLQ: replay-dlq -fila <dlq> [-limite N] [-dry-run]. Imprime só
+// contagens e message_ids (nunca payload); dry-run lista sem publicar.
+func runReplayDLQ(args []string) error {
+	fs := flag.NewFlagSet("replay-dlq", flag.ContinueOnError)
+	fila := fs.String("fila", "", "DLQ de origem: "+strings.Join(filasReplay(), " | "))
+	limite := fs.Int("limite", 10, "máximo de mensagens nesta execução")
+	dryRun := fs.Bool("dry-run", false, "só lista as mensagens, sem republicar")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return err
+	}
+	log := logger.NewLogger(cfg.LogLevel)
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+	cli := broker.NewClient(cfg.RabbitMQURL, log.Logger)
+	if err := cli.Start(ctx); err != nil {
+		return err
+	}
+	defer func() { _ = cli.Close() }()
+	r, err := cli.Reprocessar(ctx, *fila, *limite, *dryRun)
+	fmt.Printf("fila=%s dry_run=%t lidas=%d republicadas=%d\n", *fila, *dryRun, r.Lidas, r.Republicadas)
+	for _, id := range r.MessageIDs {
+		fmt.Println(id)
+	}
+	return err
+}
+
+func filasReplay() []string {
+	out := make([]string, 0, len(broker.FilasReplay))
+	for f := range broker.FilasReplay {
+		out = append(out, f)
+	}
+	sort.Strings(out)
+	return out
+}
+
 // modo de execução do binário único (ADR 0001): api serve HTTP e nunca
 // publica (RF04); worker roda só o relay da outbox; all faz as duas coisas
 // (default — mantém o walking skeleton de ponta a ponta num só processo).
@@ -77,6 +117,16 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "seed-operador" {
 		if err := runSeedOperador(os.Args[2:]); err != nil {
 			fmt.Fprintf(os.Stderr, "seed-operador: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// Subcomando replay-dlq (PRD 0027): devolve mensagens de uma DLQ à fila de
+	// origem. Só pelo shell da VM — nenhuma superfície HTTP (refinamento E6).
+	if len(os.Args) > 1 && os.Args[1] == "replay-dlq" {
+		if err := runReplayDLQ(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "replay-dlq: %v\n", err)
 			os.Exit(1)
 		}
 		return
@@ -211,9 +261,10 @@ func registrarMetricasMensageria(tel *telemetria.Telemetria, dbPool *pgxpool.Poo
 		LagSegundos: func(ctx context.Context) (float64, error) { return outbox.LagSegundos(ctx, dbPool) },
 	}
 	if brokerClient != nil {
-		fontes.FilaDLQ = broker.QueueFilmeCriadoDLQ
-		fontes.ProfundidadeDLQ = func(context.Context) (int, error) {
-			return brokerClient.ProfundidadeFila(broker.QueueFilmeCriadoDLQ)
+		// Todas as DLQs do replay (PRD 0027): uma série por fila.
+		fontes.FilasDLQ = filasReplay()
+		fontes.ProfundidadeDLQ = func(_ context.Context, fila string) (int, error) {
+			return brokerClient.ProfundidadeFila(fila)
 		}
 	}
 	if err := tel.RegistrarMensageria(fontes, log.Logger); err != nil {
@@ -601,6 +652,11 @@ func startWorker(ctx context.Context, cfg *config.Config, dbPool *pgxpool.Pool, 
 	brokerClient := startRelay(ctx, cfg.RabbitMQURL, dbPool, wg, log)
 	startConsumer(ctx, brokerClient, dbPool, wg, log)
 	startLimpezaRefresh(ctx, dbPool, wg, log)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		outbox.RodarLimpeza(ctx, dbPool, outbox.IntervaloLimpeza, log.Logger)
+	}()
 	sweeper := reserva.NovoSweeper(dbPool, metricasReserva(log), nil, log.Logger)
 	wg.Add(1)
 	go func() {

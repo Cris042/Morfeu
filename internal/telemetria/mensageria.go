@@ -14,10 +14,12 @@ import (
 // importa outbox nem broker; o wiring (main) injeta as fontes. Campos nil
 // desligam o respectivo gauge (ex.: processo sem broker não mede DLQ).
 type FontesMensageria struct {
-	Pendentes       func(ctx context.Context) (int64, error)
-	LagSegundos     func(ctx context.Context) (float64, error)
-	ProfundidadeDLQ func(ctx context.Context) (int, error)
-	FilaDLQ         string
+	Pendentes   func(ctx context.Context) (int64, error)
+	LagSegundos func(ctx context.Context) (float64, error)
+	// ProfundidadeDLQ lê a profundidade de cada fila de FilasDLQ (PRD 0027:
+	// todas as DLQs, uma série por fila).
+	ProfundidadeDLQ func(ctx context.Context, fila string) (int, error)
+	FilasDLQ        []string
 }
 
 // RegistrarMensageria cria os gauges observáveis morfeu_outbox_pendentes,
@@ -42,9 +44,7 @@ func (t *Telemetria) RegistrarMensageria(fontes FontesMensageria, logger *zap.Lo
 	if err != nil {
 		return fmt.Errorf("telemetria: gauge dlq: %w", err)
 	}
-	filaAttr := metric.WithAttributes(attribute.String("fila", fontes.FilaDLQ))
-
-	g := gaugesMensageria{fontes: fontes, logger: logger, pendentes: pendentes, lag: lag, dlq: dlq, filaAttr: filaAttr}
+	g := gaugesMensageria{fontes: fontes, logger: logger, pendentes: pendentes, lag: lag, dlq: dlq}
 	_, err = meter.RegisterCallback(g.observar, pendentes, lag, dlq)
 	if err != nil {
 		return fmt.Errorf("telemetria: callback de mensageria: %w", err)
@@ -59,7 +59,6 @@ type gaugesMensageria struct {
 	pendentes metric.Int64ObservableGauge
 	lag       metric.Float64ObservableGauge
 	dlq       metric.Int64ObservableGauge
-	filaAttr  metric.ObserveOption
 }
 
 // observar lê cada fonte configurada; erro de leitura omite só a respectiva
@@ -74,8 +73,12 @@ func (g gaugesMensageria) observar(ctx context.Context, o metric.Observer) error
 		g.registrar(err, "outbox_lag", func() { o.ObserveFloat64(g.lag, s) })
 	}
 	if g.fontes.ProfundidadeDLQ != nil {
-		n, err := g.fontes.ProfundidadeDLQ(ctx)
-		g.registrar(err, "dlq_mensagens", func() { o.ObserveInt64(g.dlq, int64(n), g.filaAttr) })
+		for _, fila := range g.fontes.FilasDLQ {
+			n, err := g.fontes.ProfundidadeDLQ(ctx, fila)
+			g.registrar(err, "dlq_mensagens", func() {
+				o.ObserveInt64(g.dlq, int64(n), metric.WithAttributes(attribute.String("fila", fila)))
+			})
+		}
 	}
 	return nil
 }

@@ -19,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/zap"
 
 	"github.com/mclovin137/morfeu/internal/outbox/db"
 )
@@ -114,4 +115,50 @@ func LagSegundos(ctx context.Context, pool Pool) (float64, error) {
 		return 0, fmt.Errorf("outbox: idade do pendente mais antigo: %w", err)
 	}
 	return idade, nil
+}
+
+// Retenção da outbox publicada (PRD 0027): o evento só serve ao relay; depois
+// de publicado e confirmado, 7 dias bastam para investigação.
+const (
+	RetencaoPublicadosDias = 7
+	lotePublicados         = 1000
+	IntervaloLimpeza       = time.Hour
+)
+
+// LimparPublicados apaga eventos publicados além da retenção, em lotes de
+// 1000 até esvaziar (cada lote é um DELETE curto). Devolve o total apagado.
+func LimparPublicados(ctx context.Context, pool Pool, dias int) (int64, error) {
+	var total int64
+	for ctx.Err() == nil {
+		n, err := db.New(pool).LimparPublicados(ctx, db.LimparPublicadosParams{Dias: int32(dias), Limite: lotePublicados}) //nolint:gosec // dias é constante pequena
+		if err != nil {
+			return total, fmt.Errorf("outbox: limpar publicados: %w", err)
+		}
+		total += n
+		if n < lotePublicados {
+			break
+		}
+	}
+	return total, nil
+}
+
+// RodarLimpeza limpa a outbox a cada intervalo até ctx acabar (worker).
+func RodarLimpeza(ctx context.Context, pool Pool, intervalo time.Duration, logger *zap.Logger) {
+	ticker := time.NewTicker(intervalo)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			n, err := LimparPublicados(ctx, pool, RetencaoPublicadosDias)
+			if err != nil {
+				logger.Error("outbox: limpeza falhou", zap.Error(err))
+				continue
+			}
+			if n > 0 {
+				logger.Info("outbox: eventos publicados removidos", zap.Int64("quantidade", n))
+			}
+		}
+	}
 }

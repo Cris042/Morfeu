@@ -33,6 +33,7 @@ type ResumoTarefas struct {
 	Expirados   int
 	Confirmados int
 	Estornados  int
+	Encerradas  int // cobranças de expirados encerradas ou cobradas (→ estorno)
 	Falhas      int
 }
 
@@ -83,6 +84,7 @@ func (s *Servico) Reconciliar(ctx context.Context) ResumoTarefas {
 			out.Expirados++
 		}
 	}
+	s.varrerCobrancasAbertas(ctx, &out)
 	return out
 }
 
@@ -104,7 +106,61 @@ func (s *Servico) reconciliarUm(ctx context.Context, id uuid.UUID, intencao *str
 		}
 	case pagamento.CobrancaCancelada:
 	}
-	return false, s.expirarAgora(ctx, id)
+	if err := s.expirarAgora(ctx, id); err != nil {
+		return false, err
+	}
+	return false, s.encerrarCobranca(ctx, id)
+}
+
+// encerrarCobranca marca que a cobrança do pedido não aceita mais pagamento.
+func (s *Servico) encerrarCobranca(ctx context.Context, id uuid.UUID) error {
+	if err := db.New(s.pool).EncerrarCobranca(ctx, id); err != nil {
+		return fmt.Errorf("encerrar cobrança: %w", err)
+	}
+	return nil
+}
+
+// varrerCobrancasAbertas trata pedidos expirados cuja cobrança não foi
+// encerrada (PRD 0027, auditoria 0025): o cancelamento lazy falhou ou foi
+// recusado porque o cliente pagou. Aprovada → o mesmo pivô (expirado →
+// estorno "tardio"); pendente → cancela; cancelada → só encerra.
+func (s *Servico) varrerCobrancasAbertas(ctx context.Context, out *ResumoTarefas) {
+	abertos, err := db.New(s.pool).ExpiradosComCobrancaAberta(ctx, loteReconciliacao)
+	if err != nil {
+		s.logger.Error("pedido: listar cobranças abertas", zap.Error(err))
+		out.Falhas++
+		return
+	}
+	for _, a := range abertos {
+		if ctx.Err() != nil {
+			return
+		}
+		if err := s.encerrarOuCobrar(ctx, a.ID, *a.PaymentIntentID); err != nil {
+			out.Falhas++
+			s.logger.Warn("pedido: cobrança aberta adiada", zap.String("pedido_id", a.ID.String()), zap.Error(err))
+			continue
+		}
+		out.Encerradas++
+	}
+}
+
+func (s *Servico) encerrarOuCobrar(ctx context.Context, id uuid.UUID, intencao string) error {
+	sit, err := s.cfg.Gateway.ConsultarCobranca(ctx, intencao)
+	if err != nil {
+		return fmt.Errorf("consultar cobrança: %w", err)
+	}
+	switch sit.Estado {
+	case pagamento.CobrancaAprovada:
+		if err := s.AplicarPagamento(ctx, Pagamento{PedidoID: id, IntencaoID: intencao, ValorCentavos: sit.ValorCentavos, Moeda: sit.Moeda}); err != nil {
+			return err
+		}
+	case pagamento.CobrancaPendente:
+		if err := s.cfg.Gateway.CancelarCobranca(ctx, intencao); err != nil {
+			return fmt.Errorf("cancelar cobrança: %w", err)
+		}
+	case pagamento.CobrancaCancelada:
+	}
+	return s.encerrarCobranca(ctx, id)
 }
 
 // expirarAgora expira o pedido numa TX própria.

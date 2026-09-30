@@ -76,10 +76,10 @@ func TestMetricas_MensageriaComFontesReais(t *testing.T) {
 	err = tel.RegistrarMensageria(telemetria.FontesMensageria{
 		Pendentes:   func(ctx context.Context) (int64, error) { return outbox.Pendentes(ctx, pool) },
 		LagSegundos: func(ctx context.Context) (float64, error) { return outbox.LagSegundos(ctx, pool) },
-		ProfundidadeDLQ: func(context.Context) (int, error) {
-			return client.ProfundidadeFila(broker.QueueFilmeCriadoDLQ)
+		ProfundidadeDLQ: func(_ context.Context, fila string) (int, error) {
+			return client.ProfundidadeFila(fila)
 		},
-		FilaDLQ: broker.QueueFilmeCriadoDLQ,
+		FilasDLQ: []string{broker.QueueFilmeCriadoDLQ},
 	}, zap.NewNop())
 	if err != nil {
 		t.Fatalf("RegistrarMensageria: %v", err)

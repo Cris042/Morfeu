@@ -70,6 +70,30 @@ func (q *Queries) InsertEvent(ctx context.Context, arg InsertEventParams) (Outbo
 	return i, err
 }
 
+const limparPublicados = `-- name: LimparPublicados :execrows
+DELETE FROM outbox_events
+WHERE id IN (
+    SELECT id FROM outbox_events
+    WHERE published_at < now() - make_interval(days => $1::int)
+    LIMIT $2::int
+)
+`
+
+type LimparPublicadosParams struct {
+	Dias   int32 `db:"dias"`
+	Limite int32 `db:"limite"`
+}
+
+// Limpeza da outbox (PRD 0027): apaga, em lote, eventos já publicados há mais
+// de @dias dias. Pendentes (published_at IS NULL) nunca são tocados.
+func (q *Queries) LimparPublicados(ctx context.Context, arg LimparPublicadosParams) (int64, error) {
+	result, err := q.db.Exec(ctx, limparPublicados, arg.Dias, arg.Limite)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const marcarPublicado = `-- name: MarcarPublicado :exec
 UPDATE outbox_events
 SET published_at = $2

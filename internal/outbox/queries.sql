@@ -37,3 +37,13 @@ ON CONFLICT (message_id, consumidor) DO NOTHING;
 SELECT COALESCE(EXTRACT(EPOCH FROM now() - min(created_at)), 0)::float8 AS idade_segundos
 FROM outbox_events
 WHERE published_at IS NULL;
+
+-- name: LimparPublicados :execrows
+-- Limpeza da outbox (PRD 0027): apaga, em lote, eventos já publicados há mais
+-- de @dias dias. Pendentes (published_at IS NULL) nunca são tocados.
+DELETE FROM outbox_events
+WHERE id IN (
+    SELECT id FROM outbox_events
+    WHERE published_at < now() - make_interval(days => @dias::int)
+    LIMIT @limite::int
+);

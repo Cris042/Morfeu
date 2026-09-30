@@ -93,3 +93,16 @@ SELECT
     count(*) FILTER (WHERE status = 'estorno_pendente')::bigint AS estorno_pendente
 FROM pedidos
 WHERE status IN ('aguardando_pagamento', 'estorno_pendente');
+
+-- name: EncerrarCobranca :exec
+-- A cobrança do pedido foi cancelada no gateway (ou já estava): nada a varrer.
+UPDATE pedidos SET cobranca_encerrada = true WHERE id = @id;
+
+-- name: ExpiradosComCobrancaAberta :many
+-- Varredura (PRD 0027): expirados cuja cobrança não foi encerrada — o
+-- cancelamento pode ter sido recusado porque o cliente acabou de pagar.
+SELECT id, payment_intent_id
+FROM pedidos
+WHERE status = 'expirado' AND NOT cobranca_encerrada AND payment_intent_id IS NOT NULL
+ORDER BY atualizado_em
+LIMIT @limite::int;

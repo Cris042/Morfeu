@@ -113,8 +113,8 @@ func TestCardinalidade_SoLabelsPermitidos(t *testing.T) {
 	err := tel.RegistrarMensageria(FontesMensageria{
 		Pendentes:       func(context.Context) (int64, error) { return 3, nil },
 		LagSegundos:     func(context.Context) (float64, error) { return 1.5, nil },
-		ProfundidadeDLQ: func(context.Context) (int, error) { return 2, nil },
-		FilaDLQ:         "catalogo.filme_criado.dlq",
+		ProfundidadeDLQ: func(context.Context, string) (int, error) { return 2, nil },
+		FilasDLQ:        []string{"catalogo.filme_criado.dlq"},
 	}, zap.NewNop())
 	if err != nil {
 		t.Fatalf("RegistrarMensageria: %v", err)
@@ -173,10 +173,15 @@ func TestLabelsDaSaga(t *testing.T) {
 func TestMensageria_GaugesNoScrape(t *testing.T) {
 	tel := iniciarTeste(t)
 	err := tel.RegistrarMensageria(FontesMensageria{
-		Pendentes:       func(context.Context) (int64, error) { return 7, nil },
-		LagSegundos:     func(context.Context) (float64, error) { return 0, io.ErrUnexpectedEOF },
-		ProfundidadeDLQ: func(context.Context) (int, error) { return 4, nil },
-		FilaDLQ:         "catalogo.filme_criado.dlq",
+		Pendentes:   func(context.Context) (int64, error) { return 7, nil },
+		LagSegundos: func(context.Context) (float64, error) { return 0, io.ErrUnexpectedEOF },
+		ProfundidadeDLQ: func(_ context.Context, fila string) (int, error) {
+			if fila == "notificacao.pedido_confirmado.dlq" {
+				return 1, nil
+			}
+			return 4, nil
+		},
+		FilasDLQ: []string{"catalogo.filme_criado.dlq", "notificacao.pedido_confirmado.dlq"},
 	}, zap.NewNop())
 	if err != nil {
 		t.Fatalf("RegistrarMensageria: %v", err)
@@ -186,6 +191,7 @@ func TestMensageria_GaugesNoScrape(t *testing.T) {
 	for _, esperado := range []string{
 		"morfeu_outbox_pendentes 7",
 		`morfeu_dlq_mensagens{fila="catalogo.filme_criado.dlq"} 4`,
+		`morfeu_dlq_mensagens{fila="notificacao.pedido_confirmado.dlq"} 1`,
 	} {
 		if !strings.Contains(metrics, esperado) {
 			t.Errorf("esperava %q no scrape:\n%s", esperado, metrics)

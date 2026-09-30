@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -152,7 +153,7 @@ func (c *Client) processar(ctx context.Context, fila string, d amqp.Delivery, h 
 	pctx, span := otel.Tracer("morfeu/broker").Start(pctx, "consumir "+fila, trace.WithSpanKind(trace.SpanKindConsumer))
 	defer span.End()
 
-	err := h(pctx, e)
+	err := executarProtegido(pctx, h, e)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "entrega não processada")
@@ -173,6 +174,19 @@ func (c *Client) processar(ctx context.Context, fila string, d amqp.Delivery, h 
 			c.logger.Warn("falha no nack", append(campos, zap.Error(nackErr))...)
 		}
 	}
+}
+
+// executarProtegido roda o handler recuperando panic (PRD 0027): um bug que
+// derruba o handler vira erro permanente (DLQ) em vez de derrubar o worker.
+func executarProtegido(ctx context.Context, h Handler, e Entrega) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			// Tipo + stack para achar o bug; nunca o valor do panic (pode
+			// carregar dado de negócio — auditoria 0027).
+			err = fmt.Errorf("panic no handler (%T): %w\n%s", r, ErrPermanente, debug.Stack())
+		}
+	}()
+	return h(ctx, e)
 }
 
 // fechado informa se Close já foi chamado.
