@@ -4,6 +4,8 @@ import { Link, Route, Routes } from 'react-router'
 import { Cartaz } from '../features/cartaz/Cartaz'
 import { AcompanharPedido } from '../features/checkout/AcompanharPedido'
 import { Checkout } from '../features/checkout/Checkout'
+import { Consulta } from '../features/consulta/Consulta'
+import { Ingresso } from '../features/consulta/Ingresso'
 import { Entrar } from '../features/conta/Entrar'
 import { MeusPedidos, PedidoDaConta } from '../features/conta/MeusPedidos'
 import { PaginaFilme } from '../features/filme/PaginaFilme'
@@ -34,6 +36,8 @@ export function App() {
           <Route path="/sessoes/:id" element={<PaginaSessao />} />
           <Route path="/sessoes/:id/pagamento" element={<Checkout />} />
           <Route path="/pedido/:id" element={<AcompanharPedido />} />
+          <Route path="/consulta" element={<Consulta />} />
+          <Route path="/i/:ref" element={<Ingresso />} />
           <Route path="/entrar" element={<Entrar modo="entrar" />} />
           <Route path="/cadastro" element={<Entrar modo="cadastro" />} />
           <Route path="/conta/pedidos" element={<MeusPedidos />} />

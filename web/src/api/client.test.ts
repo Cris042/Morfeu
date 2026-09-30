@@ -26,6 +26,7 @@ describe('cliente da API', () => {
     const { url, init, headers } = chamada(f)
     expect(url).toBe('/api/filmes')
     expect(init.credentials).toBe('include')
+    expect(init.referrerPolicy).toBe('no-referrer')
     expect(headers['X-Requested-With']).toBeUndefined()
   })
 

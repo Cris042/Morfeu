@@ -45,7 +45,10 @@ export function AcompanharPedido() {
       return (
         <section className={styles.checkout}>
           <h1 className={styles.titulo}>Pedido não encontrado neste navegador</h1>
-          <p>Os ingressos de um pedido pago chegam no e-mail informado na compra.</p>
+          <p>
+            Os ingressos de um pedido pago chegam no e-mail informado na compra.{' '}
+            <Link to="/consulta">Consultar pedido</Link>
+          </p>
         </section>
       )
     }

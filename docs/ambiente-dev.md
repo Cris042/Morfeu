@@ -71,6 +71,7 @@ npm run e2e                                  # sobe o vite preview (proxy /api) 
 - Sem Chrome/libs no WSL (caso desta máquina: faltam libasound/libxcomposite/libxrandr), use a imagem oficial: `docker run --rm --network host -v "$PWD/web":/work -w /work mcr.microsoft.com/playwright:v1.63.0-noble npx playwright test` (a imagem é grande — ~2 GB no 1º pull).
 - Portas 5432/5672 ocupadas por outro projeto: suba a stack com outro nome de projeto e um override (`docker compose -p morfeu-e2e -f docker-compose.yml -f override.yml --profile app up -d`, com `ports: !override [...]` e `env_file: !override [cópia do .env.docker-compose.example]`). O `.env.docker-compose` de dev aponta a API para `localhost` e não serve dentro do compose.
 - Com o repo em `/mnt/c`, o `01-usuario-monitoracao.sh` perde o bit de execução e o entrypoint do postgres o executa com `source`: com `PG_MONITOR_PASSWORD` vazio, o `exit 0` dele encerra o container na 1ª inicialização. Defina a senha (o example já define).
+- **M4 (task 0035):** `m4.spec.ts` compra de verdade (D3/D4) e lê o e-mail pela rota `GET /__teste/emails?para=` (só com e-mail **e** gateway fakes, `-mode=all` e `STRIPE_WEBHOOK_SECRET` definido). Rode o `seed.sql` **antes de cada execução** (sala nova). O `vite preview` serve com a CSP de produção: violação ou problema do axe falham o teste com seletor e motivo.
 - No CI roda no job `E2E` (`.github/workflows/e2e.yml`), que sobe a stack pelo compose e anexa o relatório em falha.
 
 ## Checkout (tasks 0023–0025 — ADR 0010)

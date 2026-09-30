@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"sort"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -220,7 +221,7 @@ func runServer(mode string) {
 
 	e := setupRouter(log, tel, healthHandler)
 	pedidoServico, sessaoServico := registrarRotasDeDominio(e, mode, cfg, dbPool, redisClient, cacheLayer, catalogoServico, catalogoHandler, log)
-	iniciarRotinasDaSaga(relayCtx, mode, cfg, brokerClient, dbPool, fonteDoEmail{pedidoServico, sessaoServico, catalogoServico}, &relayWG, log)
+	iniciarRotinasDaSaga(relayCtx, e, mode, cfg, brokerClient, dbPool, fonteDoEmail{pedidoServico, sessaoServico, catalogoServico}, &relayWG, log)
 
 	go func() {
 		if err := e.Start(":" + cfg.AppPort); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -351,7 +352,7 @@ func registrarRotasDeDominio(e *echo.Echo, mode string, cfg *config.Config, dbPo
 	// Conta no checkout (PRD 0031): Bearer opcional; "Meus pedidos" exige login.
 	pedidoHandler.ComConta(autenticacao.Opcional(emissor),
 		autenticacao.Exigir(emissor, autenticacao.PapelCliente, autenticacao.PapelOperador), autenticacao.UsuarioID)
-	if cfg.Gateway == "fake" && cfg.StripeWebhookSegredo != "" {
+	if rotasDeTesteAtivas(cfg) {
 		// Só com o gateway fake — que o boot recusa em produção (PRD 0024/0031).
 		log.Warn("rota de teste POST /__teste/pagar/:id ATIVA (gateway fake)")
 		pedidoHandler.ComRotasDeTeste()
@@ -427,17 +428,49 @@ func montarReserva(dbPool *pgxpool.Pool, sessoes reserva.FonteSessoes, redisClie
 
 // iniciarRotinasDaSaga sobe, no worker, as tarefas do pedido (PRD 0025) e o
 // consumidor de notificação (PRD 0028; só com broker).
-func iniciarRotinasDaSaga(ctx context.Context, mode string, cfg *config.Config, cli *broker.Client, dbPool *pgxpool.Pool, f fonteDoEmail, wg *sync.WaitGroup, log *logger.Logger) {
+func iniciarRotinasDaSaga(ctx context.Context, e *echo.Echo, mode string, cfg *config.Config, cli *broker.Client, dbPool *pgxpool.Pool, f fonteDoEmail, wg *sync.WaitGroup, log *logger.Logger) {
 	iniciarTarefasPedido(ctx, mode, f.pedidos, wg)
 	if cli != nil {
-		iniciarNotificacao(ctx, cfg, cli, dbPool, f, wg, log)
+		sender := iniciarNotificacao(ctx, cfg, cli, dbPool, f, wg, log)
+		// E-mail verificável no E2E do M4 (PRD 0035): só no processo único
+		// (o fake guarda em memória) e com as mesmas travas da rota de pagamento.
+		if fake, ok := sender.(*notificacao.Fake); ok && mode == modeAll && rotasDeTesteAtivas(cfg) {
+			log.Warn("rota de teste GET /__teste/emails ATIVA (e-mail fake)")
+			e.GET("/__teste/emails", emailsParaTeste(fake))
+		}
+	}
+}
+
+// rotasDeTesteAtivas: gateway fake + segredo do webhook (o boot recusa o
+// fake em produção — PRD 0024/0031).
+func rotasDeTesteAtivas(cfg *config.Config) bool {
+	return cfg.Gateway == "fake" && cfg.StripeWebhookSegredo != ""
+}
+
+// refIngresso acha os links de ingresso no texto do e-mail.
+var refIngresso = regexp.MustCompile(`/i/[0-9a-f-]{36}\.[A-Za-z0-9_-]{43}`)
+
+// emailsParaTeste lista o que o fake "enviou" para ?para= (assunto e os
+// caminhos /i/... dos ingressos) — o E2E abre o link como o cliente abriria.
+func emailsParaTeste(fake *notificacao.Fake) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		para := strings.ToLower(strings.TrimSpace(c.QueryParam("para")))
+		out := make([]map[string]any, 0)
+		for _, m := range fake.Enviadas() {
+			if para == "" || strings.ToLower(m.Para) != para {
+				continue
+			}
+			out = append(out, map[string]any{"tipo": m.Tipo, "assunto": m.Assunto, "links": refIngresso.FindAllString(m.Texto, -1)})
+		}
+		c.Response().Header().Set(echo.HeaderCacheControl, "no-store")
+		return c.JSON(http.StatusOK, out)
 	}
 }
 
 // iniciarNotificacao consome pedido.confirmado (ingresso com QRs — PRD
 // 0026/0028) e pedido.estornado (aviso de estorno — PRD 0030): carrega o
 // pedido pelas portas, monta o e-mail e envia pelo provedor da config (0029).
-func iniciarNotificacao(ctx context.Context, cfg *config.Config, cli *broker.Client, dbPool *pgxpool.Pool, fonte fonteDoEmail, wg *sync.WaitGroup, log *logger.Logger) {
+func iniciarNotificacao(ctx context.Context, cfg *config.Config, cli *broker.Client, dbPool *pgxpool.Pool, fonte fonteDoEmail, wg *sync.WaitGroup, log *logger.Logger) notificacao.EmailSender {
 	fatal := func(msg string, err error) {
 		log.ErrorMsg(msg, zap.Error(err))
 		os.Exit(1)
@@ -501,6 +534,7 @@ func iniciarNotificacao(ctx context.Context, cfg *config.Config, cli *broker.Cli
 	consumir(broker.QueuePedidoEstornado, notificacao.ConsumidorEstorno, notificacao.NovoConsumidor(notificacao.Config{
 		Tipo: notificacao.TipoEstorno, Entregar: aviso.Entregar, Resultado: resultado,
 	}, log.Logger))
+	return sender
 }
 
 // montarEmailSender escolhe o provedor (ADR 0005 Strategy): Resend ou o

@@ -75,7 +75,9 @@ async function enviar(metodo: Metodo, caminho: string, corpo: unknown, token: st
   if (token) {
     headers.Authorization = `Bearer ${token}`
   }
-  const init: RequestInit = { method: metodo, credentials: 'include', headers }
+  // no-referrer: a API nunca precisa do Referer, e a página do ingresso tem
+  // o token no path (PRD 0035).
+  const init: RequestInit = { method: metodo, credentials: 'include', headers, referrerPolicy: 'no-referrer' }
   if (corpo !== undefined) {
     headers['Content-Type'] = 'application/json'
     init.body = JSON.stringify(corpo)

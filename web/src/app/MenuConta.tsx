@@ -25,6 +25,7 @@ export function MenuConta() {
   if (sessao.status === 'anonimo') {
     return (
       <nav className={styles.menu} aria-label="Conta">
+        <Link to="/consulta">Consultar pedido</Link>
         <Link to="/entrar">Entrar</Link>
       </nav>
     )

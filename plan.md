@@ -4,7 +4,19 @@
 
 ## Estado corrente (2026-09-30)
 
-**Task 0034 — Backend: consulta de convidado e página do ingresso (E8 T4): CONCLUÍDA — auditoria APROVADA em 2026-09-30 (`security`), CI verde (PR #65)** (branch `feature/0034-consulta-ingresso`, da main `93b49fd`).
+**Task 0035 — SPA: consulta e ingresso + E2E do M4 (E8 T5): EM ANDAMENTO** (branch `feature/0035-spa-consulta-m4`, da main `2a76e67`).
+
+### Plano da task 0035
+
+1. ~~Rota de teste do e-mail~~ — `GET /__teste/emails?para=` no main (fake + `-mode=all` + travas da rota de pagamento) + unit.
+2. ~~Telas~~ — `/consulta` (mensagem única), `/i/:ref` (válido/usado/404/410, QR `no-referrer`), links, `referrerPolicy: no-referrer` no cliente.
+3. ~~CSP/axe~~ — `@axe-core/playwright` 4.13.0; CSP de produção no `vite preview` + gate de igualdade no `web-ci`; snippet `(ingresso)` do Caddy.
+4. ~~E2E M4~~ — convidado e conta verdes localmente (5/5 com M3 e sessão), sob CSP e axe. **Achado do axe:** rodapé do TMDB com contraste 4,08:1 → `--nevoa` (corrigido).
+5. Lint + typecheck + CI + passe de julgamento; roadmap (E8 ✅, M4 ✅) no fechamento.
+
+---
+
+### Task 0034 — Backend: consulta de convidado e página do ingresso: CONCLUÍDA e MERGEADA (PR #65, `2a76e67`)
 
 ### Plano da task 0034
 

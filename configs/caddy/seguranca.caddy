@@ -15,3 +15,17 @@
 		# Strict-Transport-Security "max-age=31536000; includeSubDomains"
 	}
 }
+
+# Página do ingresso (PRD 0034/0035): o link /i/{id}.{token} é credencial.
+# No site block, antes do fallback da SPA:  import ingresso
+#   - SPA em /i/* com no-referrer + no-store (o path não vaza por Referer nem cache);
+#   - a API em /api/i/* já responde com os mesmos headers;
+#   - access log: redigir o path de /i/* e /api/i/* (E0c-CD), ex.:
+#       log { format filter { request>uri regexp "^(/api)?/i/.*" "$1/i/[redigido]" } }
+(ingresso) {
+	@ingresso path /i/*
+	header @ingresso {
+		Referrer-Policy "no-referrer"
+		Cache-Control "no-store"
+	}
+}
