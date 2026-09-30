@@ -29,7 +29,20 @@ type Config struct {
 	Agora    func() time.Time
 	// Entregar é o envio do ingresso; nil = stub (só registra). O E7 injeta o e-mail.
 	Entregar func(ctx context.Context, pedidoID uuid.UUID) error
+	// Resultado recebe cada tentativa de entrega (tipo, resultado, duração) —
+	// morfeu_email_* (PRD 0029). Resultados: ok, ignorado, transitorio,
+	// permanente, cota.
+	Resultado func(ctx context.Context, tipo, resultado string, d time.Duration)
 }
+
+// Resultados de uma entrega (label `resultado` — lista fechada).
+const (
+	ResultadoOK          = "ok"
+	ResultadoIgnorado    = "ignorado"
+	ResultadoTransitorio = "transitorio"
+	ResultadoPermanente  = "permanente"
+	ResultadoCota        = "cota"
+)
 
 // ConsumidorPedidos consome pedido.confirmado.
 type ConsumidorPedidos struct {
@@ -44,6 +57,9 @@ func NovoConsumidor(cfg Config, logger *zap.Logger) *ConsumidorPedidos {
 	}
 	if cfg.Latencia == nil {
 		cfg.Latencia = func(context.Context, time.Duration) {}
+	}
+	if cfg.Resultado == nil {
+		cfg.Resultado = func(context.Context, string, string, time.Duration) {}
 	}
 	return &ConsumidorPedidos{cfg: cfg, logger: logger}
 }
@@ -63,17 +79,10 @@ func (c *ConsumidorPedidos) Efeito(ctx context.Context, _ outbox.Tx, msg outbox.
 		return fmt.Errorf("notificacao: pedido_id inválido: %w", outbox.ErrPermanente)
 	}
 	if c.cfg.Entregar != nil {
-		err := c.cfg.Entregar(ctx, id)
-		switch {
-		case errors.Is(err, ErrNaoNotificavel):
-			// Pedido não pago ou sem ingresso ativo (ex.: estornado): ack sem
-			// envio — nenhum replay muda isso e nunca sai QR de ingresso inválido.
-			c.logger.Info("notificacao: pedido não notificável, nada enviado", zap.String("pedido_id", id.String()))
+		if err := c.entregar(ctx, id); errors.Is(err, errIgnorado) {
 			return nil
-		case errors.Is(err, ErrPedidoInexistente):
-			return fmt.Errorf("notificacao: %w: %w", err, outbox.ErrPermanente)
-		case err != nil:
-			return fmt.Errorf("notificacao: entregar ingresso: %w", err)
+		} else if err != nil {
+			return err
 		}
 	}
 	if !msg.OccurredAt.IsZero() {
@@ -82,3 +91,37 @@ func (c *ConsumidorPedidos) Efeito(ctx context.Context, _ outbox.Tx, msg outbox.
 	c.logger.Info("notificacao: pedido confirmado registrado", zap.String("pedido_id", id.String()))
 	return nil
 }
+
+// entregar roda a entrega, registra o resultado e decide a classe do erro:
+// não notificável = ack sem envio; inexistente, recusa e cota = permanente
+// (DLQ); o resto volta à fila (redelivery → DLQ após 3).
+func (c *ConsumidorPedidos) entregar(ctx context.Context, id uuid.UUID) error {
+	inicio := c.cfg.Agora()
+	err := c.cfg.Entregar(ctx, id)
+	resultado := ResultadoOK
+	switch {
+	case errors.Is(err, ErrNaoNotificavel):
+		resultado = ResultadoIgnorado
+		err = nil
+		// Pedido não pago ou sem ingresso ativo (ex.: estornado): nenhum
+		// replay muda isso e nunca sai QR de ingresso inválido.
+		c.logger.Info("notificacao: pedido não notificável, nada enviado", zap.String("pedido_id", id.String()))
+	case errors.Is(err, ErrCotaEsgotada):
+		resultado = ResultadoCota
+		err = fmt.Errorf("notificacao: %w: %w", err, outbox.ErrPermanente)
+	case errors.Is(err, ErrPedidoInexistente), errors.Is(err, ErrEnvioPermanente):
+		resultado = ResultadoPermanente
+		err = fmt.Errorf("notificacao: %w: %w", err, outbox.ErrPermanente)
+	case err != nil:
+		resultado = ResultadoTransitorio
+		err = fmt.Errorf("notificacao: entregar ingresso: %w", err)
+	}
+	c.cfg.Resultado(ctx, TipoConfirmacao, resultado, c.cfg.Agora().Sub(inicio))
+	if resultado == ResultadoIgnorado {
+		return errIgnorado
+	}
+	return err
+}
+
+// errIgnorado sinaliza ao Efeito que não houve envio (ack sem latência).
+var errIgnorado = errors.New("notificacao: ignorado")

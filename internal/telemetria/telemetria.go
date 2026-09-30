@@ -54,6 +54,9 @@ var LabelsPermitidos = []attribute.Key{
 	"op",
 	"passo",
 	"estado",
+	// E-mail (task 0029): provedor (fake|resend) e tipo (confirmacao|estorno).
+	"provedor",
+	"tipo",
 }
 
 // Config parametriza Iniciar.

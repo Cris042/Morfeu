@@ -122,7 +122,7 @@ func TestValidate_Argon2ForaDosLimites(t *testing.T) {
 
 // TestValidarPagamento cobre as recusas de boot do checkout (PRD 0024 RF09).
 func TestValidarPagamento(t *testing.T) {
-	base := Config{Ambiente: "dev", Gateway: "fake"}
+	base := Config{Ambiente: "dev", Gateway: "fake", EmailProvedor: "fake"}
 	casos := []struct {
 		nome   string
 		mudar  func(*Config)
@@ -134,6 +134,7 @@ func TestValidarPagamento(t *testing.T) {
 		{"produção com stripe", func(c *Config) {
 			c.Ambiente, c.Gateway, c.StripeChave, c.StripeWebhookSegredo = "producao", "stripe", "rk_test_x", "whsec_x"
 			c.TokenSegredoV1, c.BaseURLPublica = strings.Repeat("s", 32), "https://m.exemplo"
+			c.EmailProvedor, c.ResendChave, c.EmailRemetente = "resend", "re_x", "M <m@x.com>"
 		}, ""},
 		{"stripe sem segredo do webhook", func(c *Config) { c.Gateway, c.StripeChave = "stripe", "rk_test_x" }, "STRIPE_WEBHOOK_SECRET"},
 		{"produção com fake", func(c *Config) { c.Ambiente = "producao" }, "fake"},
@@ -142,12 +143,21 @@ func TestValidarPagamento(t *testing.T) {
 		{"chave live mesmo com fake", func(c *Config) { c.StripeChave = "rk_live_x" }, "modo de teste"},
 		{"gateway desconhecido", func(c *Config) { c.Gateway = "paypal" }, "MORFEU_GATEWAY"},
 		{"ambiente desconhecido", func(c *Config) { c.Ambiente = "prod" }, "AMBIENTE"},
+		{"e-mail resend completo", func(c *Config) { c.EmailProvedor, c.ResendChave, c.EmailRemetente = "resend", "re_x", "M <m@x.com>" }, ""},
+		{"e-mail resend sem chave", func(c *Config) { c.EmailProvedor, c.EmailRemetente = "resend", "M <m@x.com>" }, "RESEND_API_KEY"},
+		{"e-mail provedor desconhecido", func(c *Config) { c.EmailProvedor = "smtp" }, "EMAIL_PROVEDOR"},
+		{"e-mail fake em produção", func(c *Config) {
+			c.Ambiente, c.Gateway, c.StripeChave, c.StripeWebhookSegredo = "producao", "stripe", "rk_test_x", "whsec_x"
+			c.TokenSegredoV1, c.BaseURLPublica = strings.Repeat("s", 32), "https://m.exemplo"
+		}, "EMAIL_PROVEDOR=fake"},
 		{"segredo do token curto", func(c *Config) { c.TokenSegredoV1 = "curto" }, "INGRESSO_TOKEN_SEGREDO_V1"},
 		{"produção sem segredo do token", func(c *Config) {
 			c.Ambiente, c.Gateway, c.StripeChave, c.StripeWebhookSegredo, c.TokenSegredoV1, c.BaseURLPublica = "producao", "stripe", "rk_test_x", "whsec_x", "", "https://m.exemplo"
+			c.EmailProvedor, c.ResendChave, c.EmailRemetente = "resend", "re_x", "M <m@x.com>"
 		}, "INGRESSO_TOKEN_SEGREDO_V1"},
 		{"produção com base http", func(c *Config) {
 			c.Ambiente, c.Gateway, c.StripeChave, c.StripeWebhookSegredo, c.TokenSegredoV1, c.BaseURLPublica = "producao", "stripe", "rk_test_x", "whsec_x", strings.Repeat("s", 32), "http://m.exemplo"
+			c.EmailProvedor, c.ResendChave, c.EmailRemetente = "resend", "re_x", "M <m@x.com>"
 		}, "BASE_URL_PUBLICA"},
 	}
 	for _, c := range casos {

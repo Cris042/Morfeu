@@ -49,6 +49,11 @@ type Config struct {
 	// ADR 0010) e a URL pública base dos links do e-mail (nunca do header Host).
 	TokenSegredoV1 string
 	BaseURLPublica string
+	// E-mail (PRD 0029): provedor "fake" (padrão: dev/CI/load-test) ou
+	// "resend"; chave nunca logada; remetente "Nome <email>".
+	EmailProvedor  string
+	ResendChave    string
+	EmailRemetente string
 }
 
 // LoadConfig loads configuration from environment variables with defaults
@@ -80,6 +85,9 @@ func LoadConfig() (*Config, error) {
 		StripeWebhookSegredo: getEnv("STRIPE_WEBHOOK_SECRET", ""),
 		TokenSegredoV1:       getEnv("INGRESSO_TOKEN_SEGREDO_V1", ""),
 		BaseURLPublica:       getEnv("BASE_URL_PUBLICA", "http://localhost:5173"),
+		EmailProvedor:        getEnv("EMAIL_PROVEDOR", "fake"),
+		ResendChave:          getEnv("RESEND_API_KEY", ""),
+		EmailRemetente:       getEnv("EMAIL_REMETENTE", "Morfeu <onboarding@resend.dev>"),
 	}
 
 	// Parse cache TTL
@@ -195,6 +203,14 @@ func (c *Config) validarNotificacao() error {
 	}
 	if c.Ambiente == "producao" && (c.TokenSegredoV1 == "" || !strings.HasPrefix(c.BaseURLPublica, "https://")) {
 		return fmt.Errorf("em produção, INGRESSO_TOKEN_SEGREDO_V1 é obrigatório e BASE_URL_PUBLICA deve ser https")
+	}
+	switch {
+	case c.EmailProvedor != "fake" && c.EmailProvedor != "resend":
+		return fmt.Errorf("EMAIL_PROVEDOR deve ser fake ou resend")
+	case c.EmailProvedor == "fake" && c.Ambiente == "producao":
+		return fmt.Errorf("EMAIL_PROVEDOR=fake é proibido com AMBIENTE=producao")
+	case c.EmailProvedor == "resend" && (!strings.HasPrefix(c.ResendChave, "re_") || c.EmailRemetente == ""):
+		return fmt.Errorf("EMAIL_PROVEDOR=resend exige RESEND_API_KEY (re_…) e EMAIL_REMETENTE")
 	}
 	return nil
 }

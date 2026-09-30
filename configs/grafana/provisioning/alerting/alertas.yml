@@ -1,6 +1,6 @@
 # Alertas mínimos (task 0007, RF06) — lista FECHADA do refinamento E0d,
 # + 1 do refinamento E1 (task 0010: reuso de refresh token), + 2 da reserva (E4)
-# + 5 da saga do checkout (refinamento E6, task 0026).
+# + 5 da saga do checkout (refinamento E6, task 0026), + 2 do e-mail (E7, task 0029).
 # Grafana-managed; roteados ao Discord. Webhook só via env ($DISCORD_WEBHOOK_URL).
 # Cada regra segue o padrão A (query instantânea) → C (threshold). Nova regra
 # exige atualizar o PRD — a lista é fechada ("sem mais um alerta").
@@ -411,3 +411,57 @@ groups:
         annotations:
           summary: "Confirmação → notificação lenta"
           description: "p95 entre o pagamento confirmado e a notificação processada acima de 5 s (SLI do checkout fim a fim, doc.md §13): relay da outbox lento, broker ou consumidor atrasados."
+      - uid: morfeu-email-recusado
+        title: "E-mail recusado ou cota esgotada"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 900, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'sum(increase(morfeu_email_envios_total{resultado=~"permanente|cota"}[15m])) or vector(0)'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+        for: 0m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "E-mail recusado ou cota esgotada"
+          description: "O provedor recusou um e-mail (4xx) ou a cota do plano grátis acabou (Resend: 100/dia): a mensagem foi para a DLQ notificacao.pedido_confirmado.dlq. Cota → replay-dlq no dia seguinte; recusa → ver o log pelo pedido_id (401/403 em série = chave revogada: trocar RESEND_API_KEY e fazer o replay). A venda segue válida (pós-pivô)."
+      - uid: morfeu-email-falhando
+        title: "Falhas de envio de e-mail acima de 20%"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 900, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: '(sum(increase(morfeu_email_envios_total{resultado="transitorio"}[15m])) / clamp_min(sum(increase(morfeu_email_envios_total[15m])), 1)) and on() (sum(increase(morfeu_email_envios_total[15m])) >= 5)'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0.2]}
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "Falhas de envio de e-mail acima de 20%"
+          description: "Mais de 20% das entregas falharam de forma transitória em 15 min (com ao menos 5 envios): provedor instável ou rede. As mensagens voltam à fila e, após 3 tentativas, vão à DLQ."
