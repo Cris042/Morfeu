@@ -1,7 +1,7 @@
 # Task 0023 — Pedido: aggregate, máquina de estados e criação com gateway fake (E6, T2)
 
 - **Data:** 2026-09-30
-- **Status:** em andamento
+- **Status:** concluída (auditoria APROVADA em 2026-09-30)
 - **Branch:** `feature/0023-pedido-criacao` (da main `ad2e1b0`)
 - **PRD:** docs/prd/0023-pedido-criacao.md
 - **Item do roadmap:** E6 — Saga do checkout (2ª de 6). Refinamento: `docs/refinamentos/E6-saga-checkout.md` §T2; ADR 0010.
@@ -28,11 +28,11 @@ Nenhuma nova.
 
 ## Critérios de aceite
 
-- [ ] Pedido criado com total do servidor, holds presos até o prazo + 2 min e cobrança no gateway.
-- [ ] Recusas: total do cliente, validação, sem carrinho, holds alheios, sessão indisponível — sem pedido órfão.
-- [ ] 1 pedido pendente por carrinho (com corrida); vencido expira de forma lazy.
-- [ ] Gateway fora → 503, pedido `falhou`, assentos devolvidos.
-- [ ] Matriz de estados completa e CAS concorrente → exatamente 1.
+- [x] Pedido criado com total do servidor, holds presos até o prazo + 2 min e cobrança no gateway.
+- [x] Recusas: total do cliente, validação, sem carrinho, holds alheios, sessão indisponível — sem pedido órfão.
+- [x] 1 pedido pendente por carrinho (com corrida); vencido expira de forma lazy.
+- [x] Gateway fora → 503, pedido `falhou`, assentos devolvidos.
+- [x] Matriz de estados completa e CAS concorrente → exatamente 1.
 
 ## Riscos
 

@@ -132,12 +132,16 @@ func (s *Servico) Criar(ctx context.Context, donoHash []byte, in Entrada) (Criad
 	if err != nil {
 		s.cfg.Funil(ctx, EtapaGatewayFalhou)
 		s.logger.Warn("pedido: gateway recusou a cobrança", zap.String("pedido_id", p.id.String()), zap.Error(err))
-		if errDesfazer := s.desfazer(ctx, p.id); errDesfazer != nil {
+		ctxDesfazer, cancelar := ctxPosCobranca(ctx)
+		defer cancelar()
+		if errDesfazer := s.desfazer(ctxDesfazer, p.id); errDesfazer != nil {
 			s.logger.Error("pedido: desfazer após falha do gateway", zap.String("pedido_id", p.id.String()), zap.Error(errDesfazer))
 		}
 		return Criado{}, ErrGatewayIndisponivel
 	}
-	if err := (repositorio{q: db.New(s.pool)}).definirCobranca(ctx, p.id, intencao.ID, s.cfg.Agora()); err != nil {
+	ctxGravar, cancelar := ctxPosCobranca(ctx)
+	defer cancelar()
+	if err := (repositorio{q: db.New(s.pool)}).definirCobranca(ctxGravar, p.id, intencao.ID, s.cfg.Agora()); err != nil {
 		return Criado{}, err
 	}
 	s.cfg.Funil(ctx, EtapaCobrancaCriada)
@@ -180,6 +184,16 @@ func (s *Servico) expirar(ctx context.Context, tx outbox.Tx, r repositorio, id u
 	}
 	_, err = s.cfg.Reserva.LiberarDoPedido(ctx, tx, id)
 	return err
+}
+
+// prazoPosCobranca limita os passos que seguem a chamada ao gateway.
+const prazoPosCobranca = 5 * time.Second
+
+// ctxPosCobranca desacopla do cancelamento da requisição os passos que
+// seguem a chamada ao gateway (gravar a cobrança ou desfazer o pedido): se o
+// cliente desistir no meio, o estado do pedido ainda fecha (auditoria 0023).
+func ctxPosCobranca(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), prazoPosCobranca)
 }
 
 // abrirNaTx insere o pedido e prende os holds — tudo ou nada. Pedido

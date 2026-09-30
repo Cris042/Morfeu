@@ -92,6 +92,8 @@ func (h *Handler) criar(c echo.Context) error {
 		return h.responderErro(c, err)
 	}
 	p := criado.Pedido
+	// O client_secret confirma pagamento: nunca em cache (auditoria 0023).
+	c.Response().Header().Set(echo.HeaderCacheControl, "no-store")
 	return c.JSON(http.StatusCreated, map[string]any{
 		"pedido": pedidoDTO{ID: p.id, Codigo: p.codigo, SessaoID: p.sessaoID, Assentos: p.Assentos(),
 			TotalCentavos: p.totalCentavos, Status: p.status, ExpiraEm: p.expiraEm.UTC()},
@@ -109,6 +111,7 @@ func (h *Handler) obter(c echo.Context) error {
 	if err != nil {
 		return h.responderErro(c, err)
 	}
+	c.Response().Header().Set(echo.HeaderCacheControl, "no-store")
 	return c.JSON(http.StatusOK, pedidoDTO{ID: v.ID, Codigo: v.Codigo, SessaoID: v.SessaoID, Assentos: v.Assentos,
 		TotalCentavos: v.TotalCentavos, Status: v.Status, ExpiraEm: v.ExpiraEm.UTC()})
 }

@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0023-pedido-criacao.md
 - **Branch:** feature/0023-pedido-criacao
 - **Data:** 2026-09-30
-- **Status:** em andamento
+- **Status:** concluído
 
 ## Objetivo
 
@@ -39,6 +39,7 @@ Migration 011, aggregate `Pedido`, máquina de estados e CAS, `POST /pedidos`, `
 
 - RNF01 — O `pedido` não importa outros módulos. Sessão e reserva chegam por interfaces declaradas no consumidor; o adapter `reservaDoPedido` vive no `main` e traduz os erros da reserva (ADR 0003/0010). Depguard `pedido-domain` e `pedido-pagamento` (strict).
 - RNF02 — Sem PII em logs: só `pedido_id`, `sessao_id` e contagens. O e-mail fica só na tabela.
+- RNF04 — Os passos depois da chamada ao gateway (gravar a cobrança, desfazer) usam contexto desacoplado do cancelamento da requisição (5 s); respostas com `client_secret` têm `Cache-Control: no-store` (auditoria 0023).
 - RNF03 — Relógio injetado. Testes com PG e Redis reais, sessão e reserva reais, gateway fake (sem rede).
 
 ## Regras de negócio

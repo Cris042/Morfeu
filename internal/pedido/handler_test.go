@@ -329,7 +329,11 @@ func TestCriar_CaminhoFeliz(t *testing.T) {
 	a := novoAmbiente(t)
 	sessaoID := novaSessao(t)
 	car := a.carrinho(t, sessaoID, "A1", "A2")
-	c := criadoDe(t, a.criar(car, sessaoID, "A2", "A1"))
+	rc := a.criar(car, sessaoID, "A2", "A1")
+	if rc.cabecalho.Get(echo.HeaderCacheControl) != "no-store" {
+		t.Fatalf("Cache-Control: %q", rc.cabecalho.Get(echo.HeaderCacheControl))
+	}
+	c := criadoDe(t, rc)
 	p := c.Pedido
 	if p.TotalCentavos != 6000 || p.Status != AguardandoPagamento || !p.ExpiraEm.Equal(a.rel.agora().Add(TTLPedido)) ||
 		c.ClientSecret == "" || len(p.Codigo) != 16 || strings.Contains(c.ClientSecret, "ana@") {
