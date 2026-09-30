@@ -123,3 +123,19 @@
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+.continuar {
+  display: inline-block;
+  margin-top: var(--espaco-4);
+  padding: 13px 28px;
+  font-weight: 700;
+  color: var(--tinta-papoula);
+  text-decoration: none;
+  background: var(--papoula);
+  border-radius: 6px;
+}
+
+.continuar:focus-visible {
+  outline: none;
+  box-shadow: var(--halo);
+}

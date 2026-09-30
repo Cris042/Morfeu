@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { Link } from 'react-router'
 
 import { useEstender, useLiberar } from '../../api/consultas'
 import type { Hold } from '../../api/tipos'
@@ -76,6 +77,9 @@ export function SeusAssentos({ sessaoID, holds, agora, aoVencer }: Props) {
           </li>
         ))}
       </ul>
+      <Link to={`/sessoes/${String(sessaoID)}/pagamento`} className={styles.continuar}>
+        Continuar para o pagamento
+      </Link>
     </aside>
   )
 }

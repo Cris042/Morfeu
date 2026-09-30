@@ -4,7 +4,19 @@
 
 ## Estado corrente (2026-09-30)
 
-**Task 0032 — SPA: sessão, login/cadastro e "Meus pedidos" (E8 T2): EM ANDAMENTO** (branch `feature/0032-spa-sessao-conta`, da main `802e374`).
+**Task 0033 — SPA: checkout e pagamento (E8 T3): EM ANDAMENTO** (branch `feature/0033-spa-checkout`, da main `f539bdf`).
+
+### Plano da task 0033
+
+1. ~~Deps~~ — `@stripe/stripe-js` 9.17.0 + `@stripe/react-stripe-js` 6.12.0 (Context7, npm audit, `lib.md`); `allow_redirects=never` no PaymentIntent (segredo nunca numa URL de retorno — decisão da implementação, dentro do RF de "client_secret só em memória").
+2. ~~Telas~~ — checkout (`/sessoes/:id/pagamento`), meio por build (fake × Stripe, chunk do outro modo não gerado), acompanhamento `/pedido/:id` (backoff, teto 2 min), link no painel.
+3. ~~Testes~~ — componentes (checkout, meios com mocks do Stripe, polling com timers falsos) + adapter Go; smoke manual do fluxo na stack local (assento → "Pagar (teste)" → pago → assento ocupado).
+4. ~~CSP/gates~~ — Stripe na CSP do Caddy; `web-ci` barra teste/segredo no bundle; E2E builda em modo fake com a rota de teste ativa.
+5. Lint + typecheck + build + CI + passe de julgamento.
+
+---
+
+### Task 0032 — SPA: sessão, login/cadastro e "Meus pedidos": CONCLUÍDA e MERGEADA (PR #63, `f539bdf`)
 
 ### Plano da task 0032
 

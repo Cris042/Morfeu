@@ -22,6 +22,8 @@ export default defineConfig({
     command: 'npm run build && npx vite preview',
     url: 'http://localhost:4173',
     reuseExistingServer: true,
+    // Build do E2E com o pagamento de teste (gateway fake da API — PRD 0033).
+    env: { VITE_PAGAMENTO_MODO: 'fake' },
     timeout: 120_000,
   },
 })
