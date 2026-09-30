@@ -20,6 +20,7 @@ const (
 	IntervaloTarefas     = time.Minute
 	loteReconciliacao    = 20 // teto por rodada (Stripe test ~25 req/s)
 	loteEstornos         = 10
+	janelaBackoff        = 5 // lê até 5× o lote para pular os que estão em backoff
 	backoffEstornoBase   = time.Minute
 	backoffEstornoMaximo = time.Hour
 	// alertaTentativas: a partir daqui cada falha é log de erro (o alerta
@@ -68,6 +69,9 @@ func (s *Servico) Reconciliar(ctx context.Context) ResumoTarefas {
 		return out
 	}
 	for _, v := range vencidos {
+		if ctx.Err() != nil {
+			break // shutdown: o resto fica para a próxima rodada
+		}
 		confirmou, err := s.reconciliarUm(ctx, v.ID, v.PaymentIntentID)
 		switch {
 		case err != nil:
@@ -118,16 +122,23 @@ func (s *Servico) expirarAgora(ctx context.Context, id uuid.UUID) error {
 func (s *Servico) ExecutarEstornos(ctx context.Context) ResumoTarefas {
 	var out ResumoTarefas
 	agora := s.cfg.Agora()
-	pendentes, err := db.New(s.pool).EstornosPendentes(ctx, loteEstornos)
+	// Busca mais que o lote: pedidos em backoff não podem ocupar as vagas de
+	// um estorno novo (auditoria 0025).
+	pendentes, err := db.New(s.pool).EstornosPendentes(ctx, loteEstornos*janelaBackoff)
 	if err != nil {
 		s.logger.Error("pedido: listar estornos pendentes", zap.Error(err))
 		out.Falhas++
 		return out
 	}
+	tentados := 0
 	for _, p := range pendentes {
+		if ctx.Err() != nil || tentados == loteEstornos {
+			break
+		}
 		if p.TentativasEstorno > 0 && agora.Before(p.AtualizadoEm.Add(backoffEstorno(int(p.TentativasEstorno)))) {
 			continue
 		}
+		tentados++
 		if err := s.estornarUm(ctx, p.ID, p.PaymentIntentID, int(p.TentativasEstorno)); err != nil {
 			out.Falhas++
 			continue

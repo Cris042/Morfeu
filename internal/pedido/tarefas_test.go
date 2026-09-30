@@ -211,3 +211,30 @@ func TestCriar_ExpiracaoLazyCancelaCobranca(t *testing.T) {
 		t.Fatalf("cobrança do vencido não cancelada: %v", a.gateway.Cancelamentos())
 	}
 }
+
+// TestReconciliar_Adiamentos cobre o RF02 (auditoria 0025): consulta que
+// falha adia o pedido; pedido sem cobrança expira direto.
+func TestReconciliar_Adiamentos(t *testing.T) {
+	semPendenciasAlheias(t)
+	a := novoAmbiente(t)
+	p, _, _ := a.pedidoCom(t, "A7")
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `UPDATE pedidos SET payment_intent_id = 'pi_desconhecido' WHERE id = $1`, p.ID); err != nil {
+		t.Fatal(err)
+	}
+	a.rel.avancar(TTLPedido)
+	if r := a.servico.Reconciliar(ctx); r.Falhas != 1 || statusDe(t, p.ID) != "aguardando_pagamento" {
+		t.Fatalf("consulta falhou: %+v %s", r, statusDe(t, p.ID))
+	}
+	if _, err := pool.Exec(ctx, `UPDATE pedidos SET payment_intent_id = NULL WHERE id = $1`, p.ID); err != nil {
+		t.Fatal(err)
+	}
+	if r := a.servico.Reconciliar(ctx); r.Expirados != 1 || statusDe(t, p.ID) != "expirado" {
+		t.Fatalf("sem cobrança: %+v %s", r, statusDe(t, p.ID))
+	}
+	cancelado, fim := context.WithCancel(ctx)
+	fim()
+	if r := a.servico.Reconciliar(cancelado); r.Expirados+r.Confirmados != 0 {
+		t.Fatalf("com o contexto encerrado nada é processado: %+v", r)
+	}
+}

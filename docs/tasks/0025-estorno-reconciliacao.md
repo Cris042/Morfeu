@@ -1,7 +1,7 @@
 # Task 0025 — Estorno + reconciliação no worker (E6, T4)
 
 - **Data:** 2026-09-30
-- **Status:** em andamento
+- **Status:** concluída (auditoria APROVADA em 2026-09-30)
 - **Branch:** `feature/0025-estorno-reconciliacao` (da main `8cf6f6e`)
 - **PRD:** docs/prd/0025-estorno-reconciliacao.md
 - **Item do roadmap:** E6 — Saga do checkout (4ª de 6). Refinamento: `docs/refinamentos/E6-saga-checkout.md` §T4; ADR 0010.
@@ -28,11 +28,11 @@ Nenhuma nova.
 
 ## Critérios de aceite
 
-- [ ] Estorno pendente → estornado com a chave do pedido, assentos devolvidos, idempotente.
-- [ ] Falha no estorno → tentativa registrada, backoff, mesma chave depois.
-- [ ] Vencido sem pagamento → cobrança cancelada, expirado, assentos devolvidos.
-- [ ] Vencido pago sem webhook → pivô (pago ou estorno).
-- [ ] Reconciliação × webhook → efeito único.
+- [x] Estorno pendente → estornado com a chave do pedido, assentos devolvidos, idempotente.
+- [x] Falha no estorno → tentativa registrada, backoff, mesma chave depois.
+- [x] Vencido sem pagamento → cobrança cancelada, expirado, assentos devolvidos.
+- [x] Vencido pago sem webhook → pivô (pago ou estorno).
+- [x] Reconciliação × webhook → efeito único.
 
 ## Riscos
 

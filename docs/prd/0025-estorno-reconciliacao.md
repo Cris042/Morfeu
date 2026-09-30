@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0025-estorno-reconciliacao.md
 - **Branch:** feature/0025-estorno-reconciliacao
 - **Data:** 2026-09-30
-- **Status:** em andamento
+- **Status:** concluído
 
 ## Objetivo
 
@@ -57,15 +57,15 @@ Porta `Gateway` estendida (consultar, cancelar, estornar) com os adapters Stripe
 
 ## Critérios de aceite
 
-- [ ] CA01 — Estorno pendente (divergência, holds presos) → estornado, chave `estorno-{pedido}`, trilha `estorno_pendente>estornado`, assentos devolvidos, 2ª rodada sem chamada, funil `estornado`.
-- [ ] CA02 — Estorno falha → tentativa 1, ainda pendente; antes do backoff não chama o gateway; depois conclui com a **mesma** chave.
-- [ ] CA03 — Vencido pendente → cobrança cancelada, expirado, assentos devolvidos; pedido no prazo intocado.
-- [ ] CA04 — Vencido pago sem webhook → pago com ingressos; webhook atrasado depois → sem efeito.
-- [ ] CA05 — Pago tarde demais com assento levado → estorno `emissao` → estornado.
-- [ ] CA06 — Reconciliação × webhook do mesmo pagamento em paralelo (5 rodadas) → efeito único.
-- [ ] CA07 — Expiração lazy cancela a cobrança do vencido.
-- [ ] CA08 — Adapter Stripe: rotas, métodos, mapeamento de status, cancelamento recusado sem contar no breaker, estorno com chave e `payment_intent`. Fake: estados e falhas programadas. Backoff: 1, 2, 4 min… até 1 h.
-- [ ] CA09 — CI verde.
+- [x] CA01 — Estorno pendente (divergência, holds presos) → estornado, chave `estorno-{pedido}`, trilha `estorno_pendente>estornado`, assentos devolvidos, 2ª rodada sem chamada, funil `estornado`.
+- [x] CA02 — Estorno falha → tentativa 1, ainda pendente; antes do backoff não chama o gateway; depois conclui com a **mesma** chave.
+- [x] CA03 — Vencido pendente → cobrança cancelada, expirado, assentos devolvidos; pedido no prazo intocado.
+- [x] CA04 — Vencido pago sem webhook → pago com ingressos; webhook atrasado depois → sem efeito.
+- [x] CA05 — Pago tarde demais com assento levado → estorno `emissao` → estornado.
+- [x] CA06 — Reconciliação × webhook do mesmo pagamento em paralelo (5 rodadas) → efeito único.
+- [x] CA07 — Expiração lazy cancela a cobrança do vencido.
+- [x] CA08 — Adapter Stripe: rotas, métodos, mapeamento de status, cancelamento recusado sem contar no breaker, estorno com chave e `payment_intent`. Fake: estados e falhas programadas. Backoff: 1, 2, 4 min… até 1 h.
+- [x] CA09 — CI verde.
 
 ## Plano de testes
 
@@ -97,7 +97,7 @@ Porta `Gateway` estendida (consultar, cancelar, estornar) com os adapters Stripe
 - `cmd/morfeu/main.go`, `sqlc.yaml`
 - `docs/tasks/README.md`, `docs/roadmap.md`, `plan.md`, `state.md`
 
-Total: 22.
+Total: 23 (+ `docs/ambiente-dev.md`, nota operacional pedida pela auditoria).
 
 ## Dependências utilizadas
 

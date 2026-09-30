@@ -70,6 +70,12 @@ npm run e2e                                  # sobe o vite preview (proxy /api) 
 - Sem Chrome/libs no WSL (caso desta máquina: faltam libasound/libxcomposite/libxrandr), use a imagem oficial: `docker run --rm --network host -v "$PWD/web":/work -w /work mcr.microsoft.com/playwright:v1.63.0-noble npx playwright test` (a imagem é grande — ~2 GB no 1º pull).
 - No CI roda no job `E2E` (`.github/workflows/e2e.yml`), que sobe a stack pelo compose e anexa o relatório em falha.
 
+## Checkout (tasks 0023–0025 — ADR 0010)
+
+- Padrão: `MORFEU_GATEWAY=fake` — nenhuma cobrança real. O fake guarda as cobranças **em memória do processo**: use `-mode=all` (o compose já usa). Com API e worker separados, ou após reinício, o worker não conhece as cobranças do fake e a reconciliação/estorno ficam adiando.
+- Stripe de teste: `MORFEU_GATEWAY=stripe` + `STRIPE_SECRET_KEY` (`rk_test_…`/`sk_test_…`) **e** `STRIPE_WEBHOOK_SECRET` — exigidos na API **e no worker** (o boot recusa sem eles). Webhooks locais: `docker compose --profile app --profile stripe up` e copie o `whsec_` de `docker compose logs stripe-cli`.
+- As tarefas da saga (reconciliação + estornos) rodam a cada 1 min em `-mode=worker|all`.
+
 ## Lições registradas (por que este arquivo existe)
 
 - **Task 0003**: sessão inteira redescobrindo que Go não estava instalado (build da E0a nunca tinha compilado), que lint só roda via Docker e que locks de container travavam a limpeza de `internal/catalogo`.

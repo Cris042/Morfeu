@@ -4,7 +4,7 @@
 
 ## Estado corrente (2026-09-30)
 
-**Task 0025 — Estorno + reconciliação no worker (E6 T4): IMPLEMENTADA; em PR** (branch `feature/0025-estorno-reconciliacao`, da main `8cf6f6e`).
+**Task 0025 — Estorno + reconciliação no worker (E6 T4): CONCLUÍDA — auditoria APROVADA em 2026-09-30 (`qa`), CI verde (PR #54)** (branch `feature/0025-estorno-reconciliacao`, da main `8cf6f6e`).
 
 ### Plano da task 0025
 
@@ -13,7 +13,7 @@
 3. ~~Tarefas~~ — `Reconciliar` (aprovada → mesmo pivô; pendente → cancelar + expirar), `ExecutarEstornos` (chave `estorno-{pedido}`, backoff 1 min…1 h, erro a partir da 5ª), cancelamento na expiração lazy.
 4. ~~Wiring~~ — worker monta reserva + pedido e roda as tarefas no WaitGroup do shutdown.
 5. ~~Testes~~ — unit (adapter, fake, backoff) + integração (CA01–CA07), 2/2 com `-race`.
-6. Lint + CI + passe de julgamento → merge.
+6. ~~Lint + CI + passe de julgamento~~ — APROVADO. Resolvidos no PR: loops param no shutdown (`ctx.Err()`), pedidos em backoff não ocupam o lote do estorno (lê 5× e processa 10), testes de consulta falha → adiado / sem cobrança → expira / contexto encerrado, nota operacional no `ambiente-dev.md` (fake em memória; worker exige as envs do Stripe). **Transferidos à 0026:** Stripe "charge already refunded" (chave de idempotência vencida após 24 h) tratado como sucesso; alerta/varredura de `expirado` cuja cobrança acabou aprovada (cancelamento lazy recusado + webhook perdido).
 
 **Decisão de teste registrada:** as tarefas varrem a tabela inteira; os testes de tarefas começam encerrando pendências alheias (`semPendenciasAlheias`) — o pacote roda em sequência.
 
