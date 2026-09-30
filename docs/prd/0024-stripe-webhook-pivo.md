@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0024-stripe-webhook-pivo.md
 - **Branch:** feature/0024-stripe-webhook-pivo
 - **Data:** 2026-09-30
-- **Status:** em andamento
+- **Status:** concluído
 
 ## Objetivo
 
@@ -58,7 +58,7 @@ Implementar o pivô da saga (ADR 0010). O pagamento aprovado chega pelo webhook 
 - RF07 — Métricas `gateway_requests_total{op,resultado}`, `gateway_duration_seconds{op}`, `gateway_breaker_state`; funil ganha `pago`, `pagamento_recusado`, `estorno_necessario`.
 - RF08 — Config e boot (só quando serve HTTP):
   - `AMBIENTE` (dev|producao), `MORFEU_GATEWAY` (fake|stripe, padrão fake), `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`.
-  - Recusa: gateway fake em produção, Stripe sem chave, qualquer chave que não seja `sk_test_`/`rk_test_`, valores desconhecidos.
+  - Recusa: gateway fake em produção, Stripe sem chave ou sem segredo do webhook (auditoria 0024), qualquer chave que não seja `sk_test_`/`rk_test_`, valores desconhecidos.
   - Sem segredo do webhook, a rota fica desligada (log de aviso).
 - RF09 — Dev: serviço `stripe-cli` (v1.52.1) no profile `stripe` do compose (`stripe listen --forward-to app:8080/webhooks/stripe`). `.env.example` documentado. Regra do gitleaks para `whsec_`, porque as regras default cobrem `sk_`/`rk_` e não `whsec_`.
 

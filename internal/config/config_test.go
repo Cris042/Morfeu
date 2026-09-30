@@ -129,12 +129,15 @@ func TestValidarPagamento(t *testing.T) {
 		recusa string
 	}{
 		{"padrão dev + fake", func(*Config) {}, ""},
-		{"stripe com chave de teste", func(c *Config) { c.Gateway, c.StripeChave = "stripe", "sk_test_x" }, ""},
-		{"stripe com chave restrita de teste", func(c *Config) { c.Gateway, c.StripeChave = "stripe", "rk_test_x" }, ""},
-		{"produção com stripe", func(c *Config) { c.Ambiente, c.Gateway, c.StripeChave = "producao", "stripe", "rk_test_x" }, ""},
+		{"stripe com chave de teste", func(c *Config) { c.Gateway, c.StripeChave, c.StripeWebhookSegredo = "stripe", "sk_test_x", "whsec_x" }, ""},
+		{"stripe com chave restrita de teste", func(c *Config) { c.Gateway, c.StripeChave, c.StripeWebhookSegredo = "stripe", "rk_test_x", "whsec_x" }, ""},
+		{"produção com stripe", func(c *Config) {
+			c.Ambiente, c.Gateway, c.StripeChave, c.StripeWebhookSegredo = "producao", "stripe", "rk_test_x", "whsec_x"
+		}, ""},
+		{"stripe sem segredo do webhook", func(c *Config) { c.Gateway, c.StripeChave = "stripe", "rk_test_x" }, "STRIPE_WEBHOOK_SECRET"},
 		{"produção com fake", func(c *Config) { c.Ambiente = "producao" }, "fake"},
 		{"stripe sem chave", func(c *Config) { c.Gateway = "stripe" }, "exige"},
-		{"chave live", func(c *Config) { c.Gateway, c.StripeChave = "stripe", "sk_live_x" }, "modo de teste"},
+		{"chave live", func(c *Config) { c.Gateway, c.StripeChave, c.StripeWebhookSegredo = "stripe", "sk_live_x", "whsec_x" }, "modo de teste"},
 		{"chave live mesmo com fake", func(c *Config) { c.StripeChave = "rk_live_x" }, "modo de teste"},
 		{"gateway desconhecido", func(c *Config) { c.Gateway = "paypal" }, "MORFEU_GATEWAY"},
 		{"ambiente desconhecido", func(c *Config) { c.Ambiente = "prod" }, "AMBIENTE"},

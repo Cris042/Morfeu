@@ -4,7 +4,7 @@
 
 ## Estado corrente (2026-09-30)
 
-**Task 0024 — Stripe + webhook assinado + pivô (E6 T3): IMPLEMENTADA; em PR** (branch `feature/0024-stripe-webhook-pivo`, da main `882d408`).
+**Task 0024 — Stripe + webhook assinado + pivô (E6 T3): CONCLUÍDA — auditoria APROVADA em 2026-09-30 (`security`), CI verde (PR #53)** (branch `feature/0024-stripe-webhook-pivo`, da main `882d408`).
 
 ### Plano da task 0024
 
@@ -14,7 +14,7 @@
 4. ~~Pivô~~ — `pivo.go`: dedup → `FOR UPDATE` → cruzamento → savepoint da emissão → `pago` + `pedido.confirmado` | `estorno_pendente` (divergencia/tardio/emissao).
 5. ~~Wiring~~ — config com recusas de boot, gateway por config, webhook opcional, depguard, Stripe CLI no compose, regra `whsec_` no gitleaks.
 6. ~~Testes~~ — unit (webhook, adapter contra servidor falso, breaker, config) + integração (CA01–CA10); verdes, webhook 2/2.
-7. Lint + CI + passe de julgamento → merge.
+7. ~~Lint + CI + passe de julgamento~~ — APROVADO. Resolvido no PR: `MORFEU_GATEWAY=stripe` sem `STRIPE_WEBHOOK_SECRET` recusado no boot. **Transferidos à 0025:** o job de estorno libera os holds do pedido (divergência com pedido ainda aguardando mantém os holds presos até lá); meio-aberto do breaker deixa passar chamadas concorrentes (aceito no volume). **E0c-CD:** rever o teto do webhook por IP atrás do Caddy; `payment_failed` sem dedup só infla o funil (aceito).
 
 **Desvio registrado:** o SDK não repete erro já respondido pela API (só rede e lock timeout) — adotada a política oficial do SDK em vez de "retry em 5xx" do refinamento; o 5xx conta no breaker.
 

@@ -170,8 +170,9 @@ func (c *Config) ValidarPagamento() error {
 	if c.StripeChave != "" && !chaveDeTeste {
 		return fmt.Errorf("STRIPE_SECRET_KEY precisa ser de modo de teste (sk_test_/rk_test_)")
 	}
-	if c.Gateway == "stripe" && c.StripeChave == "" {
-		return fmt.Errorf("MORFEU_GATEWAY=stripe exige STRIPE_SECRET_KEY")
+	if c.Gateway == "stripe" && (c.StripeChave == "" || c.StripeWebhookSegredo == "") {
+		// Sem o webhook nenhum pagamento real é confirmado (auditoria 0024).
+		return fmt.Errorf("MORFEU_GATEWAY=stripe exige STRIPE_SECRET_KEY e STRIPE_WEBHOOK_SECRET")
 	}
 	return nil
 }
