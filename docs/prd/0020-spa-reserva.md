@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0020-spa-reserva.md
 - **Branch:** feature/0020-spa-reserva
 - **Data:** 2026-09-29
-- **Status:** ativo
+- **Status:** concluído
 
 ## Objetivo
 
@@ -85,17 +85,17 @@ A T4 do refinamento foi dividida em 0020 (esta) e 0021 (E2E do M3 no CI, com o s
 
 ## Critérios de aceite
 
-- [ ] CA01 — Ocupação reconsultada a cada 4 s (fake timers) e **não** reconsultada com a janela sem foco; mapa buscado uma única vez.
-- [ ] CA02 — Reservar envia `POST` com os assentos; durante o envio o botão fica desabilitado e nenhum assento aparece como "seu"; depois do 201 + `GET /holds`, os assentos aparecem como "seus".
-- [ ] CA03 — 409 `assento_indisponivel {assentos: ["F8"]}`:
+- [x] CA01 — Ocupação reconsultada a cada 4 s (fake timers) e **não** reconsultada com a janela sem foco; mapa buscado uma única vez.
+- [x] CA02 — Reservar envia `POST` com os assentos; durante o envio o botão fica desabilitado e nenhum assento aparece como "seu"; depois do 201 + `GET /holds`, os assentos aparecem como "seus".
+- [x] CA03 — 409 `assento_indisponivel {assentos: ["F8"]}`:
   - ocupação reconsultada sem avançar o relógio;
   - mensagem com F8;
   - F8 sai da seleção.
-- [ ] CA04 — `limite_holds` e 429 com mensagens próprias.
-- [ ] CA05 — Painel: "09:59" que vira "09:58" após 1 s; aviso com ≤ 60 s; "Mais 10 minutos" → `POST /estender` e desabilita com `extensoes_usadas = 1`; "Liberar" → `DELETE`.
-- [ ] CA06 — Selecionado ocupado por outra pessoa (polling) sai da seleção com aviso.
-- [ ] CA07 — Sessão 404 → mensagem de indisponível.
-- [ ] CA08 — `rowheader` por fileira; `web-ci` verde com a verificação do bundle.
+- [x] CA04 — `limite_holds` e 429 com mensagens próprias.
+- [x] CA05 — Painel: "09:59" que vira "09:58" após 1 s; aviso com ≤ 60 s; "Mais 10 minutos" → `POST /estender` e desabilita com `extensoes_usadas = 1`; "Liberar" → `DELETE`.
+- [x] CA06 — Selecionado ocupado por outra pessoa (polling) sai da seleção com aviso.
+- [x] CA07 — Sessão 404 → mensagem de indisponível.
+- [x] CA08 — `rowheader` por fileira; `web-ci` verde com a verificação do bundle.
 
 ## Plano de testes
 

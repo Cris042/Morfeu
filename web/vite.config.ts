@@ -21,6 +21,7 @@ export default defineConfig({
   preview: { port: 4173, strictPort: true, proxy },
   test: {
     environment: 'jsdom',
+    include: ['src/**/*.test.{ts,tsx}'], // e2e/ é do Playwright (PRD 0021)
     setupFiles: ['./src/test/setup.ts'],
     restoreMocks: true,
   },

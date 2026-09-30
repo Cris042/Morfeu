@@ -219,8 +219,9 @@ describe('página da sessão', () => {
     const antes = quantas('GET /api/holds')
     await act(() => vi.advanceTimersByTimeAsync(61_000))
     await waitFor(() => {
-      expect(quantas('GET /api/holds')).toBeGreaterThan(antes)
+      expect(screen.queryByRole('heading', { name: 'Seus assentos' })).toBeNull()
     })
-    expect(screen.queryByRole('heading', { name: 'Seus assentos' })).toBeNull()
+    await act(() => vi.advanceTimersByTimeAsync(3000))
+    expect(quantas('GET /api/holds')).toBe(antes + 1) // uma reconsulta, não uma por segundo
   })
 })

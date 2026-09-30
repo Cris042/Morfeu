@@ -58,6 +58,18 @@ npm audit --audit-level=high   # gate no web-ci
 - `npm install` em `/mnt/c` é lento (≈ 4–5 min na 1ª vez): I/O do Windows. Some quando o repo for para o ext4 do WSL (item 0 do roadmap).
 - Nunca use `localStorage`/`sessionStorage` nem `fetch` fora de `src/api/` — o lint barra (PRD 0017 RF07).
 
+### E2E (Playwright — task 0021)
+
+```bash
+# API em :8080 (compose --profile app, ou -mode=api com PG/Redis) + seed da sessão de teste:
+docker compose exec -T postgres psql -U postgres -d morfeu -v ON_ERROR_STOP=1 < web/e2e/seed.sql
+cd web && npx playwright install chromium   # 1ª vez (precisa das libs do sistema)
+npm run e2e                                  # sobe o vite preview (proxy /api) e roda M3 + caminho feliz
+```
+
+- Sem Chrome/libs no WSL (caso desta máquina: faltam libasound/libxcomposite/libxrandr), use a imagem oficial: `docker run --rm --network host -v "$PWD/web":/work -w /work mcr.microsoft.com/playwright:v1.63.0-noble npx playwright test` (a imagem é grande — ~2 GB no 1º pull).
+- No CI roda no job `E2E` (`.github/workflows/e2e.yml`), que sobe a stack pelo compose e anexa o relatório em falha.
+
 ## Lições registradas (por que este arquivo existe)
 
 - **Task 0003**: sessão inteira redescobrindo que Go não estava instalado (build da E0a nunca tinha compilado), que lint só roda via Docker e que locks de container travavam a limpeza de `internal/catalogo`.

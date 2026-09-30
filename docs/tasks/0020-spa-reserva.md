@@ -1,7 +1,7 @@
 # Task 0020 — SPA: mapa integrado à trava (polling, holds, contagem) (E5, T4a)
 
 - **Data:** 2026-09-29
-- **Status:** em andamento
+- **Status:** concluída
 - **Branch:** `feature/0020-spa-reserva` (da main `0117c41`)
 - **PRD:** docs/prd/0020-spa-reserva.md
 - **Item do roadmap:** E5 — SPA cliente, parte 1 (T4 dividida: 0020 integração + 0021 E2E do M3 — o conjunto passava de 30 arquivos). Refinamento: `docs/refinamentos/E5-spa-cliente.md` §T4.
@@ -28,10 +28,10 @@ Nenhuma nova.
 
 ## Critérios de aceite
 
-- [ ] Ocupação atualizada a cada 4 s, pausada com a aba fora de foco; mapa sem refetch.
-- [ ] Reservar: a UI só mostra "seu" depois da resposta 201; 409 invalida a ocupação na hora e diz quais assentos foram perdidos; limite e 429 com mensagem própria.
-- [ ] Painel: contagem mm:ss por `expira_em`, aviso ≤ 60 s, "Mais 10 minutos" uma vez, "Liberar"; hold vencido some.
-- [ ] Testes com fake timers; `web-ci` verde (com a verificação da demo fora do bundle).
+- [x] Ocupação atualizada a cada 4 s, pausada com a aba fora de foco; mapa sem refetch.
+- [x] Reservar: a UI só mostra "seu" depois da resposta 201; 409 invalida a ocupação na hora e diz quais assentos foram perdidos; limite e 429 com mensagem própria.
+- [x] Painel: contagem mm:ss por `expira_em`, aviso ≤ 60 s, "Mais 10 minutos" uma vez, "Liberar"; hold vencido some.
+- [x] Testes com fake timers; `web-ci` verde (com a verificação da demo fora do bundle).
 
 ## Riscos
 
