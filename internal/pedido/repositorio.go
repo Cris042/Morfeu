@@ -67,6 +67,23 @@ func (r repositorio) transicionar(ctx context.Context, id uuid.UUID, de Status, 
 	return para, r.registrar(ctx, id, &de, para, agora)
 }
 
+// marcarEstorno leva o pedido a estorno_pendente com o motivo, pelo mesmo CAS
+// e na mesma TX da trilha (o estorno em si é o job da task 0025).
+func (r repositorio) marcarEstorno(ctx context.Context, id uuid.UUID, de Status, motivo string, agora time.Time) error {
+	para, err := Transicionar(de, EstornoNecessario)
+	if err != nil {
+		return err
+	}
+	n, err := r.q.MarcarEstorno(ctx, db.MarcarEstornoParams{Motivo: &motivo, Agora: agora, ID: id, De: string(de)})
+	if err != nil {
+		return fmt.Errorf("pedido: marcar estorno: %w", err)
+	}
+	if n == 0 {
+		return ErrTransicaoConcorrente
+	}
+	return r.registrar(ctx, id, &de, para, agora)
+}
+
 func (r repositorio) registrar(ctx context.Context, id uuid.UUID, de *Status, para Status, agora time.Time) error {
 	var deTexto *string
 	if de != nil {

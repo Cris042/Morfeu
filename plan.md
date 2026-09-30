@@ -4,7 +4,23 @@
 
 ## Estado corrente (2026-09-30)
 
-**Task 0023 — Pedido: aggregate, máquina de estados e criação com gateway fake (E6 T2): CONCLUÍDA — auditoria APROVADA em 2026-09-30 (`security`), CI verde (PR #52)** (branch `feature/0023-pedido-criacao`, da main `ad2e1b0`).
+**Task 0024 — Stripe + webhook assinado + pivô (E6 T3): IMPLEMENTADA; em PR** (branch `feature/0024-stripe-webhook-pivo`, da main `882d408`).
+
+### Plano da task 0024
+
+1. ~~Dependência~~ — `stripe-go/v86` v86.4.2 (Context7 `/stripe/stripe-go`, proxy.golang.org, OSV sem advisories) no `lib.md` antes do uso.
+2. ~~Dados~~ — migration 012 `stripe_eventos`; queries de dedup, trava do pedido, estorno com motivo e emissão com `ON CONFLICT`; `DefinirCobranca` recupera cobrança órfã.
+3. ~~Borda~~ — adapter Stripe (idempotência, timeout 5 s, breaker próprio com meio-aberto, métricas) e verificador do webhook (corpo bruto, 300 s, timestamp futuro recusado).
+4. ~~Pivô~~ — `pivo.go`: dedup → `FOR UPDATE` → cruzamento → savepoint da emissão → `pago` + `pedido.confirmado` | `estorno_pendente` (divergencia/tardio/emissao).
+5. ~~Wiring~~ — config com recusas de boot, gateway por config, webhook opcional, depguard, Stripe CLI no compose, regra `whsec_` no gitleaks.
+6. ~~Testes~~ — unit (webhook, adapter contra servidor falso, breaker, config) + integração (CA01–CA10); verdes, webhook 2/2.
+7. Lint + CI + passe de julgamento → merge.
+
+**Desvio registrado:** o SDK não repete erro já respondido pela API (só rede e lock timeout) — adotada a política oficial do SDK em vez de "retry em 5xx" do refinamento; o 5xx conta no breaker.
+
+---
+
+### Task 0023 — Pedido: aggregate, máquina de estados e criação: CONCLUÍDA e MERGEADA (PR #52, `882d408`)
 
 ### Plano da task 0023
 

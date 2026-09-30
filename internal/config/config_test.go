@@ -119,3 +119,35 @@ func TestValidate_Argon2ForaDosLimites(t *testing.T) {
 		t.Error("ARGON2_MEMORIA_KIB=1024 deveria falhar")
 	}
 }
+
+// TestValidarPagamento cobre as recusas de boot do checkout (PRD 0024 RF09).
+func TestValidarPagamento(t *testing.T) {
+	base := Config{Ambiente: "dev", Gateway: "fake"}
+	casos := []struct {
+		nome   string
+		mudar  func(*Config)
+		recusa string
+	}{
+		{"padrão dev + fake", func(*Config) {}, ""},
+		{"stripe com chave de teste", func(c *Config) { c.Gateway, c.StripeChave = "stripe", "sk_test_x" }, ""},
+		{"stripe com chave restrita de teste", func(c *Config) { c.Gateway, c.StripeChave = "stripe", "rk_test_x" }, ""},
+		{"produção com stripe", func(c *Config) { c.Ambiente, c.Gateway, c.StripeChave = "producao", "stripe", "rk_test_x" }, ""},
+		{"produção com fake", func(c *Config) { c.Ambiente = "producao" }, "fake"},
+		{"stripe sem chave", func(c *Config) { c.Gateway = "stripe" }, "exige"},
+		{"chave live", func(c *Config) { c.Gateway, c.StripeChave = "stripe", "sk_live_x" }, "modo de teste"},
+		{"chave live mesmo com fake", func(c *Config) { c.StripeChave = "rk_live_x" }, "modo de teste"},
+		{"gateway desconhecido", func(c *Config) { c.Gateway = "paypal" }, "MORFEU_GATEWAY"},
+		{"ambiente desconhecido", func(c *Config) { c.Ambiente = "prod" }, "AMBIENTE"},
+	}
+	for _, c := range casos {
+		cfg := base
+		c.mudar(&cfg)
+		err := cfg.ValidarPagamento()
+		if c.recusa == "" && err != nil || c.recusa != "" && (err == nil || !strings.Contains(err.Error(), c.recusa)) {
+			t.Errorf("%s: err = %v", c.nome, err)
+		}
+		if err != nil && strings.Contains(err.Error(), "_x") {
+			t.Errorf("%s: a mensagem vaza a chave: %v", c.nome, err)
+		}
+	}
+}

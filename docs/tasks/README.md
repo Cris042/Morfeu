@@ -31,3 +31,4 @@ Convenção: `NNNN-titulo-kebab.md`, numeração sequencial a partir de `0001`. 
 | 0021 | [E2E do M3: dois navegadores disputam o mesmo assento](./0021-e2e-m3.md) | E5 (T4b) | concluída (merge `38aa433`, PR #49) | `feature/0021-e2e-m3` | [0021](../prd/0021-e2e-m3.md) |
 | 0022 | [Reserva: holds vendidos ocupam o assento + portas transacionais do pedido](./0022-reserva-portas-pedido.md) | E6 (T1) | concluída (auditoria APROVADA; PR #51) | `feature/0022-reserva-portas-pedido` | [0022](../prd/0022-reserva-portas-pedido.md) |
 | 0023 | [Pedido: aggregate, máquina de estados e criação (gateway fake)](./0023-pedido-criacao.md) | E6 (T2) | concluída (auditoria APROVADA; PR #52) | `feature/0023-pedido-criacao` | [0023](../prd/0023-pedido-criacao.md) |
+| 0024 | [Stripe + webhook assinado + pivô do checkout](./0024-stripe-webhook-pivo.md) | E6 (T3) | em andamento (aberta 2026-09-30) | `feature/0024-stripe-webhook-pivo` | [0024](../prd/0024-stripe-webhook-pivo.md) |

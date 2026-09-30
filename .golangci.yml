@@ -173,7 +173,7 @@ linters:
             - github.com/mclovin137/morfeu/internal/pedido/db
             - github.com/mclovin137/morfeu/internal/pedido/pagamento
 
-        # Borda de pagamento (PRD 0023): o SDK do gateway entra só aqui (0024).
+        # Borda de pagamento (PRD 0023/0024): o SDK do Stripe só entra aqui.
         pedido-pagamento:
           files:
             - "**/internal/pedido/pagamento/*.go"
@@ -182,6 +182,7 @@ linters:
           allow:
             - $gostd
             - github.com/google/uuid
+            - github.com/stripe/stripe-go/v86
 
         # Módulo identidade (PRD 0009 RNF01): transaction script sem driver.
         identidade-domain:

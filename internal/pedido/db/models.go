@@ -45,3 +45,9 @@ type PedidoEvento struct {
 	Para       string    `db:"para"`
 	OcorridoEm time.Time `db:"ocorrido_em"`
 }
+
+type StripeEvento struct {
+	EventID    string    `db:"event_id"`
+	Tipo       string    `db:"tipo"`
+	RecebidoEm time.Time `db:"recebido_em"`
+}

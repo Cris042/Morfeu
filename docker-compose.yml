@@ -80,6 +80,20 @@ services:
     networks:
       - morfeu-network
 
+  # Stripe CLI (profile "stripe", task 0024): encaminha os webhooks do modo de
+  # teste para o app, sem túnel. Uso: `docker compose --profile app --profile
+  # stripe up`; o segredo de assinatura sai em `docker compose logs stripe-cli`
+  # (copie para STRIPE_WEBHOOK_SECRET). Só dev — nunca vai para a VM.
+  stripe-cli:
+    image: stripe/stripe-cli:v1.52.1
+    container_name: morfeu-stripe-cli
+    profiles: ["stripe"]
+    command: ["listen", "--forward-to", "app:8080/webhooks/stripe", "--events", "payment_intent.succeeded,payment_intent.payment_failed"]
+    environment:
+      STRIPE_API_KEY: ${STRIPE_SECRET_KEY:-}
+    networks:
+      - morfeu-network
+
 volumes:
   morfeu-postgres:
   morfeu-redis:

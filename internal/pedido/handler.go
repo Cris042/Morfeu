@@ -3,6 +3,7 @@ package pedido
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"time"
 
@@ -19,6 +20,9 @@ const (
 	headerAntiCSRF = "X-Requested-With"
 	valorAntiCSRF  = "morfeu"
 	limiteCorpo    = "4K"
+	// limiteWebhook: eventos de PaymentIntent têm poucos KB (refinamento E6).
+	limiteWebhook       = "64K"
+	cabecalhoAssinatura = "Stripe-Signature"
 )
 
 // Handler expõe as rotas do pedido (RF01, RF06).
@@ -36,6 +40,33 @@ func NovoHandler(s *Servico, logger *zap.Logger) *Handler {
 func (h *Handler) RegistrarRotas(e *echo.Echo) {
 	e.POST("/pedidos", h.criar, middleware.BodyLimit(limiteCorpo), exigirAntiCSRF)
 	e.GET("/pedidos/:id", h.obter)
+	if h.servico.cfg.Webhook != nil {
+		// Rota pública, fora do anti-CSRF: a autenticidade é a assinatura.
+		e.POST("/webhooks/stripe", h.webhook, middleware.BodyLimit(limiteWebhook))
+	}
+}
+
+// webhook recebe o evento do gateway (RF01–RF04): assinatura sobre o corpo
+// BRUTO antes de qualquer parse; 2xx só depois do commit do pivô; falha de
+// processamento → 5xx para o Stripe reenviar. Nunca loga corpo nem assinatura.
+func (h *Handler) webhook(c echo.Context) error {
+	ctx := c.Request().Context()
+	if err := h.servico.ContarWebhook(ctx, c.RealIP()); err != nil {
+		return h.responderErro(c, err)
+	}
+	corpo, err := io.ReadAll(c.Request().Body)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"erro": "requisicao_invalida"})
+	}
+	ev, err := h.servico.cfg.Webhook.Verificar(corpo, c.Request().Header.Get(cabecalhoAssinatura))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"erro": "assinatura_invalida"})
+	}
+	if err := h.servico.ProcessarEvento(ctx, ev); err != nil {
+		h.logger.Error("pedido: falha ao processar webhook", zap.String("tipo", string(ev.Tipo)), zap.Error(err))
+		return c.JSON(http.StatusInternalServerError, map[string]string{"erro": "erro_interno"})
+	}
+	return c.NoContent(http.StatusOK)
 }
 
 func exigirAntiCSRF(next echo.HandlerFunc) echo.HandlerFunc {

@@ -290,7 +290,7 @@ func registrarRotasDeDominio(e *echo.Echo, mode string, cfg *config.Config, dbPo
 	sessaoHandler.RegistrarRotasBackoffice(e, exigirOperador, operadorDaRequisicao)
 	reservaHandler, reservaServico := montarReserva(dbPool, sessaoServico, redisClient, cacheLayer, log)
 	reservaHandler.RegistrarRotas(e)
-	montarPedido(dbPool, sessaoServico, reservaServico, redisClient, log).RegistrarRotas(e)
+	montarPedido(cfg, dbPool, sessaoServico, reservaServico, redisClient, log).RegistrarRotas(e)
 }
 
 // operadorDaRequisicao identifica o operador para o log de auditoria mínima
@@ -358,20 +358,24 @@ func montarReserva(dbPool *pgxpool.Pool, sessoes reserva.FonteSessoes, redisClie
 	return reserva.NovoHandler(servico, log.Logger), servico
 }
 
-// Rate limit da criação de pedido (refinamento E6, security).
+// Rate limit da criação de pedido e da rota do webhook (refinamento E6).
 const (
 	limitePedidosIP   = 10
 	limitePedidosDono = 5
+	limiteWebhookIP   = 300
 )
 
-// montarPedido liga o módulo pedido (PRD 0023): porta de preço = sessao,
-// porta transacional = reserva (ADR 0010), limitadores do E1 e o funil. O
-// gateway é o fake até a task 0024 trazer o Stripe (e recusar o fake em
-// produção).
-func montarPedido(dbPool *pgxpool.Pool, sessoes pedido.FonteSessoes, r *reserva.Servico, redisClient redis.Cmdable, log *logger.Logger) *pedido.Handler {
+// montarPedido liga o módulo pedido (PRD 0023/0024): porta de preço =
+// sessao, porta transacional = reserva (ADR 0010), gateway escolhido pela
+// config (fake recusado em produção), verificador do webhook, limitadores do
+// E1, funil e métricas do gateway.
+func montarPedido(cfg *config.Config, dbPool *pgxpool.Pool, sessoes pedido.FonteSessoes, r *reserva.Servico, redisClient redis.Cmdable, log *logger.Logger) *pedido.Handler {
 	fatal := func(msg string, err error) {
 		log.ErrorMsg(msg, zap.Error(err))
 		os.Exit(1)
+	}
+	if err := cfg.ValidarPagamento(); err != nil {
+		fatal("configuração de pagamento inválida", err)
 	}
 	novoLimitador := func(escopo string, maxim int) *autenticacao.Limitador {
 		l, err := autenticacao.NovoLimitador(autenticacao.ConfigLimitador{
@@ -382,25 +386,73 @@ func montarPedido(dbPool *pgxpool.Pool, sessoes pedido.FonteSessoes, r *reserva.
 		}
 		return l
 	}
-	funil, err := otel.Meter("morfeu/pedido").Int64Counter("checkout_funil_total",
+	meter := otel.Meter("morfeu/pedido")
+	funil, err := meter.Int64Counter("checkout_funil_total",
 		metric.WithDescription("Pedidos por etapa do funil do checkout (etapas fixas)."))
 	if err != nil {
 		fatal("métrica do funil", err)
 	}
-	servico, err := pedido.NovoServico(dbPool, pedido.Config{
+	pc := pedido.Config{
 		Sessoes:    sessoes,
 		Reserva:    reservaDoPedido{r},
-		Gateway:    pagamento.NovoFake(),
+		Gateway:    montarGateway(cfg, meter, log),
 		LimiteIP:   novoLimitador("pedido-ip", limitePedidosIP),
 		LimiteDono: novoLimitador("pedido-dono", limitePedidosDono),
 		Funil: func(ctx context.Context, etapa string) {
 			funil.Add(ctx, 1, metric.WithAttributes(attribute.String("etapa", etapa)))
 		},
-	}, log.Logger)
+	}
+	if cfg.StripeWebhookSegredo == "" {
+		log.Warn("STRIPE_WEBHOOK_SECRET ausente: rota /webhooks/stripe desligada")
+	} else {
+		if pc.Webhook, err = pagamento.NovoWebhook(cfg.StripeWebhookSegredo); err != nil {
+			fatal("webhook do gateway", err)
+		}
+		pc.LimiteWebhook = novoLimitador("webhook-ip", limiteWebhookIP)
+	}
+	servico, err := pedido.NovoServico(dbPool, pc, log.Logger)
 	if err != nil {
 		fatal("serviço de pedido", err)
 	}
 	return pedido.NovoHandler(servico, log.Logger)
+}
+
+// montarGateway escolhe o adapter (ADR 0005 Strategy): Stripe em modo de
+// teste ou o fake (CI, dev e load-test). Métricas gateway_* sem labels de
+// alta cardinalidade.
+func montarGateway(cfg *config.Config, meter metric.Meter, log *logger.Logger) pagamento.Gateway {
+	if cfg.Gateway != "stripe" {
+		log.Warn("gateway de pagamento FAKE ativo (nenhuma cobrança real)")
+		return pagamento.NovoFake()
+	}
+	requisicoes, err1 := meter.Int64Counter("gateway_requests_total", metric.WithDescription("Chamadas ao gateway por operação e resultado."))
+	duracao, err2 := meter.Float64Histogram("gateway_duration_seconds", metric.WithDescription("Duração das chamadas ao gateway."), metric.WithUnit("s"))
+	breaker, err3 := meter.Int64Gauge("gateway_breaker_state", metric.WithDescription("Circuit breaker do gateway (1 = aberto)."))
+	if err := errors.Join(err1, err2, err3); err != nil {
+		log.ErrorMsg("métricas do gateway", zap.Error(err))
+		os.Exit(1)
+	}
+	gw, err := pagamento.NovoStripe(pagamento.ConfigStripe{
+		Chave: cfg.StripeChave,
+		Observar: func(op, resultado string, d time.Duration) {
+			ctx := context.Background()
+			requisicoes.Add(ctx, 1, metric.WithAttributes(attribute.String("op", op), attribute.String("resultado", resultado)))
+			duracao.Record(ctx, d.Seconds(), metric.WithAttributes(attribute.String("op", op)))
+		},
+		AoMudarBreaker: func(aberto bool) {
+			v := int64(0)
+			if aberto {
+				v = 1
+				log.Warn("circuit breaker do gateway ABERTO")
+			}
+			breaker.Record(context.Background(), v)
+		},
+	})
+	if err != nil {
+		log.ErrorMsg("gateway Stripe", zap.Error(err))
+		os.Exit(1)
+	}
+	return gw
 }
 
 // reservaDoPedido adapta a reserva à porta transacional do pedido (ADR
@@ -430,6 +482,10 @@ func (a reservaDoPedido) PrenderParaPedido(ctx context.Context, tx outbox.Tx, do
 
 func (a reservaDoPedido) LiberarDoPedido(ctx context.Context, tx outbox.Tx, pedidoID uuid.UUID) (int64, error) {
 	return a.s.LiberarDoPedido(ctx, tx, pedidoID)
+}
+
+func (a reservaDoPedido) ConverterDoPedido(ctx context.Context, tx outbox.Tx, pedidoID uuid.UUID) ([]string, error) {
+	return a.s.ConverterDoPedido(ctx, tx, pedidoID)
 }
 
 // metricasReserva cria os contadores da trava (sem labels — PRD 0015 RF10);
