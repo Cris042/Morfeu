@@ -106,3 +106,9 @@ Falhas comuns: `pg_restore` falha se o PG não estiver vazio; `permission denied
 ## Testes
 
 `make backup-teste` (ou o comando de `docs/ambiente-dev.md` com `-run TestBackup`): sobe PG com os roles e as migrations reais, semeia dados sintéticos, roda `backup.sh` com a imagem real (backend `local` do rclone), prova que o objeto é age e não contém o e-mail do seed, restaura num PG efêmero e roda as invariantes; cobre chave errada, objeto corrompido, destino fora (ping de falha, nunca o de sucesso), banco sem `schema_migrations` e o agendador. Com `BACKUP_TESTE_S3=1` repete o ciclo contra um servidor S3 (`rclone serve s3`) — fora do CI de PR.
+
+## Notas da auditoria (0043)
+
+- **Objetos órfãos:** uma falha no meio do envio pode deixar um `.dump.age` sem `.sha256`/`.manifesto` no bucket (a credencial do job não apaga). Ele é lixo — o restore recusa sem hash e manifesto — e expira pelo lifecycle do prefixo.
+- **Dump em claro no restore:** o `restore.sh` precisa do dump decifrado em disco para o `pg_restore` (diretório 700, apagado ao final). Na máquina do operador, prefira `TMPDIR` em tmpfs (`/dev/shm`) ou disco cifrado.
+- **Manifesto:** não é coberto pelo `sha256`; o restore aceita só linhas `versao|tabela <TAB> nome <TAB> número` antes de entregá-lo ao `psql`.

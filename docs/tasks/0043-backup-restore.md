@@ -1,7 +1,7 @@
 # Task 0043 — Backup cifrado e restore validado (E11, T2)
 
 - **Data:** 2026-10-01
-- **Status:** em implementação
+- **Status:** concluída (auditoria APROVADA em 2026-10-01)
 - **Branch:** `feature/0043-backup-restore`
 - **PRD:** docs/prd/0043-backup-restore.md
 - **Item do roadmap:** E11 — Hardening + backup (2ª de 3). Refinamento: `docs/refinamentos/E11-hardening-backup.md` §T2; ADR 0013.

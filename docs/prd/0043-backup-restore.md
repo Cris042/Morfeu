@@ -45,7 +45,7 @@ Imagem `deploy/backup/Dockerfile` + scripts em `scripts/backup/`, serviço `back
 - [x] CA05 — Banco sem `schema_migrations` → backup recusado.
 - [x] CA06 — `docker-compose.prod.yml` com o serviço `backup` passa o teste estático; preflight cobre as variáveis novas (inclui chave privada num `.env` → falha).
 - [x] CA07 — `docs/backup.md`, `lib.md` e checklist da E0c-CD atualizados.
-- [ ] CA08 — CI verde.
+- [x] CA08 — CI verde.
 
 ## Plano de testes
 

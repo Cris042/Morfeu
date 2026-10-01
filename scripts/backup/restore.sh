@@ -44,6 +44,12 @@ real="$(sha256sum "$TMP/dump.age" | cut -d' ' -f1)"
 [ -n "$esperado" ] && [ "$esperado" = "$real" ] || falhar "sha256 do objeto não confere — objeto corrompido ou adulterado"
 log "sha256 conferido"
 
+# O manifesto não é coberto pelo sha256 e vai para o psql: só linhas
+# "versao|tabela <TAB> nome <TAB> número" passam (nada de meta-comando \).
+if grep -qvE $'^(versao|tabela)\t[A-Za-z0-9_]+\t[0-9]+$' "$TMP/manifesto"; then
+  falhar "manifesto com formato inválido — objeto adulterado?"
+fi
+
 if ! age -d -i "$BACKUP_AGE_IDENTITY" -o "$TMP/dump" "$TMP/dump.age" 2>"$TMP/age.err"; then
   falhar "não foi possível decifrar: chave errada (não é a identidade deste backup) ou objeto inválido"
 fi
