@@ -209,11 +209,15 @@ func TestCancelar_CicloCompleto(t *testing.T) {
 	// compartilhado pela suíte — isolado contra resíduos de outros testes).
 	var pi *string
 	_ = pool.QueryRow(context.Background(), `SELECT payment_intent_id FROM pedidos WHERE id = $1`, p.ID).Scan(&pi)
-	if err := a.servico.estornarUm(context.Background(), p.ID, pi, 0); err != nil {
+	motivo := MotivoCancelamento
+	if err := a.servico.estornarUm(context.Background(), p.ID, pi, 0, &motivo); err != nil {
 		t.Fatalf("estornar: %v", err)
 	}
 	if statusDe(t, p.ID) != string(Estornado) || vezes(a.gateway.Estornos(), ChaveEstorno(p.ID)) != 1 {
 		t.Fatalf("status %s, estornos %v", statusDe(t, p.ID), a.gateway.Estornos())
+	}
+	if a.compensacoes(PassoEstorno) != 0 {
+		t.Fatal("cancelamento não é compensação da saga (alerta de estorno automático)")
 	}
 	if n := contarNoBanco(t, `SELECT count(*) FROM outbox_events WHERE aggregate_id = $1 AND event_type = $2`, p.ID.String(), EventoEstornado); n != 1 {
 		t.Fatalf("pedido.estornado na outbox: %d", n)

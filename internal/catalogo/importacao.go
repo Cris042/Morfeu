@@ -13,6 +13,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/mclovin137/morfeu/internal/auditoria"
 	"github.com/mclovin137/morfeu/internal/catalogo/db"
 	"github.com/mclovin137/morfeu/internal/outbox"
 )
@@ -126,6 +127,9 @@ func (s *Servico) ImportarDoTMDB(ctx context.Context, tmdbID int64) (Filme, bool
 		filme = Filme{ID: l.ID, Titulo: l.Titulo, Sinopse: l.Sinopse, DuracaoMin: l.DuracaoMin, Ano: l.Ano,
 			PosterURL: l.PosterUrl, ImdbID: l.ImdbID, TmdbID: l.TmdbID}
 		criado = l.Inserido
+		if err := auditoria.Registrar(ctx, tx, auditoria.FilmeImportado, auditoria.ID(l.ID), time.Now()); err != nil {
+			return err
+		}
 		if !criado {
 			return nil
 		}

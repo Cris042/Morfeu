@@ -17,6 +17,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/mclovin137/morfeu/internal/auditoria"
 	"github.com/mclovin137/morfeu/internal/cache"
 	"github.com/mclovin137/morfeu/internal/outbox"
 	"github.com/mclovin137/morfeu/internal/sessao/db"
@@ -59,8 +60,8 @@ type PedidosDaSessao interface {
 // Config agrupa as dependências injetadas pelo main.
 type Config struct {
 	Filmes FonteFilmes
-	// Pool abre a TX do cancelamento da sessão (PRD 0036); nil só em testes
-	// que não cancelam sessão.
+	// Pool abre a TX das mutações (trilha de auditoria na mesma TX — PRD
+	// 0037; cancelamento da sessão — PRD 0036); nil só em testes sem mutação.
 	Pool       outbox.Pool
 	AoConflito func(context.Context) // incrementa sessao_conflitos_total (RF07)
 	Agora      func() time.Time
@@ -138,12 +139,16 @@ func (s *Servico) CriarSala(ctx context.Context, nome string, layoutJSON []byte,
 		return Sala{}, err
 	}
 	bruto, _ := json.Marshal(layout)
-	l, err := s.q.InserirSala(ctx, db.InserirSalaParams{Nome: nome, Layout: bruto})
-	if err != nil {
-		if db.EhNomeDuplicado(err) {
-			return Sala{}, ErrNomeSalaEmUso
+	var l db.InserirSalaRow
+	err = s.naTx(ctx, func(q *db.Queries, tx outbox.Tx) error {
+		var err error
+		if l, err = q.InserirSala(ctx, db.InserirSalaParams{Nome: nome, Layout: bruto}); err != nil {
+			return err
 		}
-		return Sala{}, fmt.Errorf("sessao: inserir sala: %w", err)
+		return auditoria.Registrar(ctx, tx, auditoria.SalaCriada, auditoria.ID(l.ID), s.cfg.Agora())
+	})
+	if err != nil {
+		return Sala{}, erroDaSala(err, "inserir")
 	}
 	s.logger.Info("sala criada", zap.String("operador_id", operador), zap.Int64("sala_id", l.ID))
 	return Sala{ID: l.ID, Nome: l.Nome, Layout: layout}, nil
@@ -175,15 +180,18 @@ func (s *Servico) AtualizarSala(ctx context.Context, id int64, nome string, layo
 			return Sala{}, ErrLayoutEmUso
 		}
 	}
-	linhas, err := s.q.AtualizarSala(ctx, db.AtualizarSalaParams{ID: id, Nome: nome, Layout: bruto})
-	if err != nil {
-		if db.EhNomeDuplicado(err) {
-			return Sala{}, ErrNomeSalaEmUso
+	err = s.naTx(ctx, func(q *db.Queries, tx outbox.Tx) error {
+		linhas, err := q.AtualizarSala(ctx, db.AtualizarSalaParams{ID: id, Nome: nome, Layout: bruto})
+		if err != nil {
+			return err
 		}
-		return Sala{}, fmt.Errorf("sessao: atualizar sala: %w", err)
-	}
-	if len(linhas) == 0 {
-		return Sala{}, ErrSalaNaoEncontrada
+		if len(linhas) == 0 {
+			return ErrSalaNaoEncontrada
+		}
+		return auditoria.Registrar(ctx, tx, auditoria.SalaAtualizada, auditoria.ID(id), s.cfg.Agora())
+	})
+	if err != nil {
+		return Sala{}, erroDaSala(err, "atualizar")
 	}
 	s.logger.Info("sala atualizada", zap.String("operador_id", operador), zap.Int64("sala_id", id))
 	return Sala{ID: id, Nome: nome, Layout: layout}, nil
@@ -262,7 +270,13 @@ func (s *Servico) inserirSessao(ctx context.Context, p db.InserirSessaoParams) (
 		err error
 	)
 	for tentativa := 1; tentativa <= maxTentativasInsercao; tentativa++ {
-		l, err = s.q.InserirSessao(ctx, p)
+		err = s.naTx(ctx, func(q *db.Queries, tx outbox.Tx) error {
+			var err error
+			if l, err = q.InserirSessao(ctx, p); err != nil {
+				return err
+			}
+			return auditoria.Registrar(ctx, tx, auditoria.SessaoCriada, auditoria.ID(l.ID), s.cfg.Agora())
+		})
 		if err == nil || !db.EhImpasse(err) {
 			return l, err
 		}
@@ -349,10 +363,35 @@ func (s *Servico) cancelarNaTx(ctx context.Context, tx outbox.Tx, id int64) (fil
 	if _, err := q.CancelarSessao(ctx, id); err != nil {
 		return 0, 0, fmt.Errorf("sessao: cancelar sessão: %w", err)
 	}
+	if linhas[0].Status == statusAgendada { // repetir o cancelamento não audita de novo
+		if err := auditoria.Registrar(ctx, tx, auditoria.SessaoCancelada, auditoria.ID(id), s.cfg.Agora()); err != nil {
+			return 0, 0, err
+		}
+	}
 	if n, err = s.pedidos.CancelarPedidosDaSessao(ctx, tx, id); err != nil {
 		return 0, 0, fmt.Errorf("sessao: estornar pedidos: %w", err)
 	}
 	return linhas[0].FilmeID, n, nil
+}
+
+// erroDaSala traduz o erro da escrita da sala (nome duplicado → 409).
+func erroDaSala(err error, op string) error {
+	switch {
+	case errors.Is(err, ErrSalaNaoEncontrada):
+		return err
+	case db.EhNomeDuplicado(err):
+		return ErrNomeSalaEmUso
+	}
+	return fmt.Errorf("sessao: %s sala: %w", op, err)
+}
+
+// naTx roda fn numa TX do pool com as queries ligadas a ela: toda mutação do
+// operador grava a trilha de auditoria na mesma TX (PRD 0037).
+func (s *Servico) naTx(ctx context.Context, fn func(q *db.Queries, tx outbox.Tx) error) error {
+	if s.cfg.Pool == nil {
+		return errors.New("sessao: mutação sem pool")
+	}
+	return outbox.WithTx(ctx, s.cfg.Pool, func(tx outbox.Tx) error { return fn(s.q.WithTx(tx), tx) })
 }
 
 // statusAgendada é o status da sessão em programação (CHECK da migration 008).

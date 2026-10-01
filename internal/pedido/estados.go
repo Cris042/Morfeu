@@ -17,6 +17,15 @@ const (
 	Estornado           Status = "estornado"
 )
 
+// Valido diz se o status existe (filtro do backoffice — PRD 0037).
+func (s Status) Valido() bool {
+	switch s {
+	case AguardandoPagamento, Pago, Expirado, Falhou, EstornoPendente, Estornado:
+		return true
+	}
+	return false
+}
+
 // Evento é o fato que pede uma transição.
 type Evento string
 

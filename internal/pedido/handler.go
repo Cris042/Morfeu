@@ -381,6 +381,8 @@ func (h *Handler) responderErro(c echo.Context, err error) error {
 		return c.JSON(http.StatusConflict, map[string]string{"erro": "nao_cancelavel"})
 	case errors.Is(err, ErrForaDaJanela):
 		return c.JSON(http.StatusConflict, map[string]string{"erro": "fora_da_janela"})
+	case errors.Is(err, ErrSessaoJaComecou):
+		return c.JSON(http.StatusConflict, map[string]string{"erro": "sessao_iniciada"})
 	case errors.Is(err, ErrSessaoIndisponivel), errors.Is(err, ErrPedidoNaoEncontrado):
 		return naoEncontrado(c)
 	default:
@@ -391,4 +393,97 @@ func (h *Handler) responderErro(c echo.Context, err error) error {
 
 func naoEncontrado(c echo.Context) error {
 	return c.JSON(http.StatusNotFound, map[string]string{"erro": "nao_encontrado"})
+}
+
+// RegistrarRotasBackoffice monta a consulta e o cancelamento de pedidos do
+// operador (PRD 0037); exigirOperador vem do main (RBAC) já com o ator da
+// trilha de auditoria no context.
+func (h *Handler) RegistrarRotasBackoffice(e *echo.Echo, exigirOperador echo.MiddlewareFunc) {
+	g := e.Group("/backoffice/pedidos", exigirOperador)
+	g.GET("", h.listarParaOperador)
+	g.GET("/:id", h.detalharParaOperador)
+	g.POST("/:id/cancelar", h.cancelarPeloOperador)
+}
+
+type pedidoOperadorDTO struct {
+	ID            uuid.UUID `json:"id"`
+	SessaoID      int64     `json:"sessao_id"`
+	Email         string    `json:"email"` // sempre mascarado
+	Assentos      []string  `json:"assentos"`
+	TotalCentavos int64     `json:"total_centavos"`
+	Status        Status    `json:"status"`
+	MotivoEstorno string    `json:"motivo_estorno,omitempty"`
+	CriadoEm      time.Time `json:"criado_em"`
+}
+
+func paraPedidoOperadorDTO(p PedidoOperador) pedidoOperadorDTO {
+	return pedidoOperadorDTO{ID: p.ID, SessaoID: p.SessaoID, Email: p.EmailMascarado, Assentos: p.Assentos,
+		TotalCentavos: p.TotalCentavos, Status: p.Status, MotivoEstorno: p.MotivoEstorno, CriadoEm: p.CriadoEm.UTC()}
+}
+
+// listarParaOperador: ?sessao_id=N&status=S&pagina=P (filtros validados).
+func (h *Handler) listarParaOperador(c echo.Context) error {
+	var f FiltroOperador
+	if v := c.QueryParam("sessao_id"); v != "" {
+		id, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || id <= 0 {
+			return c.JSON(http.StatusBadRequest, map[string]any{"erro": "dados_invalidos", "campos": []string{"sessao_id"}})
+		}
+		f.SessaoID = &id
+	}
+	if v := c.QueryParam("status"); v != "" {
+		st := Status(v)
+		if !st.Valido() {
+			return c.JSON(http.StatusBadRequest, map[string]any{"erro": "dados_invalidos", "campos": []string{"status"}})
+		}
+		f.Status = &st
+	}
+	pagina, _ := strconv.Atoi(c.QueryParam("pagina"))
+	lista, err := h.servico.ListarParaOperador(c.Request().Context(), f, pagina)
+	if err != nil {
+		return h.responderErro(c, err)
+	}
+	out := make([]pedidoOperadorDTO, 0, len(lista))
+	for _, p := range lista {
+		out = append(out, paraPedidoOperadorDTO(p))
+	}
+	c.Response().Header().Set(echo.HeaderCacheControl, "no-store")
+	return c.JSON(http.StatusOK, map[string]any{"pedidos": out})
+}
+
+func (h *Handler) detalharParaOperador(c echo.Context) error {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return naoEncontrado(c)
+	}
+	d, err := h.servico.DetalharParaOperador(c.Request().Context(), id)
+	if err != nil {
+		return h.responderErro(c, err)
+	}
+	return h.responderDetalhe(c, d)
+}
+
+func (h *Handler) cancelarPeloOperador(c echo.Context) error {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return naoEncontrado(c)
+	}
+	d, err := h.servico.CancelarPeloOperador(c.Request().Context(), id)
+	if err != nil {
+		return h.responderErro(c, err)
+	}
+	return h.responderDetalhe(c, d)
+}
+
+func (h *Handler) responderDetalhe(c echo.Context, d DetalheOperador) error {
+	ingressos := make([]map[string]string, 0, len(d.Ingressos))
+	for _, i := range d.Ingressos {
+		ingressos = append(ingressos, map[string]string{"assento": i.Assento, "status": i.Status})
+	}
+	eventos := make([]map[string]any, 0, len(d.Eventos))
+	for _, e := range d.Eventos {
+		eventos = append(eventos, map[string]any{"de": e.De, "para": e.Para, "ocorrido_em": e.OcorridoEm.UTC()})
+	}
+	c.Response().Header().Set(echo.HeaderCacheControl, "no-store")
+	return c.JSON(http.StatusOK, map[string]any{"pedido": paraPedidoOperadorDTO(d.PedidoOperador), "ingressos": ingressos, "eventos": eventos})
 }

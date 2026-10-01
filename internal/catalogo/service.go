@@ -16,6 +16,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/mclovin137/morfeu/internal/auditoria"
 	"github.com/mclovin137/morfeu/internal/cache"
 	"github.com/mclovin137/morfeu/internal/catalogo/db"
 	"github.com/mclovin137/morfeu/internal/outbox"
@@ -187,6 +188,9 @@ func (s *Servico) Criar(ctx context.Context, dados DadosFilme) (Filme, error) {
 		}); err != nil {
 			return err
 		}
+		if err := auditoria.Registrar(ctx, tx, auditoria.FilmeCriado, auditoria.ID(l.ID), time.Now()); err != nil {
+			return err
+		}
 		criado = Filme{ID: l.ID, Titulo: l.Titulo, Sinopse: l.Sinopse, DuracaoMin: l.DuracaoMin, Ano: l.Ano,
 			PosterURL: l.PosterUrl, ImdbID: l.ImdbID, TmdbID: l.TmdbID}
 		return nil
@@ -205,17 +209,24 @@ func (s *Servico) Atualizar(ctx context.Context, id int64, dados DadosFilme) (Fi
 	if err != nil {
 		return Filme{}, err
 	}
-	linhas, err := s.q.AtualizarFilme(ctx, db.AtualizarFilmeParams{
-		ID: id, Titulo: d.Titulo, Sinopse: d.Sinopse, DuracaoMin: d.DuracaoMin, Ano: d.Ano, PosterUrl: d.PosterURL, ImdbID: d.ImdbID,
+	var l db.AtualizarFilmeRow
+	err = outbox.WithTx(ctx, s.pool, func(tx outbox.Tx) error {
+		linhas, err := s.q.WithTx(tx).AtualizarFilme(ctx, db.AtualizarFilmeParams{
+			ID: id, Titulo: d.Titulo, Sinopse: d.Sinopse, DuracaoMin: d.DuracaoMin, Ano: d.Ano, PosterUrl: d.PosterURL, ImdbID: d.ImdbID,
+		})
+		if err != nil {
+			return fmt.Errorf("catalogo: atualizar filme: %w", err)
+		}
+		if len(linhas) == 0 {
+			return ErrFilmeNaoEncontrado
+		}
+		l = linhas[0]
+		return auditoria.Registrar(ctx, tx, auditoria.FilmeAtualizado, auditoria.ID(id), time.Now())
 	})
 	if err != nil {
-		return Filme{}, fmt.Errorf("catalogo: atualizar filme: %w", err)
-	}
-	if len(linhas) == 0 {
-		return Filme{}, ErrFilmeNaoEncontrado
+		return Filme{}, err
 	}
 	s.invalidarCartaz(ctx)
-	l := linhas[0]
 	s.logger.Info("filme atualizado", zap.Int64("filme_id", l.ID))
 	return Filme{ID: l.ID, Titulo: l.Titulo, Sinopse: l.Sinopse, DuracaoMin: l.DuracaoMin, Ano: l.Ano,
 		PosterURL: l.PosterUrl, ImdbID: l.ImdbID, TmdbID: l.TmdbID}, nil
@@ -223,12 +234,18 @@ func (s *Servico) Atualizar(ctx context.Context, id int64, dados DadosFilme) (Fi
 
 // Arquivar tira o filme do cartaz sem apagá-lo (RN01). Idempotente.
 func (s *Servico) Arquivar(ctx context.Context, id int64) error {
-	n, err := s.q.ArquivarFilme(ctx, id)
+	err := outbox.WithTx(ctx, s.pool, func(tx outbox.Tx) error {
+		n, err := s.q.WithTx(tx).ArquivarFilme(ctx, id)
+		if err != nil {
+			return fmt.Errorf("catalogo: arquivar filme: %w", err)
+		}
+		if n == 0 {
+			return ErrFilmeNaoEncontrado
+		}
+		return auditoria.Registrar(ctx, tx, auditoria.FilmeArquivado, auditoria.ID(id), time.Now())
+	})
 	if err != nil {
-		return fmt.Errorf("catalogo: arquivar filme: %w", err)
-	}
-	if n == 0 {
-		return ErrFilmeNaoEncontrado
+		return err
 	}
 	s.invalidarCartaz(ctx)
 	s.logger.Info("filme arquivado", zap.Int64("filme_id", id))

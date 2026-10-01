@@ -27,6 +27,7 @@ import (
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
 
+	"github.com/mclovin137/morfeu/internal/auditoria"
 	"github.com/mclovin137/morfeu/internal/autenticacao"
 	"github.com/mclovin137/morfeu/internal/catalogo"
 	catalogodb "github.com/mclovin137/morfeu/internal/catalogo/db"
@@ -95,7 +96,7 @@ func TestMain(m *testing.M) {
 		defer pool.Close()
 		for _, arq := range []string{"001_initial_schema.up.sql", "002_outbox_events.up.sql", "007_filmes.up.sql",
 			"008_salas_sessoes.up.sql", "009_holds.up.sql", "010_holds_pedido.up.sql", "011_pedidos.up.sql",
-			"012_stripe_eventos.up.sql", "013_pedidos_tarefas.up.sql", "014_pedidos_cobranca_encerrada.up.sql", "015_pedidos_usuario.up.sql", "016_motivo_cancelamento.up.sql"} {
+			"012_stripe_eventos.up.sql", "013_pedidos_tarefas.up.sql", "014_pedidos_cobranca_encerrada.up.sql", "015_pedidos_usuario.up.sql", "016_motivo_cancelamento.up.sql", "017_eventos_auditoria.up.sql"} {
 			ddl, err := os.ReadFile("../../migrations/" + arq)
 			if err == nil {
 				_, err = pool.Exec(ctx, string(ddl))
@@ -254,9 +255,19 @@ func montarAmbiente(t *testing.T, lim limites) *ambiente {
 	if err != nil {
 		t.Fatal(err)
 	}
-	NovoHandler(s, logTeste).
+	h := NovoHandler(s, logTeste).
 		ComConta(autenticacao.Opcional(emissor), autenticacao.Exigir(emissor, autenticacao.PapelCliente, autenticacao.PapelOperador), autenticacao.UsuarioID).
-		ComRotasDeTeste().RegistrarRotas(e)
+		ComRotasDeTeste()
+	h.RegistrarRotas(e)
+	// Backoffice como no main (comAtorDaTrilha): RBAC + ator da trilha no context.
+	exigir := autenticacao.Exigir(emissor, autenticacao.PapelOperador)
+	h.RegistrarRotasBackoffice(e, func(next echo.HandlerFunc) echo.HandlerFunc {
+		return exigir(func(c echo.Context) error {
+			id, _ := autenticacao.UsuarioID(c)
+			c.SetRequest(c.Request().WithContext(auditoria.ComAtor(c.Request().Context(), id)))
+			return next(c)
+		})
+	})
 	// Porta do cancelamento da sessão ligada como no main (ADR 0011).
 	sessoes.LigarPedidos(s, s.ContarCancelamentosDaSessao)
 	return &ambiente{e: e, rel: rel, reserva: res, servico: s, gateway: gw, funil: funil, compens: compens, cancel: cancel, emissor: emissor, sessoes: sessoes}

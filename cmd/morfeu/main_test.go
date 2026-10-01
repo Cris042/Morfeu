@@ -66,7 +66,7 @@ func TestMain(m *testing.M) {
 	}
 	// Schema pelos arquivos de migration reais (001 filmes-seed, 002 outbox,
 	// 007 catálogo em PT) — sem DDL duplicado no teste (task 0011).
-	for _, arq := range []string{"001_initial_schema.up.sql", "002_outbox_events.up.sql", "007_filmes.up.sql"} {
+	for _, arq := range []string{"001_initial_schema.up.sql", "002_outbox_events.up.sql", "007_filmes.up.sql", "017_eventos_auditoria.up.sql"} {
 		ddl, lerErr := os.ReadFile("../../migrations/" + arq)
 		if lerErr != nil {
 			fmt.Fprintln(os.Stderr, "ler migration:", lerErr)
