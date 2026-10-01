@@ -5,13 +5,17 @@ services:
     env_file: .env.docker-compose
     environment:
       POSTGRES_DB: morfeu
+    # Só em localhost (task 0042, RF08): o arquivo copiado para uma VM não expõe o banco.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - morfeu-postgres:/var/lib/postgresql/data
       # Usuário de leitura mínima do postgres-exporter (task 0007). Só roda em
       # volume novo — volume existente: ver docs/observabilidade.md.
       - ./configs/postgres/01-usuario-monitoracao.sh:/docker-entrypoint-initdb.d/01-usuario-monitoracao.sh:ro
+      # Roles de menor privilégio (task 0042, ADR 0013): só nascem se as envs
+      # PG_*_PASSWORD estiverem no .env — em dev o usuário único segue valendo.
+      - ./configs/postgres/02-roles.sh:/docker-entrypoint-initdb.d/02-roles.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -24,7 +28,7 @@ services:
     image: redis:7-alpine
     container_name: morfeu-redis
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - morfeu-redis:/data
     command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
@@ -41,7 +45,7 @@ services:
     container_name: morfeu-rabbitmq
     env_file: .env.docker-compose
     ports:
-      - "5672:5672"
+      - "127.0.0.1:5672:5672"
       # UI de management só em localhost (RNF02) — nunca exposta na rede.
       - "127.0.0.1:15672:15672"
     volumes:

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"runtime"
 	"strconv"
@@ -15,6 +16,13 @@ const tamanhoMinimoSegredoJWT = 32
 // Config holds application configuration loaded from environment variables
 type Config struct {
 	DatabaseURL string
+	// DatabaseMigrateURL: role dono do schema, usado só nas migrations do boot
+	// (ADR 0013); ausente = DatabaseURL. DatabasePurgeURL: role da purga da
+	// trilha de auditoria (pool próprio no worker); ausente = DatabaseURL.
+	DatabaseMigrateURL string
+	DatabasePurgeURL   string
+	// RedisURL: "redis://[:senha@]host:porta/db" (rediss:// também) ou o
+	// formato legado "host:porta". Nunca logado (pode conter a senha).
 	RedisURL    string
 	RabbitMQURL string
 	LogLevel    string
@@ -93,6 +101,10 @@ func LoadConfig() (*Config, error) {
 		EmailRemetente:       getEnv("EMAIL_REMETENTE", "Morfeu <onboarding@resend.dev>"),
 	}
 
+	// URLs dos roles de menor privilégio: sem elas, tudo no usuário único (dev/CI).
+	cfg.DatabaseMigrateURL = getEnv("DATABASE_MIGRATE_URL", cfg.DatabaseURL)
+	cfg.DatabasePurgeURL = getEnv("DATABASE_PURGE_URL", cfg.DatabaseURL)
+
 	// Parse cache TTL
 	ttlSeconds := getEnvInt("CACHE_TTL_SECONDS", 300)
 	cfg.CacheTTL = time.Duration(ttlSeconds) * time.Second
@@ -120,6 +132,9 @@ func (c *Config) Validate() error {
 	if c.RabbitMQURL == "" {
 		return fmt.Errorf("RABBITMQ_URL is required")
 	}
+	if err := c.validarRedis(); err != nil {
+		return err
+	}
 	if c.AppPort == "" {
 		return fmt.Errorf("APP_PORT is required")
 	}
@@ -136,6 +151,23 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("CACHE_TTL_SECONDS must be >= 1")
 	}
 	return c.validarArgon2()
+}
+
+// validarRedis exige senha no Redis em produção (ADR 0013, doc.md §14.5). Só
+// a URL com credencial serve: o formato legado host:porta não tem como
+// carregá-la. A mensagem nunca inclui a URL.
+func (c *Config) validarRedis() error {
+	if c.Ambiente != "producao" {
+		return nil
+	}
+	u, err := url.Parse(c.RedisURL)
+	if err != nil || (u.Scheme != "redis" && u.Scheme != "rediss") || u.Host == "" {
+		return fmt.Errorf("em produção, REDIS_URL deve ser redis://:senha@host:porta/db")
+	}
+	if senha, ok := u.User.Password(); !ok || senha == "" {
+		return fmt.Errorf("em produção, REDIS_URL exige senha")
+	}
+	return nil
 }
 
 // validarArgon2 limita os custos do hash a faixas sãs (evita DoS acidental por

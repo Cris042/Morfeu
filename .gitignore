@@ -45,6 +45,7 @@ build/
 !.env.example
 !.env.docker-compose.example
 !.env.observability.example
+!.env.prod.example
 
 ### Claude Code ###
 .claude/settings.local.json

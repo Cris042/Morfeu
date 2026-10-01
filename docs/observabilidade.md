@@ -15,6 +15,20 @@ make obs-down
 - Prometheus, Loki, Alloy e exporters só existem na rede interna. Para inspecionar: `docker exec morfeu-prometheus wget -qO- localhost:9090/api/v1/targets`.
 - `docker compose up` **sem** profile continua subindo só PG/Redis/RabbitMQ (dev com `go run`).
 
+## Produção (task 0042)
+
+`docker-compose.prod.yml` é **standalone** (PG, Redis, RabbitMQ + a mesma stack; app e Caddy entram na E0c-CD). Só o Grafana (`127.0.0.1:3000`) e o management do RabbitMQ (`127.0.0.1:15672`) publicam porta — acesso por túnel SSH. Senhas por `${VAR:?}` nos dois `.env`:
+
+```bash
+cp .env.prod.example .env.prod && cp .env.observability.example .env.observability   # chmod 600; troque tudo
+make preflight   # recusa vazio, placeholder e senha < 24 caracteres (sem imprimir valores)
+docker compose --env-file .env.prod --env-file .env.observability -f docker-compose.prod.yml up -d
+```
+
+- **Senha do Redis no exporter:** o `redis-exporter` recebe `REDIS_PASSWORD` do `.env.prod` (o compose o injeta; não defina `REDIS_PASSWORD` vazio no `.env.observability`, ele sobrescreveria a interpolação). O app usa `REDIS_URL=redis://:SENHA@redis:6379/0` — com `AMBIENTE=producao` a URL sem senha recusa o boot.
+- **Disco:** o alerta "Disco acima de 80%" e o painel USE medem `mountpoint="/"`, que é onde os volumes do Docker (`/var/lib/docker`) moram na VM — o disco do host é coberto. Se o `data-root` do Docker ou os volumes forem para outro ponto de montagem, ajuste o alerta antes de confiar nele.
+- **Roles do PG (ADR 0013):** `02-roles.sh` cria `morfeu_migrator`/`app`/`purge`/`backup` **só em volume novo** e só os roles cuja `PG_*_PASSWORD` existir. Em volume existente, veja a seção abaixo. O app usa `DATABASE_URL` (role `morfeu_app`), `DATABASE_MIGRATE_URL` (migrator, só no boot) e `DATABASE_PURGE_URL` (pool de 2 conexões da purga da trilha).
+
 ## O que existe
 
 | Peça | Onde | Notas |
@@ -73,6 +87,18 @@ docker exec -it morfeu-postgres psql -U postgres -d morfeu \
   -c "GRANT pg_monitor TO morfeu_monitor"
 ```
 
+## Roles em volume existente (task 0042)
+
+O `02-roles.sh` não roda em volume já inicializado. Rode o mesmo script manualmente, com as senhas no ambiente do container (ele é idempotente: `CREATE ROLE` só se não existir, `ALTER ROLE` e `GRANT` repetidos são inócuos):
+
+```bash
+docker exec -e POSTGRES_USER=<admin> -e POSTGRES_DB=morfeu \
+  -e PG_MIGRATOR_PASSWORD=… -e PG_APP_PASSWORD=… -e PG_PURGE_PASSWORD=… -e PG_BACKUP_PASSWORD=… \
+  morfeu-postgres sh /docker-entrypoint-initdb.d/02-roles.sh
+```
+
+Atenção: em banco **com tabelas já criadas por outro usuário**, o `ALTER DEFAULT PRIVILEGES` não cobre o que já existe — transfira o dono (`REASSIGN OWNED BY <antigo> TO morfeu_migrator`) e dê `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES` e `GRANT USAGE, SELECT ON ALL SEQUENCES` ao `morfeu_app`; depois reaplique a migration 018 (ou rode o seu `DO $$ … $$` à mão).
+
 ## Riscos aceitos e pendências
 
 - Alloy e cAdvisor montam o socket do Docker **read-only** — acesso ao socket ≈ root no host. Nenhum dos dois publica porta.
@@ -81,4 +107,4 @@ docker exec -it morfeu-postgres psql -U postgres -d morfeu \
 
 ## Validação automatizada
 
-`test/observabilidade/stack_integration_test.go` (tag `integration`) sobe Prometheus (`promtool check config`), Loki (`/ready`), Alloy (`alloy validate`), Alloy + Tempo (trace com erro e trace lento chegam pelo tail sampling) e Grafana reais com as configs do repositório e verifica 7 dashboards, 3 datasources, as 18 regras por uid, os 2 contact points e o 401 anônimo; também garante que o compose de observabilidade só publica o Grafana em 127.0.0.1. `contrato_test.go` garante que dashboards e alertas só citam métricas que o app declara.
+`test/observabilidade/stack_integration_test.go` (tag `integration`) sobe Prometheus (`promtool check config`), Loki (`/ready`), Alloy (`alloy validate`), Alloy + Tempo (trace com erro e trace lento chegam pelo tail sampling) e Grafana reais com as configs do repositório e verifica 7 dashboards, 3 datasources, as 18 regras por uid, os 2 contact points e o 401 anônimo; também garante que o compose de observabilidade só publica o Grafana em 127.0.0.1. Os testes de `test/infra` (task 0042) validam o compose de produção (portas, senhas, logging), o preflight, os roles do PG com o `02-roles.sh` real e o Redis com senha. `contrato_test.go` garante que dashboards e alertas só citam métricas que o app declara.
