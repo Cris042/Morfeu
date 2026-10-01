@@ -10,13 +10,13 @@
 
 ### Plano da task 0043
 
-1. ~~~~Imagem + `backup.sh`~~ — stream `pg_dump | age | rclone rcat`, sha256/tamanho por FIFO, snapshot único (manifesto = dump), heartbeat.
-2. ~~~~`agendar.sh`~~.
-3. ~~~~`restore.sh` + `invariantes.sql`~~.
-4. ~~~~Compose de prod + preflight + exemplos~~ — serviço `backup`; preflight recusa chave privada/placeholder.
-5. ~~~~Testes~~ — ida e volta com imagem real + matriz de erro (CA01–CA05), invariantes reprovando divergência, S3 opcional (`rclone serve s3`).
-6. ~~~~Runbook, checklist, `lib.md`~~ — `docs/backup.md`, `docs/deploy-checklist.md`, 4 linhas em `lib.md`, `make backup-teste`.
-7. ~~Lint + suíte ok; **pendente: passe de julgamento (auditoria) + CI**. Desvios no PRD (índice `holds_assento_ocupado`, `rclone serve s3` no lugar do MinIO, contexto `./scripts/backup`, mem 128m).
+1. ~~Imagem + `backup.sh`~~ — stream `pg_dump | age | rclone rcat`, sha256/tamanho por FIFO, snapshot único (manifesto = dump), heartbeat.
+2. ~~`agendar.sh`~~.
+3. ~~`restore.sh` + `invariantes.sql`~~.
+4. ~~Compose de prod + preflight + exemplos~~ — serviço `backup`; preflight recusa chave privada/placeholder.
+5. ~~Testes~~ — ida e volta com imagem real + matriz de erro (CA01–CA05), invariantes reprovando divergência, S3 opcional (`rclone serve s3`).
+6. ~~Runbook, checklist, `lib.md`~~ — `docs/backup.md`, `docs/deploy-checklist.md`, 4 linhas em `lib.md`, `make backup-teste`.
+7. ~~Lint + suíte + passe de julgamento~~ — APROVADO, sem bloqueantes. Antes do PR: `rclone` 1.69.3 do Alpine tinha 24 advisories (4 críticos) e o `lib.md` dizia "sem CVE" → binário oficial 1.75.1 com SHA256 fixado. Resolvido no passe: manifesto (fora do sha256) validado por regex antes do `psql`. Registrados no runbook: objetos órfãos expiram pelo lifecycle; dump em claro do restore em tmpfs/disco cifrado; varredura de imagem no CI da E0c-CD. Desvios no PRD (índice `holds_assento_ocupado`, `rclone serve s3` no lugar do MinIO, contexto `./scripts/backup`, mem 128m).
 
 ---
 
