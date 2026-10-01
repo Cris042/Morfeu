@@ -18,3 +18,4 @@ Convenção: `NNNN-titulo-kebab.md`, numeração sequencial a partir de `0001`. 
 | [0008](0008-trava-de-assento.md) | Trava de assento: PG com índice único parcial, expiração lazy e sweeper | aceito | 2026-09-29 |
 | [0009](0009-frontend-spa.md) | Frontend SPA: React + TS + Vite, fronteira `/api` por proxy e estáticos pelo Caddy | aceito | 2026-09-29 |
 | [0010](0010-saga-do-checkout.md) | Saga do checkout: pivô síncrono no webhook, estorno como única compensação | aceito | 2026-09-30 |
+| [0011](0011-cancelamento-na-saga.md) | Cancelamento como nova entrada da saga (estende o 0010) | aceito | 2026-10-01 |
