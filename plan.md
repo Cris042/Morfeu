@@ -4,7 +4,7 @@
 
 ## Estado corrente (2026-10-01)
 
-**Task 0037 — Trilha de auditoria + consulta e cancelamento de pedido pelo operador (E9 T2): implementada, em auditoria** (branch `feature/0037-auditoria-operador`, da main `8ecc2a8`).
+**Task 0037 — Trilha de auditoria + consulta e cancelamento de pedido pelo operador (E9 T2): auditoria APROVADA em 2026-10-01 (`security`), PR #69** (branch `feature/0037-auditoria-operador`, da main `8ecc2a8`).
 
 ### Plano da task 0037
 
@@ -13,7 +13,7 @@
 3. ~~Operador no pedido~~ — `GET /backoffice/pedidos` (filtros, e-mail mascarado, sem código), detalhe, `POST …/cancelar` (sem janela; 409 com a sessão iniciada; trilha na TX).
 4. ~~Main + RBAC~~ — `comAtorDaTrilha`, rotas, purga; teste sobre todas as rotas `/backoffice/*` do main.
 5. ~~Achado na revisão dos alertas~~ — cancelamento contava como compensação da saga (dispararia "Estorno automático executado" a cada cancelamento) → só estornos automáticos contam; alerta de purga parada e textos dos alertas de estorno → **E10** (a task passaria de 30 arquivos).
-6. Lint (0) + suíte `-race` completa verdes → passe de julgamento → PR.
+6. ~~Lint + suíte `-race` + passe de julgamento~~ — APROVADO, sem bloqueantes. Resolvidos: máscara de e-mail por runa (local curto todo oculto) + teste; ator ausente → 401 no `comAtorDaTrilha`. Registrados: `catalogo` usa `time.Now()` na trilha (sem relógio injetado — consistência futura); DELETE da trilha possível ao usuário único do banco (role só da purga no hardening E11).
 
 ---
 

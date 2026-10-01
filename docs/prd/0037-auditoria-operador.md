@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0037-auditoria-operador.md
 - **Branch:** feature/0037-auditoria-operador
 - **Data:** 2026-10-01
-- **Status:** em andamento
+- **Status:** concluído
 
 ## Objetivo
 
@@ -43,15 +43,15 @@ Trilha de auditoria, consulta e cancelamento de pedido pelo operador, RBAC testa
 
 ## Critérios de aceite
 
-- [ ] CA01 — Registrar com ator do context e sem ator (sistema); ação fora do enum falha.
-- [ ] CA02 — Alvo com e-mail, código ou texto livre recusado pelo banco.
-- [ ] CA03 — UPDATE e TRUNCATE na trilha falham; o evento permanece.
-- [ ] CA04 — Purga remove só o que passou da retenção, em lotes, e é idempotente.
-- [ ] CA05 — Filme (criar/editar/arquivar) e sessão (criar/cancelar ×2) deixam a trilha esperada.
-- [ ] CA06 — Consulta do operador: filtros, 400 nos inválidos, e-mail mascarado, sem código; detalhe com ingressos e trilha; 404.
-- [ ] CA07 — Operador cancela dentro das 2h finais → `estorno_pendente`/`operador`, ingressos cancelados, 1 linha na trilha com o ator do token; repetir não audita nem conta; sessão iniciada → 409; cliente → 403; sem token → 401.
-- [ ] CA08 — Toda rota `/backoffice/*` do main recusa sem token (401) e cliente (403); o teste falha se encontrar menos de 15 rotas.
-- [ ] CA09 — Cancelamento estornado não incrementa a compensação da saga; lint, suíte `-race` e CI verdes.
+- [x] CA01 — Registrar com ator do context e sem ator (sistema); ação fora do enum falha.
+- [x] CA02 — Alvo com e-mail, código ou texto livre recusado pelo banco.
+- [x] CA03 — UPDATE e TRUNCATE na trilha falham; o evento permanece.
+- [x] CA04 — Purga remove só o que passou da retenção, em lotes, e é idempotente.
+- [x] CA05 — Filme (criar/editar/arquivar) e sessão (criar/cancelar ×2) deixam a trilha esperada.
+- [x] CA06 — Consulta do operador: filtros, 400 nos inválidos, e-mail mascarado, sem código; detalhe com ingressos e trilha; 404.
+- [x] CA07 — Operador cancela dentro das 2h finais → `estorno_pendente`/`operador`, ingressos cancelados, 1 linha na trilha com o ator do token; repetir não audita nem conta; sessão iniciada → 409; cliente → 403; sem token → 401.
+- [x] CA08 — Toda rota `/backoffice/*` do main recusa sem token (401) e cliente (403); o teste falha se encontrar menos de 15 rotas.
+- [x] CA09 — Cancelamento estornado não incrementa a compensação da saga; lint, suíte `-race` e CI verdes.
 
 ## Plano de testes
 
@@ -87,7 +87,7 @@ Trilha de auditoria, consulta e cancelamento de pedido pelo operador, RBAC testa
 - `internal/outbox/relay_integration_test.go`, `cmd/morfeu/{main.go, main_test.go}`, `.golangci.yml`
 - `docs/tasks/README.md`, `plan.md`, `state.md`
 
-Total: 29 (28 autorais + 1 gerado).
+Total: 30 (29 autorais + 1 gerado — `dominio_test.go` entrou com a correção da auditoria).
 
 ## Dependências utilizadas
 

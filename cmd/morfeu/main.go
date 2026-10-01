@@ -371,9 +371,11 @@ func registrarRotasDeDominio(e *echo.Echo, mode string, cfg *config.Config, dbPo
 func comAtorDaTrilha(exigir echo.MiddlewareFunc) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return exigir(func(c echo.Context) error {
-			if id, ok := autenticacao.UsuarioID(c); ok {
-				c.SetRequest(c.Request().WithContext(auditoria.ComAtor(c.Request().Context(), id)))
+			id, ok := autenticacao.UsuarioID(c)
+			if !ok { // inalcançável depois do Exigir — defesa em profundidade (auditoria 0037)
+				return c.JSON(http.StatusUnauthorized, map[string]string{"erro": "nao_autenticado"})
 			}
+			c.SetRequest(c.Request().WithContext(auditoria.ComAtor(c.Request().Context(), id)))
 			return next(c)
 		})
 	}

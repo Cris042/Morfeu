@@ -139,3 +139,17 @@ func TestEntrada_Validacao(t *testing.T) {
 		t.Errorf("seis assentos: %v", err)
 	}
 }
+
+// TestMascararEmail (PRD 0037, auditoria): por runa; local curto todo oculto.
+func TestMascararEmail(t *testing.T) {
+	for e, quer := range map[string]string{
+		"ana@exemplo.com":  "a***@exemplo.com",
+		"élio@exemplo.com": "é***@exemplo.com",
+		"a@exemplo.com":    "***@exemplo.com",
+		"sem-arroba":       "***@",
+	} {
+		if got := mascararEmail(e); got != quer {
+			t.Errorf("%s: %q, quer %q", e, got, quer)
+		}
+	}
+}

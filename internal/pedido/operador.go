@@ -58,13 +58,15 @@ type DetalheOperador struct {
 	Eventos   []EventoOperador
 }
 
-// mascararEmail mantém a 1ª letra e o domínio: "a***@exemplo.com".
+// mascararEmail mantém a 1ª letra e o domínio: "a***@exemplo.com". Por runa
+// (letra acentuada não vira byte solto); local de 1 letra fica todo oculto.
 func mascararEmail(e string) string {
 	local, dominio, ok := strings.Cut(e, "@")
-	if !ok || local == "" {
-		return "***"
+	letras := []rune(local)
+	if !ok || len(letras) < 2 {
+		return "***@" + dominio
 	}
-	return local[:1] + "***@" + dominio
+	return string(letras[:1]) + "***@" + dominio
 }
 
 func paraOperador(id uuid.UUID, sessaoID int64, email string, assentos []string, total int64, status string, motivo *string, criado time.Time) PedidoOperador {
