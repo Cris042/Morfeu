@@ -20,3 +20,4 @@ Convenção: `NNNN-titulo-kebab.md`, numeração sequencial a partir de `0001`. 
 | [0010](0010-saga-do-checkout.md) | Saga do checkout: pivô síncrono no webhook, estorno como única compensação | aceito | 2026-09-30 |
 | [0011](0011-cancelamento-na-saga.md) | Cancelamento como nova entrada da saga (estende o 0010) | aceito | 2026-10-01 |
 | [0012](0012-tail-sampling-no-alloy.md) | Amostragem de traces por tail sampling no Alloy | aceito | 2026-10-01 |
+| [0013](0013-privilegios-pg-e-backup.md) | Privilégios do PostgreSQL e política de backup | aceito | 2026-10-01 |
