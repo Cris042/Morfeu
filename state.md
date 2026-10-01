@@ -46,6 +46,8 @@ Atualizado ao final de cada task e antes de cada PR (regras em `roles.md` §6.11
 
 ## Pendências técnicas
 
+- **Para o E10 (alertas — achado da 0037):** alerta "purga da trilha de auditoria parada > 48 h" (`time() - max(auditoria_purga_ultima_execucao_timestamp) > 172800`) e textos dos alertas `morfeu-saga-estorno*` cobrindo cancelamentos (ADR 0011); a lista fechada vai a 17 regras (atualizar `test/observabilidade`).
+
 - ~~Teste instável `TestRelay_BrokerIndisponivelNaoCrashaEReentrega`~~ → corrigido na task 0021 (broker parado antes de enfileirar + `t.Cleanup` que religa).
 - **Ambiente local sem navegador para o Playwright** (WSL sem Chrome e sem libasound/libxcomposite/libxrandr — instalar exige `sudo`, decisão do usuário): E2E local só pela imagem oficial `mcr.microsoft.com/playwright` (~2 GB); o CI é o gate.
 - ~~Débito de lint da E0a (43 issues) + `time.Sleep` nos testes~~ → **quitado na task 0004 (2026-07-12)**: `golangci-lint run ./...` = 0 issues (6 commits mecânicos, asserts intactos); `time.Sleep(1s)` substituído por `wait.ForLog(...).WithOccurrence(2)` (PG) e timeouts explícitos (Redis).

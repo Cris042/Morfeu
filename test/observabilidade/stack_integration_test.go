@@ -199,8 +199,8 @@ func TestGrafana_Provisionamento(t *testing.T) {
 		}
 	}
 
-	if len(regras) != 17 {
-		t.Errorf("esperava 17 regras de alerta (6 do E0d + reuso de refresh do E1 + 2 da reserva do E4 + 5 da saga do E6 + 2 do e-mail do E7 + purga da auditoria do E9), recebi %d", len(regras))
+	if len(regras) != 16 {
+		t.Errorf("esperava 16 regras de alerta (6 do E0d + reuso de refresh do E1 + 2 da reserva do E4 + 5 da saga do E6 + 2 do e-mail do E7), recebi %d", len(regras))
 	}
 
 	achou := false

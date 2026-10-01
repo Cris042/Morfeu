@@ -20,7 +20,7 @@ Telas (0038); consulta da trilha pela API (sem requisito).
 
 ## Arquivos esperados
 
-30 (lista no PRD).
+29 (lista no PRD).
 
 ## Dependências esperadas
 

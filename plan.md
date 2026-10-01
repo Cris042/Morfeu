@@ -12,7 +12,7 @@
 2. ~~Trilha nas mutações~~ — filmes (criar/editar/arquivar/importar), salas, sessões (criar/cancelar) — as que não tinham TX passam a abrir.
 3. ~~Operador no pedido~~ — `GET /backoffice/pedidos` (filtros, e-mail mascarado, sem código), detalhe, `POST …/cancelar` (sem janela; 409 com a sessão iniciada; trilha na TX).
 4. ~~Main + RBAC~~ — `comAtorDaTrilha`, rotas, purga; teste sobre todas as rotas `/backoffice/*` do main.
-5. ~~Achado na revisão dos alertas~~ — cancelamento contava como compensação da saga (dispararia "Estorno automático executado" a cada cancelamento) → só estornos automáticos contam; alerta novo de purga parada (16 → 17, teste da stack atualizado).
+5. ~~Achado na revisão dos alertas~~ — cancelamento contava como compensação da saga (dispararia "Estorno automático executado" a cada cancelamento) → só estornos automáticos contam; alerta de purga parada e textos dos alertas de estorno → **E10** (a task passaria de 30 arquivos).
 6. Lint (0) + suíte `-race` completa verdes → passe de julgamento → PR.
 
 ---

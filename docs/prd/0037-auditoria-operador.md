@@ -24,7 +24,7 @@ Trilha de auditoria, consulta e cancelamento de pedido pelo operador, RBAC testa
 - RF02 — Pacote de plataforma `internal/auditoria` (como o `outbox`): `Registrar(ctx, tx, acao, alvoID, agora)` na TX do chamador (erro = rollback da ação); ator lido do context (`ComAtor`), `uuid.Nil` = sistema (seed/CLI/jobs).
 - RF03 — Trilha nas mutações do operador: filme criado/atualizado/arquivado/importado; sala criada/atualizada; sessão criada/cancelada (cancelamento repetido não audita de novo); pedido cancelado. As mutações de sala/sessão/filme sem TX passam a abrir uma.
 - RF04 — O main liga o ator: `comAtorDaTrilha(Exigir(operador))` em todas as rotas `/backoffice/*`.
-- RF05 — Purga diária no worker (`DELETE` em lotes de 5000 de eventos com mais de 12 meses); métricas `auditoria_purga_removidos_total` e `auditoria_purga_ultima_execucao_timestamp`; alerta "purga parada há mais de 48 h" (lista fechada de alertas: 16 → 17).
+- RF05 — Purga diária no worker (`DELETE` em lotes de 5000 de eventos com mais de 12 meses); métricas `auditoria_purga_removidos_total` e `auditoria_purga_ultima_execucao_timestamp`. O alerta "purga parada há mais de 48 h" e o texto dos alertas de estorno (que passam a cobrir cancelamentos) ficam para o **E10** (alertas), para a task caber em 30 arquivos.
 - RF06 — `GET /backoffice/pedidos?sessao_id=&status=&pagina=`: filtros validados (400 com o campo), 50 por página, mais recentes primeiro, e-mail **mascarado** (`a***@dominio`), **sem** o código; `no-store`.
 - RF07 — `GET /backoffice/pedidos/:id`: pedido (mascarado, sem código, com o motivo do estorno), ingressos (assento + status, sem token) e trilha de estados; inexistente → 404.
 - RF08 — `POST /backoffice/pedidos/:id/cancelar`: sem a janela do cliente; só `pago` sem ingresso usado; sessão já iniciada → `409 sessao_iniciada`; CAS → `estorno_pendente` (motivo `operador`) + ingressos cancelados + trilha na mesma TX; repetir → 200 sem nova trilha; métrica `cancelamentos_total{origem="operador"}`.
@@ -51,7 +51,7 @@ Trilha de auditoria, consulta e cancelamento de pedido pelo operador, RBAC testa
 - [ ] CA06 — Consulta do operador: filtros, 400 nos inválidos, e-mail mascarado, sem código; detalhe com ingressos e trilha; 404.
 - [ ] CA07 — Operador cancela dentro das 2h finais → `estorno_pendente`/`operador`, ingressos cancelados, 1 linha na trilha com o ator do token; repetir não audita nem conta; sessão iniciada → 409; cliente → 403; sem token → 401.
 - [ ] CA08 — Toda rota `/backoffice/*` do main recusa sem token (401) e cliente (403); o teste falha se encontrar menos de 15 rotas.
-- [ ] CA09 — Cancelamento estornado não incrementa a compensação da saga; lint, suíte `-race` e CI verdes; 17 alertas provisionados.
+- [ ] CA09 — Cancelamento estornado não incrementa a compensação da saga; lint, suíte `-race` e CI verdes.
 
 ## Plano de testes
 
@@ -61,7 +61,7 @@ Trilha de auditoria, consulta e cancelamento de pedido pelo operador, RBAC testa
 | Trilha das mutações | integração (`catalogo`, `sessao`) | CA05 |
 | Consulta e cancelamento do operador | integração (`pedido`) | CA06, CA07 |
 | RBAC das rotas do main | unit (`cmd/morfeu`) | CA08 |
-| Compensação × cancelamento; 17 alertas | integração (`pedido`, `test/observabilidade`) | CA09 |
+| Compensação × cancelamento | integração (`pedido`) | CA09 |
 
 ## Plano de implementação
 
@@ -84,11 +84,10 @@ Trilha de auditoria, consulta e cancelamento de pedido pelo operador, RBAC testa
 - `internal/catalogo/{service.go, importacao.go, handler_test.go}`
 - `internal/sessao/{service.go, handler_test.go}`
 - `internal/pedido/{estados.go, errors.go, handler.go, queries.sql, tarefas.go, handler_test.go, cancelamento_test.go}`, `internal/pedido/db/queries.sql.go` (gerado)
-- `internal/outbox/relay_integration_test.go`, `cmd/morfeu/{main.go, main_test.go}`, `test/observabilidade/stack_integration_test.go`
-- `configs/grafana/provisioning/alerting/alertas.yml`, `.golangci.yml`
+- `internal/outbox/relay_integration_test.go`, `cmd/morfeu/{main.go, main_test.go}`, `.golangci.yml`
 - `docs/tasks/README.md`, `plan.md`, `state.md`
 
-Total: 30 (29 autorais + 1 gerado).
+Total: 29 (28 autorais + 1 gerado).
 
 ## Dependências utilizadas
 
