@@ -66,6 +66,8 @@ func TestOTLP_ExportaSanitizado(t *testing.T) {
 		attribute.String("url.full", "https://morfeu.exemplo/i/x.TOKENSECRETOdoINGRESSO"),
 		attribute.String("http.request.header.authorization", "Bearer segredo-jwt"),
 		attribute.String("db.query.parameter.0", "ana@exemplo.com"),
+		attribute.String("client.address", "203.0.113.77"),
+		attribute.String("user_agent.original", "NavegadorDaAna/1.0"),
 		attribute.String("pedido_id", "6f1c2e0a-0000-4000-8000-000000000001"),
 	)
 	span.SetStatus(codes.Error, "falhou")
@@ -82,7 +84,7 @@ func TestOTLP_ExportaSanitizado(t *testing.T) {
 			t.Errorf("faltou %q no OTLP exportado", deve)
 		}
 	}
-	for _, nunca := range []string{"TOKENSECRETOdoINGRESSO", "ana@exemplo.com", "segredo-jwt", "url.query", "url.full"} {
+	for _, nunca := range []string{"TOKENSECRETOdoINGRESSO", "ana@exemplo.com", "segredo-jwt", "url.query", "url.full", "203.0.113.77", "NavegadorDaAna"} {
 		if bytes.Contains(corpo, []byte(nunca)) {
 			t.Errorf("vazou %q no OTLP exportado", nunca)
 		}

@@ -74,6 +74,8 @@ var prefixosProibidos = []string{
 	"url.query", "url.full", "http.url", "http.target",
 	"http.request.header.", "http.response.header.",
 	"db.query.parameter.", "enduser.", "user.",
+	// IP e user agent são dados pessoais (LGPD — auditoria 0040).
+	"client.address", "client.port", "network.peer.address", "net.peer.ip", "http.client_ip", "user_agent.original",
 }
 
 func atributosLimpos(attrs []attribute.KeyValue) []attribute.KeyValue {

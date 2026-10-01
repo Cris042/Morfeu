@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0040-tempo-otlp.md
 - **Branch:** feature/0040-tempo-otlp
 - **Data:** 2026-10-01
-- **Status:** em andamento
+- **Status:** concluído
 
 ## Objetivo
 
@@ -22,7 +22,7 @@ App (exporter + sampler + sanitização), stack (Tempo, Alloy, Grafana) e testes
 ## Requisitos funcionais
 
 - RF01 — `OTEL_EXPORTER_OTLP_ENDPOINT` (config) liga a exportação: sampler `ParentBased(AlwaysSample)` + `BatchSpanProcessor` (fila 2048, lote 512, intervalo 2 s, timeout 3 s) com `otlptracehttp` (timeout 2 s, sem retry). Vazio → amostragem de cabeça 10% + descarte (comportamento anterior).
-- RF02 — Sanitização antes de exportar (`telemetria.Sanitizar`): `url.path` vira `http.route` quando há rota; somem `url.query`, `url.full`, `http.url`, `http.target`, `http.request.header.*`, `http.response.header.*`, `db.query.parameter.*`, `enduser.*`, `user.*`.
+- RF02 — Sanitização antes de exportar (`telemetria.Sanitizar`): `url.path` vira `http.route` quando há rota; somem `url.query`, `url.full`, `http.url`, `http.target`, `http.request.header.*`, `http.response.header.*`, `db.query.parameter.*`, `enduser.*`, `user.*` e — dados pessoais (LGPD) — `client.address`, `client.port`, `network.peer.address`, `user_agent.original`.
 - RF03 — Tempo `2.10.4` monolítico: receptor OTLP gRPC interno, storage local, `block_retention` 72 h, limites de ingestão e de tamanho de trace, 384 MB, volume `morfeu-tempo`, **sem porta publicada**.
 - RF04 — Alloy: `otelcol.receiver.otlp` (HTTP 4318, interno) → `memory_limiter` (400 MiB) → `attributes` (mesma remoção do RF02) → `tail_sampling` (ERROR; latência > 300 ms; 10% probabilístico; `decision_wait` 10 s; `num_traces` 20 000) → `batch` → Tempo; Alloy 256 → 512 MB.
 - RF05 — Compose de observabilidade injeta `OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318` no `app`.
@@ -35,13 +35,13 @@ App (exporter + sampler + sanitização), stack (Tempo, Alloy, Grafana) e testes
 
 ## Critérios de aceite
 
-- [ ] CA01 — Com coletor (falso, `httptest`), o span chega com rota templada e `pedido_id`, e **sem** token do ingresso, e-mail, Authorization, `url.query`/`url.full`.
-- [ ] CA02 — Coletor inacessível: 10 240 spans criados em < 1 s; shutdown dentro do prazo.
-- [ ] CA03 — Sem rota, `url.path` é mantido; prefixos proibidos caem sempre.
-- [ ] CA04 — `alloy validate` da config real passa.
-- [ ] CA05 — Stack real (Alloy + Tempo com as configs do repo): trace com erro e trace lento chegam ao Tempo pelo tail sampling.
-- [ ] CA06 — Grafana provisiona o datasource `tempo`; nenhuma porta além do Grafana em 127.0.0.1.
-- [ ] CA07 — Lint, suíte `-race` e CI verdes; `doc.md` §13 e `lib.md` atualizados.
+- [x] CA01 — Com coletor (falso, `httptest`), o span chega com rota templada e `pedido_id`, e **sem** token do ingresso, e-mail, Authorization, `url.query`/`url.full`.
+- [x] CA02 — Coletor inacessível: 10 240 spans criados em < 1 s; shutdown dentro do prazo.
+- [x] CA03 — Sem rota, `url.path` é mantido; prefixos proibidos caem sempre.
+- [x] CA04 — `alloy validate` da config real passa.
+- [x] CA05 — Stack real (Alloy + Tempo com as configs do repo): trace com erro e trace lento chegam ao Tempo pelo tail sampling.
+- [x] CA06 — Grafana provisiona o datasource `tempo`; nenhuma porta além do Grafana em 127.0.0.1.
+- [x] CA07 — Lint, suíte `-race` e CI verdes; `doc.md` §13 e `lib.md` atualizados.
 
 ## Plano de testes
 

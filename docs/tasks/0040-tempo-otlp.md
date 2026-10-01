@@ -1,7 +1,7 @@
 # Task 0040 — Traces: Tempo + OTLP + tail sampling no Alloy (E10, T1)
 
 - **Data:** 2026-10-01
-- **Status:** em andamento
+- **Status:** concluída (auditoria APROVADA em 2026-10-01)
 - **Branch:** `feature/0040-tempo-otlp` (sobre `docs/E10-refinamento`)
 - **PRD:** docs/prd/0040-tempo-otlp.md
 - **Item do roadmap:** E10 — Observabilidade completa (1ª de 2). Refinamento: `docs/refinamentos/E10-observabilidade.md` §T1. ADR 0012.

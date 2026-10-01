@@ -96,6 +96,10 @@ otelcol.processor.attributes "sanitizar" {
     pattern = "^db\\.query\\.parameter\\..*"
     action  = "delete"
   }
+  action {
+    pattern = "^(client\\.(address|port)|network\\.peer\\.address|net\\.peer\\.ip|http\\.client_ip|user_agent\\.original)$"
+    action  = "delete"
+  }
 
   output {
     traces = [otelcol.processor.tail_sampling.traces.input]

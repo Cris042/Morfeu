@@ -47,4 +47,4 @@ Convenção: `NNNN-titulo-kebab.md`, numeração sequencial a partir de `0001`. 
 | 0037 | [Trilha de auditoria + consulta e cancelamento de pedido pelo operador](./0037-auditoria-operador.md) | E9 (T2) | concluída (auditoria APROVADA; PR #69) | `feature/0037-auditoria-operador` | [0037](../prd/0037-auditoria-operador.md) |
 | 0038 | [SPA: cancelar pedido + backoffice de filmes e salas](./0038-spa-cancelar-backoffice.md) | E9 (T3a) | concluída (auditoria APROVADA; PR #70) | `feature/0038-spa-cancelar-backoffice` | [0038](../prd/0038-spa-cancelar-backoffice.md) |
 | 0039 | [SPA: sessões e pedidos do operador + E2E do backoffice](./0039-spa-sessoes-pedidos.md) | E9 (T3b) | concluída (auditoria APROVADA; PR #71) | `feature/0039-spa-sessoes-pedidos` | [0039](../prd/0039-spa-sessoes-pedidos.md) |
-| 0040 | [Traces: Tempo + OTLP + tail sampling no Alloy](./0040-tempo-otlp.md) | E10 (T1) | em andamento | `feature/0040-tempo-otlp` | [0040](../prd/0040-tempo-otlp.md) |
+| 0040 | [Traces: Tempo + OTLP + tail sampling no Alloy](./0040-tempo-otlp.md) | E10 (T1) | concluída (auditoria APROVADA; PR #73) | `feature/0040-tempo-otlp` | [0040](../prd/0040-tempo-otlp.md) |
