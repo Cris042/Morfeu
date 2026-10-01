@@ -220,16 +220,20 @@ func TestRolesDoPostgres(t *testing.T) {
 		if _, err := migr.Exec(ctx, sql); err != nil {
 			t.Fatalf("018 repetida: %v", err)
 		}
-		if err := m.Steps(-1); err != nil {
+		// Versões absolutas (não Steps): seguem válidas quando surgirem a 019+.
+		if err := m.Migrate(17); err != nil {
 			t.Fatalf("down da 018: %v", err)
 		}
 		if _, err := app.Exec(ctx, `DELETE FROM eventos_auditoria`); err != nil {
 			t.Errorf("após o down, o app deveria poder DELETE: %v", err)
 		}
-		if err := m.Steps(1); err != nil {
+		// O down não amplia: TRUNCATE nunca foi do app.
+		_, err := app.Exec(ctx, `TRUNCATE eventos_auditoria`)
+		esperarNegado(t, err, "TRUNCATE após o down da 018")
+		if err := m.Migrate(18); err != nil {
 			t.Fatalf("up da 018: %v", err)
 		}
-		_, err := app.Exec(ctx, `DELETE FROM eventos_auditoria`)
+		_, err = app.Exec(ctx, `DELETE FROM eventos_auditoria`)
 		esperarNegado(t, err, "DELETE após reaplicar a 018")
 	})
 }

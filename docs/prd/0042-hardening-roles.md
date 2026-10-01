@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0042-hardening-roles.md
 - **Branch:** feature/0042-hardening-roles
 - **Data:** 2026-10-01
-- **Status:** em implementação
+- **Status:** concluído
 
 ## Objetivo
 
@@ -39,13 +39,13 @@ Fechar, no que dá para fechar sem a VM, o §14.5 do `doc.md`: um compose de pro
 
 ## Critérios de aceite
 
-- [ ] CA01 — Teste estático do `docker-compose.prod.yml`: nenhum `ports:` fora de `127.0.0.1` (formas curta e longa), nenhum `network_mode: host`, nenhuma porta em Prometheus/Loki/Tempo/Alloy/exporters/PG/Redis/RabbitMQ AMQP, senhas por `${VAR:?}`, logging com rotação em todos; **caso negativo** (compose sintético com `5432:5432` e com `host_ip: 0.0.0.0`) falha a validação.
-- [ ] CA02 — Preflight: `.env` válido passa; vazio, placeholder e senha curta falham, sem ecoar o valor.
-- [ ] CA03 — Integração (PG real com o `02-roles.sh` de verdade): migrate como `morfeu_migrator` → `morfeu_app` faz CRUD, não é dono de nenhuma tabela e recebe `permission denied` (42501) em `DELETE`/`TRUNCATE` da trilha → `morfeu_purge` roda `auditoria.Purgar`, mas não faz `UPDATE` na trilha nem lê `pedidos` → `morfeu_backup` lê tudo e não escreve.
-- [ ] CA04 — Config: `REDIS_URL` nos dois formatos; produção sem senha no Redis falha; fallback das URLs de migrate e purga.
-- [ ] CA05 — Integração do Redis com senha: sem senha → `NOAUTH`; com a URL → `PING` ok.
-- [ ] CA06 — `docs/deploy-checklist.md` e runbook (`docs/observabilidade.md`: alerta de disco cobre a raiz; senha do Redis no exporter).
-- [ ] CA07 — CI verde (`-race`, lint, govulncheck).
+- [x] CA01 — Teste estático do `docker-compose.prod.yml`: nenhum `ports:` fora de `127.0.0.1` (formas curta e longa), nenhum `network_mode: host`, nenhuma porta em Prometheus/Loki/Tempo/Alloy/exporters/PG/Redis/RabbitMQ AMQP, senhas por `${VAR:?}`, logging com rotação em todos; **caso negativo** (compose sintético com `5432:5432` e com `host_ip: 0.0.0.0`) falha a validação.
+- [x] CA02 — Preflight: `.env` válido passa; vazio, placeholder e senha curta falham, sem ecoar o valor.
+- [x] CA03 — Integração (PG real com o `02-roles.sh` de verdade): migrate como `morfeu_migrator` → `morfeu_app` faz CRUD, não é dono de nenhuma tabela e recebe `permission denied` (42501) em `DELETE`/`TRUNCATE` da trilha → `morfeu_purge` roda `auditoria.Purgar`, mas não faz `UPDATE` na trilha nem lê `pedidos` → `morfeu_backup` lê tudo e não escreve.
+- [x] CA04 — Config: `REDIS_URL` nos dois formatos; produção sem senha no Redis falha; fallback das URLs de migrate e purga.
+- [x] CA05 — Integração do Redis com senha: sem senha → `NOAUTH`; com a URL → `PING` ok.
+- [x] CA06 — `docs/deploy-checklist.md` e runbook (`docs/observabilidade.md`: alerta de disco cobre a raiz; senha do Redis no exporter).
+- [x] CA07 — CI verde (`-race`, lint, govulncheck).
 
 ## Plano de testes
 
@@ -75,7 +75,7 @@ Fechar, no que dá para fechar sem a VM, o §14.5 do `doc.md`: um compose de pro
 - `docker-compose.yml`, `.env.docker-compose.example`, `.env.observability.example`, `Makefile`
 - `docs/observabilidade.md`, `docs/tasks/README.md`, `docs/roadmap.md`, `plan.md`, `state.md`
 
-Total: 28 (desvios da implementação: `.gitignore` — `!.env.prod.example`, já que `.env.*` é ignorado; `cmd/morfeu/redis_test.go` — testes do `novoRedis`).
+Total: 26 (desvios da implementação: `.gitignore` — `!.env.prod.example`, já que `.env.*` é ignorado; `cmd/morfeu/redis_test.go` — testes do `novoRedis`).
 
 ## Dependências utilizadas
 

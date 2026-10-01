@@ -6,17 +6,17 @@
 
 **E10 concluído (PR #74 mergeado). Épico E11 refinado** (`docs/refinamentos/E11-hardening-backup.md`, ADR 0013): 3 tasks — 0042 (hardening + roles) → 0043 (backup/restore) → 0044 (limpeza operacional). Próxima: **0042**.
 
-**Task 0042 — Hardening do compose, senha do Redis e roles do PG (E11 T1): em implementação** (branch `feature/0042-hardening-roles`, PRD `docs/prd/0042-hardening-roles.md`).
+**Task 0042 — Hardening do compose, senha do Redis e roles do PG (E11 T1): auditoria APROVADA em 2026-10-01 (`security`), PR #76** (branch `feature/0042-hardening-roles`, PRD `docs/prd/0042-hardening-roles.md`).
 
 ### Plano da task 0042
 
-1. Config + main — `REDIS_URL` com senha (`redis.ParseURL`), `DATABASE_MIGRATE_URL`/`DATABASE_PURGE_URL` com fallback; produção exige senha no Redis.
-2. Roles — `configs/postgres/02-roles.sh` + migration 018 idempotente.
-3. Compose — `docker-compose.prod.yml` standalone; dev em 127.0.0.1; exemplos de env.
-4. Preflight + Makefile.
-5. Testes — estático do compose (com negativos), preflight, roles e Redis com senha (testcontainers).
-6. Docs — `docs/deploy-checklist.md`, runbook.
-7. Lint + suíte + passe de julgamento.
+1. ~~Config + main~~ — `REDIS_URL` com senha (`redis.ParseURL`), `DATABASE_MIGRATE_URL`/`DATABASE_PURGE_URL` com fallback; produção exige senha no Redis.
+2. ~~Roles~~ — `configs/postgres/02-roles.sh` + migration 018 idempotente.
+3. ~~Compose~~ — `docker-compose.prod.yml` standalone; dev em 127.0.0.1; exemplos de env.
+4. ~~Preflight + Makefile~~.
+5. ~~Testes~~ — estático do compose (com negativos), preflight, roles e Redis com senha (testcontainers).
+6. ~~Docs~~ — `docs/deploy-checklist.md`, runbook.
+7. ~~Lint + suíte + passe de julgamento~~ — APROVADO, sem bloqueantes. Antes: down da 018 devolvia TRUNCATE/TRIGGER ao app (nunca foram dele) → só DELETE; senha fictícia de teste confundida com segredo pelo gitleaks → valor neutro. Resolvidos no passe: teste do down por versão absoluta (`Migrate(17/18)`) + TRUNCATE negado após o down; `02-roles.sh` executável no git (mesmo caminho do teste). Registrados: senha no argv do `psql -v` durante o init; exporters recebem o `.env.observability` inteiro; preflight não cruza `DATA_SOURCE_PASS` × `PG_MONITOR_PASSWORD`.
 
 ---
 

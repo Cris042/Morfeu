@@ -1,7 +1,7 @@
 # Task 0042 — Hardening do compose, senha do Redis e roles do PG (E11, T1)
 
 - **Data:** 2026-10-01
-- **Status:** em implementação
+- **Status:** concluída (auditoria APROVADA em 2026-10-01)
 - **Branch:** `feature/0042-hardening-roles`
 - **PRD:** docs/prd/0042-hardening-roles.md
 - **Item do roadmap:** E11 — Hardening + backup (1ª de 3). Refinamento: `docs/refinamentos/E11-hardening-backup.md` §T1; ADR 0013.
