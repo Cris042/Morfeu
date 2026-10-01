@@ -72,8 +72,18 @@ RETURNING filme_id;
 -- Porta para a notificação (PRD 0028): dados do ingresso de uma sessão já
 -- vendida — sem filtro de status/horário (a sessão pode ter sido cancelada ou
 -- já ter começado quando o e-mail sai).
-SELECT s.filme_id, s.inicio, sa.nome AS sala_nome
+SELECT s.filme_id, s.inicio, sa.nome AS sala_nome, s.status
 FROM sessoes s
 JOIN salas sa ON sa.id = s.sala_id
 WHERE s.id = $1
 LIMIT 1;
+
+-- name: TravarSessao :many
+-- Cancelamento (PRD 0036 RF10): trava a sessão até o fim da TX. NO KEY
+-- UPDATE (não FOR UPDATE): o pivô em curso insere ingressos com FK para a
+-- sessão (KEY SHARE) — FOR UPDATE o bloquearia enquanto este TX espera a
+-- trava do pedido dele → deadlock (visto no teste da corrida).
+SELECT filme_id, status, inicio
+FROM sessoes
+WHERE id = $1
+FOR NO KEY UPDATE;

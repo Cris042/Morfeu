@@ -1,6 +1,7 @@
 package pedido
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -81,9 +82,11 @@ func (h *Handler) RegistrarRotas(e *echo.Echo) {
 	e.POST("/pedidos/:id/retomar", h.retomar, exigirAntiCSRF)
 	if h.exigirConta != nil {
 		e.GET("/pedidos", h.meusPedidos, h.exigirConta)
+		e.POST("/pedidos/:id/cancelar", h.cancelarDaConta, exigirAntiCSRF, h.exigirConta)
 	}
 	if h.servico.cfg.Consulta != nil {
 		e.POST("/pedidos/consulta", h.consultar, middleware.BodyLimit(limiteCorpo), exigirAntiCSRF)
+		e.POST("/pedidos/consulta/cancelar", h.cancelarPorConsulta, middleware.BodyLimit(limiteCorpo), exigirAntiCSRF)
 		e.GET("/i/:ref", h.ingresso, cabecalhosIngresso)
 		e.GET("/i/:ref/qr.png", h.qrIngresso, cabecalhosIngresso)
 	}
@@ -146,6 +149,7 @@ type pedidoDTO struct {
 	TotalCentavos int64     `json:"total_centavos"`
 	Status        Status    `json:"status"`
 	ExpiraEm      time.Time `json:"expira_em"`
+	Cancelavel    bool      `json:"cancelavel"`
 }
 
 func (h *Handler) criar(c echo.Context) error {
@@ -199,7 +203,7 @@ func (h *Handler) obter(c echo.Context) error {
 
 func paraPedidoDTO(v Visao) pedidoDTO {
 	return pedidoDTO{ID: v.ID, Codigo: v.Codigo, SessaoID: v.SessaoID, Assentos: v.Assentos,
-		TotalCentavos: v.TotalCentavos, Status: v.Status, ExpiraEm: v.ExpiraEm.UTC()}
+		TotalCentavos: v.TotalCentavos, Status: v.Status, ExpiraEm: v.ExpiraEm.UTC(), Cancelavel: v.Cancelavel}
 }
 
 // meusPedidos: "Meus pedidos" da conta logada (PRD 0031), ?pagina=N.
@@ -240,9 +244,34 @@ func (h *Handler) retomar(c echo.Context) error {
 	})
 }
 
+// cancelarDaConta: o cliente logado cancela o próprio pedido (PRD 0036 RF05).
+func (h *Handler) cancelarDaConta(c echo.Context) error {
+	id, err := uuid.Parse(c.Param("id"))
+	usuario := h.usuario(c)
+	if err != nil || usuario == nil {
+		return naoEncontrado(c)
+	}
+	v, err := h.servico.CancelarDaConta(c.Request().Context(), id, *usuario)
+	if err != nil {
+		return h.responderErro(c, err)
+	}
+	c.Response().Header().Set(echo.HeaderCacheControl, "no-store")
+	return c.JSON(http.StatusOK, paraPedidoDTO(v))
+}
+
 // consultar: pedido de convidado por e-mail + código (PRD 0034). Todo "não
 // encontrado" (código inexistente, malformado ou e-mail errado) sai idêntico.
 func (h *Handler) consultar(c echo.Context) error {
+	return h.peloConvidado(c, h.servico.Consultar)
+}
+
+// cancelarPorConsulta: o convidado cancela com e-mail + código (PRD 0036
+// RF06) — mesmo limite, mesmo "não encontrado" e mesmo formato da consulta.
+func (h *Handler) cancelarPorConsulta(c echo.Context) error {
+	return h.peloConvidado(c, h.servico.CancelarPorConsulta)
+}
+
+func (h *Handler) peloConvidado(c echo.Context, acao func(ctx context.Context, email, codigo string) (ResultadoConsulta, error)) error {
 	c.Response().Header().Set(echo.HeaderCacheControl, "no-store")
 	var in struct {
 		Email  string `json:"email"`
@@ -257,7 +286,7 @@ func (h *Handler) consultar(c echo.Context) error {
 	if err := h.servico.ContarConsulta(ctx, c.RealIP(), in.Email); err != nil {
 		return h.responderErro(c, err)
 	}
-	r, err := h.servico.Consultar(ctx, in.Email, in.Codigo)
+	r, err := acao(ctx, in.Email, in.Codigo)
 	if err != nil {
 		return h.responderErro(c, err)
 	}
@@ -348,6 +377,10 @@ func (h *Handler) responderErro(c echo.Context, err error) error {
 	case errors.Is(err, ErrGatewayIndisponivel):
 		c.Response().Header().Set("Retry-After", "30")
 		return c.JSON(http.StatusServiceUnavailable, map[string]string{"erro": "pagamento_indisponivel"})
+	case errors.Is(err, ErrNaoCancelavel):
+		return c.JSON(http.StatusConflict, map[string]string{"erro": "nao_cancelavel"})
+	case errors.Is(err, ErrForaDaJanela):
+		return c.JSON(http.StatusConflict, map[string]string{"erro": "fora_da_janela"})
 	case errors.Is(err, ErrSessaoIndisponivel), errors.Is(err, ErrPedidoNaoEncontrado):
 		return naoEncontrado(c)
 	default:

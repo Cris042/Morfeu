@@ -71,7 +71,13 @@ func (r repositorio) transicionar(ctx context.Context, id uuid.UUID, de Status, 
 // marcarEstorno leva o pedido a estorno_pendente com o motivo, pelo mesmo CAS
 // e na mesma TX da trilha (o estorno em si é o job da task 0025).
 func (r repositorio) marcarEstorno(ctx context.Context, id uuid.UUID, de Status, motivo string, agora time.Time) error {
-	para, err := Transicionar(de, EstornoNecessario)
+	return r.marcarEstornoPor(ctx, id, de, EstornoNecessario, motivo, agora)
+}
+
+// marcarEstornoPor é o marcarEstorno com o evento explícito (o cancelamento
+// usa CancelamentoSolicitado — ADR 0011).
+func (r repositorio) marcarEstornoPor(ctx context.Context, id uuid.UUID, de Status, ev Evento, motivo string, agora time.Time) error {
+	para, err := Transicionar(de, ev)
 	if err != nil {
 		return err
 	}
@@ -113,6 +119,9 @@ type Visao struct {
 	TotalCentavos int64
 	Status        Status
 	ExpiraEm      time.Time
+	// Cancelavel: o cliente ainda pode cancelar (pago e dentro da janela —
+	// calculado no servidor, PRD 0036 RF08).
+	Cancelavel bool
 }
 
 func (r repositorio) doDono(ctx context.Context, id uuid.UUID, donoHash []byte, usuarioID *uuid.UUID) (Visao, bool, error) {

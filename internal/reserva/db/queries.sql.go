@@ -241,7 +241,7 @@ func (q *Queries) HoldsVivosDoDono(ctx context.Context, arg HoldsVivosDoDonoPara
 const liberarDoPedido = `-- name: LiberarDoPedido :execrows
 UPDATE holds
 SET status = 'liberado', atualizado_em = $1
-WHERE pedido_id = $2 AND status = 'ativo'
+WHERE pedido_id = $2 AND status IN ('ativo', 'convertido')
 `
 
 type LiberarDoPedidoParams struct {
@@ -249,7 +249,8 @@ type LiberarDoPedidoParams struct {
 	PedidoID *uuid.UUID `db:"pedido_id"`
 }
 
-// Porta do pedido (RF05): devolve os assentos ainda presos (nunca vendidos).
+// Porta do pedido (RF05): devolve os assentos do pedido — presos ou, no
+// estorno de pedido pago (cancelamento — ADR 0011), já vendidos.
 func (q *Queries) LiberarDoPedido(ctx context.Context, arg LiberarDoPedidoParams) (int64, error) {
 	result, err := q.db.Exec(ctx, liberarDoPedido, arg.Agora, arg.PedidoID)
 	if err != nil {

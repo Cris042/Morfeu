@@ -127,7 +127,8 @@ linters:
         # nunca manipulam tokens diretamente. Testes de fora podem forjar tokens.
         # Módulo sessao (PRD 0013 RNF01): transaction script sem driver, sem
         # OTel e sem autenticação (injetados pelo main). pgconn só em
-        # internal/sessao/db/erros.go (fora deste glob).
+        # internal/sessao/db/erros.go (fora deste glob). TX via outbox.WithTx
+        # só no cancelamento da sessão (porta do pedido — PRD 0036, ADR 0011).
         sessao-domain:
           files:
             - "**/internal/sessao/*.go"
@@ -138,6 +139,7 @@ linters:
             - github.com/labstack/echo/v4
             - go.uber.org/zap
             - github.com/mclovin137/morfeu/internal/cache
+            - github.com/mclovin137/morfeu/internal/outbox
             - github.com/mclovin137/morfeu/internal/sessao/db
 
         # Módulo reserva (PRD 0015 RNF01): DDD tático sem driver — pgconn só

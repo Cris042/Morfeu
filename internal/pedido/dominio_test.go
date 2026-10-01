@@ -13,7 +13,7 @@ import (
 // atualizar esta matriz quebra o teste. "" = transição ilegal.
 func TestTransicionar_MatrizCompleta(t *testing.T) {
 	estados := []Status{AguardandoPagamento, Pago, Expirado, Falhou, EstornoPendente, Estornado}
-	eventos := []Evento{PagamentoConfirmado, CobrancaFalhou, PrazoVencido, EstornoNecessario, EstornoConcluido}
+	eventos := []Evento{PagamentoConfirmado, CobrancaFalhou, PrazoVencido, EstornoNecessario, EstornoConcluido, CancelamentoSolicitado}
 	esperado := map[Status]map[Evento]Status{
 		AguardandoPagamento: {
 			PagamentoConfirmado: Pago,
@@ -22,6 +22,7 @@ func TestTransicionar_MatrizCompleta(t *testing.T) {
 			EstornoNecessario:   EstornoPendente,
 		},
 		Expirado:        {EstornoNecessario: EstornoPendente},
+		Pago:            {CancelamentoSolicitado: EstornoPendente},
 		EstornoPendente: {EstornoConcluido: Estornado},
 	}
 	if len(transicoes) > len(estados) {
@@ -32,10 +33,32 @@ func TestTransicionar_MatrizCompleta(t *testing.T) {
 			conferirCelula(t, de, ev, esperado[de][ev])
 		}
 	}
-	// O pivô é irreversível: de pago nada sai no E6 (cancelamento é do E9).
+	// O pivô é irreversível: de pago só se sai pelo cancelamento (ADR 0011).
 	for _, ev := range eventos {
-		if _, err := Transicionar(Pago, ev); err == nil {
-			t.Errorf("pago + %s deveria ser ilegal", ev)
+		if _, err := Transicionar(Pago, ev); (err == nil) != (ev == CancelamentoSolicitado) {
+			t.Errorf("pago + %s: err=%v", ev, err)
+		}
+	}
+}
+
+// Fronteira da janela do cliente (PRD 0036 RF03, CA02): inclusiva em 2h.
+func TestDentroDaJanela(t *testing.T) {
+	inicio := time.Date(2099, 1, 1, 20, 0, 0, 0, time.UTC)
+	casos := []struct {
+		nome  string
+		agora time.Time
+		quer  bool
+	}{
+		{"2h01 antes", inicio.Add(-2*time.Hour - time.Minute), true},
+		{"2h00 exatas", inicio.Add(-2 * time.Hour), true},
+		{"1h59min59s antes", inicio.Add(-2*time.Hour + time.Second), false},
+		{"sessão começando", inicio, false},
+		{"sessão já começou", inicio.Add(time.Minute), false},
+		{"outro fuso, mesmo instante", inicio.Add(-2 * time.Hour).In(time.FixedZone("BRT", -3*3600)), true},
+	}
+	for _, c := range casos {
+		if got := DentroDaJanela(inicio, c.agora); got != c.quer {
+			t.Errorf("%s: quer %t, veio %t", c.nome, c.quer, got)
 		}
 	}
 }

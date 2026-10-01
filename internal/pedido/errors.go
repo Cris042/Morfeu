@@ -13,6 +13,8 @@ var (
 	ErrMuitasRequisicoes    = errors.New("pedido: muitas requisições")
 	ErrTransicaoIlegal      = errors.New("pedido: transição ilegal")
 	ErrTransicaoConcorrente = errors.New("pedido: outro caminho já transicionou o pedido")
+	ErrNaoCancelavel        = errors.New("pedido: só pedido pago, sem ingresso usado, pode ser cancelado")
+	ErrForaDaJanela         = errors.New("pedido: cancelamento só até 2h antes da sessão")
 )
 
 // ErroValidacao lista os campos inválidos (sem ecoar os valores — o e-mail é PII).

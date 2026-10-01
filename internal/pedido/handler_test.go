@@ -95,7 +95,7 @@ func TestMain(m *testing.M) {
 		defer pool.Close()
 		for _, arq := range []string{"001_initial_schema.up.sql", "002_outbox_events.up.sql", "007_filmes.up.sql",
 			"008_salas_sessoes.up.sql", "009_holds.up.sql", "010_holds_pedido.up.sql", "011_pedidos.up.sql",
-			"012_stripe_eventos.up.sql", "013_pedidos_tarefas.up.sql", "014_pedidos_cobranca_encerrada.up.sql", "015_pedidos_usuario.up.sql"} {
+			"012_stripe_eventos.up.sql", "013_pedidos_tarefas.up.sql", "014_pedidos_cobranca_encerrada.up.sql", "015_pedidos_usuario.up.sql", "016_motivo_cancelamento.up.sql"} {
 			ddl, err := os.ReadFile("../../migrations/" + arq)
 			if err == nil {
 				_, err = pool.Exec(ctx, string(ddl))
@@ -169,7 +169,9 @@ type ambiente struct {
 	gateway *pagamento.Fake
 	funil   *sync.Map
 	compens *sync.Map
+	cancel  *sync.Map
 	emissor *autenticacao.Emissor
+	sessoes *sessao.Servico
 }
 
 type limites struct{ ip, dono, consulta int }
@@ -184,7 +186,7 @@ func montarAmbiente(t *testing.T, lim limites) *ambiente {
 	rel := &relogio{t: time.Date(2098, 1, 1, 12, 0, 0, 0, time.UTC)}
 	logTeste := zaptest.NewLogger(t, zaptest.Level(zapcore.WarnLevel))
 	filmes := catalogo.NovoServico(catalogodb.New(pool), pool, nil, zap.NewNop())
-	sessoes, err := sessao.NovoServico(sessaodb.New(pool), sessao.Config{Filmes: filmes, Agora: rel.agora}, zap.NewNop())
+	sessoes, err := sessao.NovoServico(sessaodb.New(pool), sessao.Config{Pool: pool, Filmes: filmes, Agora: rel.agora}, zap.NewNop())
 	if err != nil {
 		t.Fatalf("sessao: %v", err)
 	}
@@ -203,7 +205,7 @@ func montarAmbiente(t *testing.T, lim limites) *ambiente {
 		t.Fatalf("reserva: %v", err)
 	}
 	gw := pagamento.NovoFake()
-	funil, compens := &sync.Map{}, &sync.Map{}
+	funil, compens, cancel := &sync.Map{}, &sync.Map{}, &sync.Map{}
 	contar := func(m *sync.Map) func(context.Context, string) {
 		var mu sync.Mutex
 		return func(_ context.Context, chave string) {
@@ -213,6 +215,7 @@ func montarAmbiente(t *testing.T, lim limites) *ambiente {
 			*(n.(*int))++
 		}
 	}
+	contarCancel := contar(cancel)
 	wh, err := pagamento.NovoWebhook(segredoWebhookTeste)
 	if err != nil {
 		t.Fatal(err)
@@ -224,6 +227,11 @@ func montarAmbiente(t *testing.T, lim limites) *ambiente {
 		SegredosToken: map[int16][]byte{1: segredoTokenTeste},
 		Funil:         contar(funil),
 		Compensacao:   contar(compens),
+		Cancelamento: func(ctx context.Context, origem string, n int64) {
+			for range n {
+				contarCancel(ctx, origem)
+			}
+		},
 		Consulta: &ConfigConsulta{
 			LimiteIP: limitador("c-ip", lim.consulta), LimiteEmail: limitador("c-email", lim.consulta),
 			LimiteIngresso: limitador("i-ip", lim.consulta),
@@ -249,7 +257,9 @@ func montarAmbiente(t *testing.T, lim limites) *ambiente {
 	NovoHandler(s, logTeste).
 		ComConta(autenticacao.Opcional(emissor), autenticacao.Exigir(emissor, autenticacao.PapelCliente, autenticacao.PapelOperador), autenticacao.UsuarioID).
 		ComRotasDeTeste().RegistrarRotas(e)
-	return &ambiente{e: e, rel: rel, reserva: res, servico: s, gateway: gw, funil: funil, compens: compens, emissor: emissor}
+	// Porta do cancelamento da sessão ligada como no main (ADR 0011).
+	sessoes.LigarPedidos(s, s.ContarCancelamentosDaSessao)
+	return &ambiente{e: e, rel: rel, reserva: res, servico: s, gateway: gw, funil: funil, compens: compens, cancel: cancel, emissor: emissor, sessoes: sessoes}
 }
 
 // baseURLTeste é a origem pública dos links na suíte.

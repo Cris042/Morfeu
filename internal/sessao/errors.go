@@ -14,6 +14,7 @@ var (
 	ErrLayoutEmUso         = errors.New("sessao: layout com sessão agendada futura")
 	ErrFilmeIndisponivel   = errors.New("sessao: filme inexistente, arquivado ou sem duração")
 	ErrSessaoNaoEncontrada = errors.New("sessao: sessão não encontrada")
+	ErrSessaoIniciada      = errors.New("sessao: a sessão já começou")
 )
 
 // ErroValidacao lista os campos inválidos (sem ecoar os valores).

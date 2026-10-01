@@ -129,7 +129,7 @@ func (q *Queries) BuscarSala(ctx context.Context, id int64) ([]BuscarSalaRow, er
 }
 
 const buscarSessaoParaIngresso = `-- name: BuscarSessaoParaIngresso :many
-SELECT s.filme_id, s.inicio, sa.nome AS sala_nome
+SELECT s.filme_id, s.inicio, sa.nome AS sala_nome, s.status
 FROM sessoes s
 JOIN salas sa ON sa.id = s.sala_id
 WHERE s.id = $1
@@ -140,6 +140,7 @@ type BuscarSessaoParaIngressoRow struct {
 	FilmeID  int64     `db:"filme_id"`
 	Inicio   time.Time `db:"inicio"`
 	SalaNome string    `db:"sala_nome"`
+	Status   string    `db:"status"`
 }
 
 // Porta para a notificação (PRD 0028): dados do ingresso de uma sessão já
@@ -154,7 +155,12 @@ func (q *Queries) BuscarSessaoParaIngresso(ctx context.Context, id int64) ([]Bus
 	var items []BuscarSessaoParaIngressoRow
 	for rows.Next() {
 		var i BuscarSessaoParaIngressoRow
-		if err := rows.Scan(&i.FilmeID, &i.Inicio, &i.SalaNome); err != nil {
+		if err := rows.Scan(
+			&i.FilmeID,
+			&i.Inicio,
+			&i.SalaNome,
+			&i.Status,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -454,6 +460,43 @@ func (q *Queries) SessaoConflitante(ctx context.Context, arg SessaoConflitantePa
 	for rows.Next() {
 		var i SessaoConflitanteRow
 		if err := rows.Scan(&i.ID, &i.Inicio, &i.Fim); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const travarSessao = `-- name: TravarSessao :many
+SELECT filme_id, status, inicio
+FROM sessoes
+WHERE id = $1
+FOR NO KEY UPDATE
+`
+
+type TravarSessaoRow struct {
+	FilmeID int64     `db:"filme_id"`
+	Status  string    `db:"status"`
+	Inicio  time.Time `db:"inicio"`
+}
+
+// Cancelamento (PRD 0036 RF10): trava a sessão até o fim da TX. NO KEY
+// UPDATE (não FOR UPDATE): o pivô em curso insere ingressos com FK para a
+// sessão (KEY SHARE) — FOR UPDATE o bloquearia enquanto este TX espera a
+// trava do pedido dele → deadlock (visto no teste da corrida).
+func (q *Queries) TravarSessao(ctx context.Context, id int64) ([]TravarSessaoRow, error) {
+	rows, err := q.db.Query(ctx, travarSessao, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TravarSessaoRow
+	for rows.Next() {
+		var i TravarSessaoRow
+		if err := rows.Scan(&i.FilmeID, &i.Status, &i.Inicio); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

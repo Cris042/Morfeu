@@ -3,8 +3,8 @@ package pedido
 import "fmt"
 
 // Status é o estado do pedido na saga do checkout (ADR 0010). O pivô é
-// aguardando_pagamento → pago; o estorno é a única compensação. "cancelado"
-// (pedido do operador) entra no E9.
+// aguardando_pagamento → pago; o estorno é a única compensação — também
+// para o cancelamento (ADR 0011: sem estado "cancelado", o motivo distingue).
 type Status string
 
 // Estados persistidos (CHECK da migration 011).
@@ -27,11 +27,13 @@ const (
 	PrazoVencido        Evento = "prazo_vencido"        // expira_em passou sem pagamento
 	EstornoNecessario   Evento = "estorno_necessario"   // pago sem poder emitir (divergência, tardio, conflito)
 	EstornoConcluido    Evento = "estorno_concluido"    // gateway confirmou o estorno
+	// CancelamentoSolicitado: cliente, operador ou sessão cancelada (ADR 0011).
+	CancelamentoSolicitado Evento = "cancelamento_solicitado"
 )
 
 // transicoes é a tabela da máquina (State idiomático — ADR 0005). Tudo que
 // não está aqui é ilegal; terminais (falhou, estornado) e pago não aceitam
-// nada no E6 (pago só sai por cancelamento, no E9).
+// nada; pago só sai por cancelamento (ADR 0011).
 var transicoes = map[Status]map[Evento]Status{
 	AguardandoPagamento: {
 		PagamentoConfirmado: Pago,
@@ -42,6 +44,7 @@ var transicoes = map[Status]map[Evento]Status{
 	// Pagamento que chega depois do prazo: o cliente foi cobrado sem pedido
 	// válido → estorno automático (ADR 0010, motivo "tardio").
 	Expirado:        {EstornoNecessario: EstornoPendente},
+	Pago:            {CancelamentoSolicitado: EstornoPendente},
 	EstornoPendente: {EstornoConcluido: Estornado},
 }
 

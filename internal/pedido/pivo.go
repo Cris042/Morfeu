@@ -29,6 +29,10 @@ const (
 	MotivoDivergencia = "divergencia" // valor/moeda do pagamento ≠ pedido
 	MotivoTardio      = "tardio"      // pagou depois do pedido expirar
 	MotivoEmissao     = "emissao"     // assento perdido: não dá para emitir
+	// Cancelamentos (ADR 0011).
+	MotivoCancelamento    = "cancelamento"     // o cliente cancelou
+	MotivoOperador        = "operador"         // o operador cancelou o pedido (0037)
+	MotivoSessaoCancelada = "sessao_cancelada" // a sessão foi cancelada
 )
 
 // Resultados do pivô (logs e funil — valores fixos).
@@ -113,7 +117,7 @@ func (s *Servico) registrarResultado(ctx context.Context, pedidoID uuid.UUID, re
 	case resultadoPago:
 		s.cfg.Funil(ctx, EtapaPago)
 		s.logger.Info("pedido: pagamento confirmado", campos...)
-	case MotivoDivergencia, MotivoTardio, MotivoEmissao:
+	case MotivoDivergencia, MotivoTardio, MotivoEmissao, MotivoSessaoCancelada:
 		s.cfg.Funil(ctx, EtapaEstornoNecessario)
 		s.logger.Warn("pedido: pagamento exige estorno", campos...)
 	case resultadoSemPedido, resultadoOutraCobranca:
@@ -148,15 +152,26 @@ func (s *Servico) pivoNaTx(ctx context.Context, tx outbox.Tx, pg Pagamento, agor
 		}
 	}
 	st := Status(p.Status)
-	r := repositorio{q: q}
-	switch {
-	case st != AguardandoPagamento && st != Expirado:
+	if st != AguardandoPagamento && st != Expirado {
 		return resultadoJaProcessado, nil
-	case pg.ValorCentavos != p.TotalCentavos || !strings.EqualFold(pg.Moeda, Moeda):
-		return MotivoDivergencia, r.marcarEstorno(ctx, p.ID, st, MotivoDivergencia, agora)
-	case st == Expirado:
-		return MotivoTardio, r.marcarEstorno(ctx, p.ID, st, MotivoTardio, agora)
 	}
+	// Sessão cancelada (ADR 0011): lida DEPOIS da trava do pedido — o
+	// cancelamento da sessão trava os mesmos pedidos na TX dele, então ou já
+	// commitou (e aqui se vê "cancelada") ou espera este pivô terminar.
+	cancelada, err := s.sessaoCancelada(ctx, st, p.SessaoID)
+	if err != nil {
+		return "", err
+	}
+	r := repositorio{q: q}
+	if motivo := motivoDoEstorno(pg, p.TotalCentavos, st, cancelada); motivo != "" {
+		return motivo, r.marcarEstorno(ctx, p.ID, st, motivo, agora)
+	}
+	return s.confirmar(ctx, tx, r, p, st, agora)
+}
+
+// confirmar é o pivô propriamente dito: emite os ingressos, transiciona para
+// pago e grava o evento — ou, sem como emitir, manda para estorno.
+func (s *Servico) confirmar(ctx context.Context, tx outbox.Tx, r repositorio, p db.TravarPedidoRow, st Status, agora time.Time) (string, error) {
 	emitiu, err := s.emitir(ctx, tx, p, agora)
 	if err != nil {
 		return "", err
@@ -172,6 +187,32 @@ func (s *Servico) pivoNaTx(ctx context.Context, tx outbox.Tx, pg Pagamento, agor
 		return "", err
 	}
 	return resultadoPago, nil
+}
+
+// motivoDoEstorno decide se o pagamento vai para estorno em vez de emitir
+// ("" = emitir): valor/moeda divergente, pedido expirado ou sessão cancelada.
+func motivoDoEstorno(pg Pagamento, total int64, st Status, sessaoCancelada bool) string {
+	switch {
+	case pg.ValorCentavos != total || !strings.EqualFold(pg.Moeda, Moeda):
+		return MotivoDivergencia
+	case st == Expirado:
+		return MotivoTardio
+	case sessaoCancelada:
+		return MotivoSessaoCancelada
+	}
+	return ""
+}
+
+// sessaoCancelada só consulta a sessão de pedido que ainda emitiria.
+func (s *Servico) sessaoCancelada(ctx context.Context, st Status, sessaoID int64) (bool, error) {
+	if st != AguardandoPagamento {
+		return false, nil
+	}
+	_, cancelada, ok, err := s.cfg.Sessoes.InicioDaSessao(ctx, sessaoID)
+	if err != nil {
+		return false, fmt.Errorf("pedido: sessão do pivô: %w", err)
+	}
+	return ok && cancelada, nil
 }
 
 // emitir converte os holds do pedido e emite um ingresso por assento num

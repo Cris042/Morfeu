@@ -31,6 +31,7 @@ import (
 	"github.com/mclovin137/morfeu/internal/cache"
 	"github.com/mclovin137/morfeu/internal/catalogo"
 	catalogodb "github.com/mclovin137/morfeu/internal/catalogo/db"
+	"github.com/mclovin137/morfeu/internal/outbox"
 	"github.com/mclovin137/morfeu/internal/sessao/db"
 )
 
@@ -102,6 +103,13 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+// semPedidos é a porta do pedido sem pedidos (PRD 0036).
+type semPedidos struct{}
+
+func (semPedidos) CancelarPedidosDaSessao(context.Context, outbox.Tx, int64) (int64, error) {
+	return 0, nil
+}
+
 type ambiente struct {
 	e         *echo.Echo
 	operador  string
@@ -127,11 +135,12 @@ func montarAmbiente(t *testing.T, agora func() time.Time) *ambiente {
 	// zaptest: logs do serviço/handler aparecem na saída do teste que falhar
 	// (diagnóstico do SQLSTATE em erro inesperado — CI do PR #38).
 	logTeste := zaptest.NewLogger(t, zaptest.Level(zapcore.WarnLevel))
-	s, err := NovoServico(db.New(pool), Config{Filmes: filmes, AoConflito: func(context.Context) { conflitos.Add(1) },
+	s, err := NovoServico(db.New(pool), Config{Pool: pool, Filmes: filmes, AoConflito: func(context.Context) { conflitos.Add(1) },
 		Agora: agora, Cache: cache.NewRedisCache(redisCli, zap.NewNop())}, logTeste)
 	if err != nil {
 		t.Fatalf("serviço: %v", err)
 	}
+	s.LigarPedidos(semPedidos{}, nil) // a porta real é testada na suíte do pedido
 	e := echo.New()
 	NovoHandler(s, logTeste).RegistrarRotasPublicas(e)
 	NovoHandler(s, logTeste).RegistrarRotasBackoffice(e, autenticacao.Exigir(emissor, autenticacao.PapelOperador),
@@ -228,12 +237,13 @@ func TestSessao_FimSnapshotEBordas(t *testing.T) {
 
 	// Cancelar libera o horário: o mesmo intervalo da cancelada (que encosta
 	// na sessão das 16:42) volta a ser aceito.
-	code, _ = a.req(t, http.MethodPost, fmt.Sprintf("/backoffice/sessoes/%d/cancelar", s.ID), a.operador, nil)
-	if code != http.StatusNoContent {
-		t.Fatalf("cancelar: %d", code)
+	// Sem pedidos (a porta do pedido é coberta na suíte do pedido — PRD 0036).
+	code, corpo = a.req(t, http.MethodPost, fmt.Sprintf("/backoffice/sessoes/%d/cancelar", s.ID), a.operador, nil)
+	if code != http.StatusOK || corpo != `{"pedidos_estornados":0}` {
+		t.Fatalf("cancelar: %d %s", code, corpo)
 	}
-	if code, _ = a.req(t, http.MethodPost, fmt.Sprintf("/backoffice/sessoes/%d/cancelar", s.ID), a.operador, nil); code != http.StatusNoContent {
-		t.Errorf("cancelar de novo deveria ser idempotente (204): %d", code)
+	if code, corpo = a.req(t, http.MethodPost, fmt.Sprintf("/backoffice/sessoes/%d/cancelar", s.ID), a.operador, nil); code != http.StatusOK || corpo != `{"pedidos_estornados":0}` {
+		t.Errorf("cancelar de novo deveria ser idempotente (200, 0): %d %s", code, corpo)
 	}
 	if code, corpo := a.criarSessao(t, 1, sala, base); code != http.StatusCreated {
 		t.Errorf("horário da cancelada deveria estar livre: %d %s", code, corpo)
@@ -446,6 +456,10 @@ func TestPublico_Mapa(t *testing.T) {
 	depois := montarAmbiente(t, func() time.Time { return s.Inicio.Add(time.Minute) })
 	if code, _ := depois.req(t, http.MethodGet, fmt.Sprintf("/sessoes/%d/mapa", s.ID), "", nil); code != http.StatusNotFound {
 		t.Errorf("mapa de sessão já iniciada deveria ser 404: %d", code)
+	}
+	// Sessão que já começou não é cancelada (PRD 0036 RF10).
+	if code, corpo := depois.req(t, http.MethodPost, fmt.Sprintf("/backoffice/sessoes/%d/cancelar", s.ID), depois.operador, nil); code != http.StatusConflict || !strings.Contains(corpo, "sessao_iniciada") {
+		t.Errorf("cancelar sessão iniciada deveria ser 409: %d %s", code, corpo)
 	}
 	a.req(t, http.MethodPost, fmt.Sprintf("/backoffice/sessoes/%d/cancelar", s.ID), a.operador, nil)
 	if code, _ := a.req(t, http.MethodGet, fmt.Sprintf("/sessoes/%d/mapa", s.ID), "", nil); code != http.StatusNotFound {

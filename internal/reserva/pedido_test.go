@@ -288,17 +288,21 @@ func TestPedido_LiberarDoPedido(t *testing.T) {
 	if r := a.travar(sessaoID, outro, "A5", "A6"); r.code != http.StatusCreated {
 		t.Fatalf("assento não voltou: %d %s", r.code, r.corpo)
 	}
-	// Vendido não é liberado pelo pedido.
+	// Vendido ocupa o assento até o pedido ser estornado; o estorno (único
+	// chamador com holds vendidos — ADR 0011) devolve também os vendidos.
 	pedido2 := uuid.New()
 	if err := a.prender(donoTeste(t, outro), sessaoID, pedido2, a.rel.agora().Add(prazoPedido), "A5", "A6"); err != nil {
 		t.Fatal(err)
 	}
 	a.converter(t, pedido2)
-	if n := a.liberarDoPedido(t, pedido2); n != 0 {
-		t.Fatalf("liberou vendido: %d", n)
-	}
 	expirarCache(t, sessaoID)
 	if _, ocupados := a.ocupacao(t, sessaoID); !slices.Equal(ocupados, []string{"A5", "A6"}) {
 		t.Fatalf("ocupação: %v", ocupados)
+	}
+	if n := a.liberarDoPedido(t, pedido2); n != 2 {
+		t.Fatalf("estorno deveria devolver os vendidos: %d", n)
+	}
+	if r := a.travar(sessaoID, novoDono(t), "A5", "A6"); r.code != http.StatusCreated {
+		t.Fatalf("vendido estornado não voltou: %d %s", r.code, r.corpo)
 	}
 }
