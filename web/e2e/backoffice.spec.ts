@@ -48,11 +48,11 @@ test.describe('backoffice do operador', () => {
 
     // Sessão nessa sala daqui a 3 dias.
     await pagina.getByRole('link', { name: 'Sessões' }).click()
-    const filme = pagina.getByLabel('Filme')
+    const filme = pagina.getByLabel('Filme', { exact: true })
     await expect(filme.locator('option')).not.toHaveCount(1)
     await filme.selectOption({ index: 1 })
     const filmeID = await filme.inputValue()
-    await pagina.getByLabel('Sala').selectOption({ label: nomeSala })
+    await pagina.getByLabel('Sala', { exact: true }).selectOption({ label: nomeSala })
     await pagina.getByLabel('Início (horário do cinema)').fill(diaLocal(3))
     await pagina.getByLabel('Preço por assento (R$)').fill('30')
     await pagina.getByRole('button', { name: 'Programar sessão' }).click()
