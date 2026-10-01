@@ -71,7 +71,7 @@ jobs:
       - name: Semear o operador de teste (backoffice — PRD 0039)
         run: |
           email="operador-e2e@morfeu.dev"
-          senha=$(docker compose exec -T app /app seed-operador -nome "Operador E2E" -email "$email" | sed -n 's/.*guarde-a): //p')
+          senha=$(docker compose --profile app exec -T app /app seed-operador -nome "Operador E2E" -email "$email" | sed -n 's/.*guarde-a): //p')
           test -n "$senha"
           echo "::add-mask::$senha"
           echo "E2E_OPERADOR_EMAIL=$email" >> "$GITHUB_ENV"

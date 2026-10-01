@@ -7,7 +7,7 @@ import { PaginaSessao } from './PaginaSessao'
 // M4 (PRD 0035): cartaz → assento → checkout → pagamento (gateway fake, pelo
 // webhook real) → ingresso no e-mail (fake verificável) → link /i/… com QR.
 // Roda sob a CSP de produção (vite preview) e com varredura do axe. Compra de
-// verdade (D3, D4; D5 no cancelamento do E9; D6 no backoffice.spec): cada execução precisa de uma sala nova (web/e2e/seed.sql).
+// verdade (D3, D4; D5 no cancelamento do E9): cada execução precisa de uma sala nova (web/e2e/seed.sql).
 
 interface SessaoPublica {
   id: number

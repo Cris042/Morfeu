@@ -7,7 +7,8 @@ import { PaginaSessao } from './PaginaSessao'
 // Backoffice do operador (PRD 0039): sala → sessão → aparece para o público;
 // o operador cancela um pedido pago. O operador de E2E é criado no CI pelo
 // `seed-operador` (credenciais em E2E_OPERADOR_EMAIL/SENHA); sem elas, pula.
-// Assento comprado aqui: D6 (M3 = C4; M4 = D3, D4, D5).
+// Assento comprado aqui: D5, numa sala NOVA criada pelo próprio teste (o
+// layout modelo tem vão em D6) — sem colisão com M3/M4.
 
 // O projeto não traz os tipos do Node; o spec roda no Node do Playwright.
 declare const process: { env: Record<string, string | undefined> }
@@ -62,12 +63,12 @@ test.describe('backoffice do operador', () => {
     const nova = publicas.find((s) => s.sala_nome === nomeSala)
     expect(nova, 'a sessão criada aparece na lista pública do filme').toBeDefined()
 
-    // Um convidado compra D6 nessa sessão; o operador cancela o pedido.
+    // Um convidado compra D5 nessa sessão; o operador cancela o pedido.
     const cliente = await browser.newContext()
     const compra = await cliente.newPage()
     const sala = new PaginaSessao(compra)
     await sala.abrir(nova?.id ?? 0)
-    await sala.alternar('D', 6)
+    await sala.alternar('D', 5)
     await sala.reservar()
     await compra.getByRole('link', { name: 'Continuar para o pagamento' }).click()
     await compra.getByLabel('E-mail para receber os ingressos').fill(`e9-operador-${String(Date.now())}@exemplo.com`)

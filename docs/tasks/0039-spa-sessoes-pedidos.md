@@ -1,7 +1,7 @@
 # Task 0039 — SPA: sessões e pedidos do operador + E2E do backoffice (E9, T3b)
 
 - **Data:** 2026-10-01
-- **Status:** em andamento
+- **Status:** concluída (auditoria APROVADA em 2026-10-01, após 1 correção)
 - **Branch:** `feature/0039-spa-sessoes-pedidos` (sobre a 0038)
 - **PRD:** docs/prd/0039-spa-sessoes-pedidos.md
 - **Item do roadmap:** E9 — Backoffice restante (4ª e última). Refinamento: `docs/refinamentos/E9-backoffice.md` §T3.

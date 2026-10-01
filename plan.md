@@ -4,14 +4,14 @@
 
 ## Estado corrente (2026-10-01)
 
-**Task 0039 — SPA: sessões e pedidos do operador + E2E do backoffice (E9 T3b): implementada, em auditoria** (branch `feature/0039-spa-sessoes-pedidos`, sobre a 0038). Última task do E9.
+**Task 0039 — SPA: sessões e pedidos do operador + E2E do backoffice (E9 T3b): auditoria APROVADA em 2026-10-01 (`qa`, após 1 correção), PR #71** (branch `feature/0039-spa-sessoes-pedidos`, sobre a 0038). Última task do E9.
 
 ### Plano da task 0039
 
 1. ~~API e fuso~~ — hooks de sessões/pedidos do operador; `paraUTCDoCinema` (UTC−3 fixo).
 2. ~~Telas~~ — Sessões (programar; cancelar mostrando antes os pedidos pagos afetados) e Pedidos (filtros, detalhe com histórico, cancelar).
-3. ~~Testes~~ — 6 de componente (13 no backoffice); E2E `backoffice.spec.ts` (sala → sessão → pública → compra D6 → operador cancela) + operador semeado no workflow de E2E.
-4. Lint + typecheck + build → passe de julgamento → PR.
+3. ~~Testes~~ — 6 de componente (13 no backoffice); E2E `backoffice.spec.ts` (sala → sessão → pública → compra D5 → operador cancela) + operador semeado no workflow de E2E.
+4. ~~Lint + typecheck + build + passe de julgamento~~ — 1ª rodada REPROVADA (bloqueante: o E2E comprava D6, que é **vão** no layout modelo — timeout garantido no CI) → D5 na sala nova; `--profile app` no `exec` do seed. Revalidado o item reprovado → APROVADO. Registrados: extração da senha do seed pelo texto do `Printf` (protegida por `test -n`).
 
 ---
 

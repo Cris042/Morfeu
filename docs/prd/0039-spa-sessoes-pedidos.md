@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0039-spa-sessoes-pedidos.md
 - **Branch:** feature/0039-spa-sessoes-pedidos
 - **Data:** 2026-10-01
-- **Status:** em andamento
+- **Status:** concluído
 
 ## Objetivo
 
@@ -24,7 +24,7 @@ Abas Sessões e Pedidos do backoffice; E2E do operador.
 - RF02 — Programação: filme, sala, dia/hora no fuso do cinema, preço, situação; "Cancelar sessão" consulta antes os pedidos **pagos** da sessão e mostra quantos serão estornados ("50 ou mais" quando a página enche); só então confirma; resposta `pedidos_estornados` exibida; `sessao_iniciada` explicada.
 - RF03 — Pedidos: filtros por nº da sessão e situação; lista com e-mail mascarado (vindo da API), sessão, situação, assentos e total; paginação de 50.
 - RF04 — Detalhe: situação + motivo do estorno em português, ingressos com status, histórico de estados; "Cancelar pedido" (só pago) com confirmação; `sessao_iniciada`/`nao_cancelavel` explicados.
-- RF05 — E2E (`backoffice.spec.ts`, roda com `E2E_OPERADOR_EMAIL/SENHA`): operador entra, cria sala e sessão, a sessão aparece na lista pública do filme, um convidado compra D6 e o operador cancela o pedido; axe nas telas. O workflow de E2E cria o operador com `seed-operador` (senha mascarada no log).
+- RF05 — E2E (`backoffice.spec.ts`, roda com `E2E_OPERADOR_EMAIL/SENHA`): operador entra, cria sala e sessão, a sessão aparece na lista pública do filme, um convidado compra D5 e o operador cancela o pedido; axe nas telas. O workflow de E2E cria o operador com `seed-operador` (senha mascarada no log).
 
 ## Requisitos não funcionais
 
@@ -33,12 +33,12 @@ Abas Sessões e Pedidos do backoffice; E2E do operador.
 
 ## Critérios de aceite
 
-- [ ] CA01 — `paraUTCDoCinema("2099-10-01T20:30")` = `2099-10-01T23:30:00.000Z`.
-- [ ] CA02 — Programar envia filme ativo, sala, início UTC e preço em centavos; conflito explicado.
-- [ ] CA03 — Cancelar sessão mostra a contagem antes de chamar a API; depois mostra os estornados.
-- [ ] CA04 — Pedidos: filtros na URL da API, e-mail mascarado, detalhe com ingressos e histórico; cancelamento com `sessao_iniciada` explicado.
-- [ ] CA05 — Lint, typecheck, testes e build verdes.
-- [ ] CA06 — E2E do operador verde no CI; M3/M4/cancelamento intactos.
+- [x] CA01 — `paraUTCDoCinema("2099-10-01T20:30")` = `2099-10-01T23:30:00.000Z`.
+- [x] CA02 — Programar envia filme ativo, sala, início UTC e preço em centavos; conflito explicado.
+- [x] CA03 — Cancelar sessão mostra a contagem antes de chamar a API; depois mostra os estornados.
+- [x] CA04 — Pedidos: filtros na URL da API, e-mail mascarado, detalhe com ingressos e histórico; cancelamento com `sessao_iniciada` explicado.
+- [x] CA05 — Lint, typecheck, testes e build verdes.
+- [x] CA06 — E2E do operador verde no CI; M3/M4/cancelamento intactos.
 
 ## Plano de testes
 
