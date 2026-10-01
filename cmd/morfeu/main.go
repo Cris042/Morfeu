@@ -181,20 +181,14 @@ func runServer(mode string) {
 
 	log.Info("Database pool created", zap.Int("min_size", cfg.PoolMinSize), zap.Int("max_size", cfg.PoolMaxSize))
 
-	redisClient := redis.NewClient(&redis.Options{Addr: cfg.RedisURL})
+	redisClient := conectarRedis(cfg.RedisURL, log)
 	defer func() {
 		if closeErr := redisClient.Close(); closeErr != nil {
 			log.ErrorMsg("failed to close redis client", zap.Error(closeErr))
 		}
 	}()
 
-	if err := redisClient.Ping(context.Background()).Err(); err != nil {
-		log.ErrorMsg("Failed to connect to Redis", zap.Error(err))
-	} else {
-		log.Info("Connected to Redis")
-	}
-
-	if err := runMigrations(cfg.DatabaseURL, log); err != nil {
+	if err := runMigrations(cfg.DatabaseMigrateURL, log); err != nil {
 		log.ErrorMsg("Migration failed", zap.Error(err))
 		os.Exit(1)
 	}
@@ -452,7 +446,7 @@ func montarReserva(dbPool *pgxpool.Pool, sessoes reserva.FonteSessoes, redisClie
 // consumidor de notificação (PRD 0028; só com broker).
 func iniciarRotinasDaSaga(ctx context.Context, e *echo.Echo, mode string, cfg *config.Config, cli *broker.Client, dbPool *pgxpool.Pool, f fonteDoEmail, wg *sync.WaitGroup, log *logger.Logger) {
 	iniciarTarefasPedido(ctx, mode, f.pedidos, wg)
-	iniciarPurgaAuditoria(ctx, mode, dbPool, wg, log)
+	iniciarPurgaAuditoria(ctx, mode, cfg, dbPool, wg, log)
 	if cli != nil {
 		sender := iniciarNotificacao(ctx, cfg, cli, dbPool, f, wg, log)
 		// E-mail verificável no E2E do M4 (PRD 0035): só no processo único
@@ -646,9 +640,20 @@ const intervaloPurgaAuditoria = 24 * time.Hour
 // iniciarPurgaAuditoria roda a purga da trilha do operador no worker (PRD
 // 0037) com métricas de removidos e da última execução (alerta de purga
 // parada).
-func iniciarPurgaAuditoria(ctx context.Context, mode string, dbPool *pgxpool.Pool, wg *sync.WaitGroup, log *logger.Logger) {
+func iniciarPurgaAuditoria(ctx context.Context, mode string, cfg *config.Config, dbPool *pgxpool.Pool, wg *sync.WaitGroup, log *logger.Logger) {
 	if mode != modeWorker && mode != modeAll {
 		return
+	}
+	purgaPool := dbPool
+	// Role próprio da purga (ADR 0013): pool de até 2 conexões, fechado depois
+	// que a rotina termina. Sem a URL dedicada, usa o pool do app (dev/CI).
+	if cfg.DatabasePurgeURL != cfg.DatabaseURL {
+		p, err := criarPoolPurga(ctx, cfg.DatabasePurgeURL)
+		if err != nil {
+			log.ErrorMsg("pool da purga da trilha", zap.Error(err))
+			os.Exit(1)
+		}
+		purgaPool = p
 	}
 	meter := otel.Meter("morfeu/auditoria")
 	removidos, err := meter.Int64Counter("auditoria_purga_removidos_total",
@@ -667,7 +672,10 @@ func iniciarPurgaAuditoria(ctx context.Context, mode string, dbPool *pgxpool.Poo
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		auditoria.RodarPurga(ctx, dbPool, intervaloPurgaAuditoria, time.Now, func(n int64, err error) {
+		if purgaPool != dbPool {
+			defer purgaPool.Close()
+		}
+		auditoria.RodarPurga(ctx, purgaPool, intervaloPurgaAuditoria, time.Now, func(n int64, err error) {
 			if err != nil {
 				log.ErrorMsg("purga da trilha de auditoria", zap.Error(err))
 				return
@@ -1283,6 +1291,55 @@ func createDBPool(cfg *config.Config, log *logger.Logger) (*pgxpool.Pool, error)
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
+	return pool, nil
+}
+
+// novoRedis aceita redis://[:senha@]host:porta/db (e rediss://) ou o formato
+// legado host:porta. O erro de ParseURL nunca ecoa a URL (pode ter a senha).
+func novoRedis(url string) (*redis.Client, error) {
+	if strings.HasPrefix(url, "redis://") || strings.HasPrefix(url, "rediss://") {
+		opt, err := redis.ParseURL(url)
+		if err != nil {
+			return nil, errors.New("REDIS_URL inválida")
+		}
+		return redis.NewClient(opt), nil
+	}
+	return redis.NewClient(&redis.Options{Addr: url}), nil
+}
+
+// conectarRedis cria o cliente (URL inválida encerra o processo) e testa o
+// PING; falha de conexão só é logada (o health check reflete o estado).
+func conectarRedis(url string, log *logger.Logger) *redis.Client {
+	client, err := novoRedis(url)
+	if err != nil {
+		log.ErrorMsg("Invalid Redis URL", zap.Error(err))
+		os.Exit(1)
+	}
+	if err := client.Ping(context.Background()).Err(); err != nil {
+		log.ErrorMsg("Failed to connect to Redis", zap.Error(err))
+	} else {
+		log.Info("Connected to Redis")
+	}
+	return client
+}
+
+// criarPoolPurga abre o pool do role morfeu_purge (máx. 2 conexões).
+func criarPoolPurga(ctx context.Context, url string) (*pgxpool.Pool, error) {
+	pc, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		return nil, errors.New("DATABASE_PURGE_URL inválida")
+	}
+	pc.MaxConns = 2
+	pc.MaxConnLifetime = 15 * time.Minute
+	pc.MaxConnIdleTime = 5 * time.Minute
+	pool, err := pgxpool.NewWithConfig(ctx, pc)
+	if err != nil {
+		return nil, fmt.Errorf("criar pool da purga: %w", err)
+	}
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("ping do pool da purga: %w", err)
+	}
 	return pool, nil
 }
 

@@ -1,4 +1,4 @@
-.PHONY: help up down obs-up obs-down gen migrate lint test build run
+.PHONY: help up down obs-up obs-down preflight gen migrate lint test build run
 
 help:
 	@echo "Morfeu makefile targets:"
@@ -6,6 +6,7 @@ help:
 	@echo "  down     - Stop docker-compose"
 	@echo "  obs-up   - Start app + observability stack (docs/observabilidade.md)"
 	@echo "  obs-down - Stop app + observability stack"
+	@echo "  preflight - Validate .env.prod and .env.observability (no placeholders, strong passwords)"
 	@echo "  gen      - Generate sqlc code"
 	@echo "  migrate  - Run database migrations"
 	@echo "  lint     - Run golangci-lint"
@@ -26,6 +27,9 @@ obs-up:
 
 obs-down:
 	$(OBS_COMPOSE) down
+
+preflight:
+	bash scripts/preflight.sh .env.prod .env.observability
 
 gen:
 	sqlc generate

@@ -1,0 +1,276 @@
+# Compose de PRODUÇÃO (task 0042, ADR 0013, doc.md §14.5) — standalone: infra
+# (PG, Redis, RabbitMQ) + observabilidade. App e Caddy entram na E0c-CD.
+#
+# Uso (na VM; segredos só nos .env, permissão 600, nunca versionados):
+#   make preflight                       # valida .env.prod e .env.observability
+#   docker compose --env-file .env.prod --env-file .env.observability \
+#     -f docker-compose.prod.yml up -d
+#
+# Regras (verificadas por test/infra/compose_prod_test.go):
+#   - nenhum `ports:` além do Grafana e do management do RabbitMQ, em 127.0.0.1
+#     (acesso por túnel SSH); Prometheus, Loki, Tempo, Alloy, exporters, PG,
+#     Redis e AMQP ficam só na rede interna;
+#   - senhas por ${VAR:?}: variável ausente/vazia aborta o `up`;
+#   - logs json-file com rotação, restart e mem_limit em todos os serviços.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: morfeu-postgres
+    environment:
+      POSTGRES_DB: morfeu
+      POSTGRES_USER: ${POSTGRES_USER:?defina POSTGRES_USER no .env.prod}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env.prod}
+      # Roles de menor privilégio (ADR 0013) — criados por 02-roles.sh em volume novo.
+      PG_MIGRATOR_PASSWORD: ${PG_MIGRATOR_PASSWORD:?defina PG_MIGRATOR_PASSWORD no .env.prod}
+      PG_APP_PASSWORD: ${PG_APP_PASSWORD:?defina PG_APP_PASSWORD no .env.prod}
+      PG_PURGE_PASSWORD: ${PG_PURGE_PASSWORD:?defina PG_PURGE_PASSWORD no .env.prod}
+      PG_BACKUP_PASSWORD: ${PG_BACKUP_PASSWORD:?defina PG_BACKUP_PASSWORD no .env.prod}
+      PG_MONITOR_PASSWORD: ${PG_MONITOR_PASSWORD:?defina PG_MONITOR_PASSWORD no .env.prod}
+    volumes:
+      - morfeu-postgres:/var/lib/postgresql/data
+      - ./configs/postgres/01-usuario-monitoracao.sh:/docker-entrypoint-initdb.d/01-usuario-monitoracao.sh:ro
+      - ./configs/postgres/02-roles.sh:/docker-entrypoint-initdb.d/02-roles.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d morfeu"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    mem_limit: 1g
+    restart: unless-stopped
+    logging: *logging
+    networks:
+      - morfeu-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: morfeu-redis
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?defina REDIS_PASSWORD no .env.prod}
+    # A senha vai para um arquivo de config gerado no start (modo 600), não
+    # para os argumentos do processo (`ps`/`docker inspect` do command).
+    command:
+      - sh
+      - -c
+      - >-
+        umask 077 &&
+        printf 'requirepass %s\n' "$$REDIS_PASSWORD" > /tmp/redis.conf &&
+        chown redis /tmp/redis.conf /data &&
+        exec setpriv --reuid redis --regid redis --clear-groups redis-server /tmp/redis.conf --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - morfeu-redis:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    mem_limit: 640m
+    restart: unless-stopped
+    logging: *logging
+    networks:
+      - morfeu-network
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: morfeu-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:?defina RABBITMQ_DEFAULT_USER no .env.prod}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?defina RABBITMQ_DEFAULT_PASS no .env.prod}
+    ports:
+      # UI de management só em localhost (túnel SSH); AMQP não é publicado.
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - morfeu-rabbitmq:/var/lib/rabbitmq
+      - ./configs/rabbitmq.conf:/etc/rabbitmq/conf.d/10-morfeu.conf:ro
+      - ./configs/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    mem_limit: 512m
+    restart: unless-stopped
+    logging: *logging
+    networks:
+      - morfeu-network
+
+  # ---- Observabilidade (mesmas imagens e limites do docker-compose.observability.yml) ----
+
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    container_name: morfeu-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --storage.tsdb.retention.size=1GB
+    volumes:
+      - ./configs/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - morfeu-prometheus:/prometheus
+    mem_limit: 512m
+    restart: unless-stopped
+    logging: *logging
+    networks:
+      - morfeu-network
+
+  loki:
+    image: grafana/loki:3.7.8
+    container_name: morfeu-loki
+    command: ["-config.file=/etc/loki/loki.yml"]
+    volumes:
+      - ./configs/loki/loki.yml:/etc/loki/loki.yml:ro
+      - morfeu-loki:/loki
+    mem_limit: 384m
+    restart: unless-stopped
+    logging: *logging
+    networks:
+      - morfeu-network
+
+  alloy:
+    image: grafana/alloy:v1.20.1
+    container_name: morfeu-alloy
+    command: ["run", "--storage.path=/var/lib/alloy/data", "/etc/alloy/config.alloy"]
+    volumes:
+      - ./configs/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      # Socket read-only: descoberta e leitura de logs dos containers.
+      # Acesso ao socket ≈ root no host — risco residual aceito (sem porta publicada).
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - loki
+      - tempo
+    # Tail sampling guarda traces em memória durante a decisão (ADR 0012).
+    mem_limit: 512m
+    restart: unless-stopped
+    logging: *logging
+    networks:
+      - morfeu-network
+
+  tempo:
+    image: grafana/tempo:2.10.4
+    container_name: morfeu-tempo
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    volumes:
+      - ./configs/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      - morfeu-tempo:/var/tempo
+    mem_limit: 384m
+    restart: unless-stopped
+    logging: *logging
+    networks:
+      - morfeu-network
+
+  grafana:
+    image: grafana/grafana:13.2.3
+    container_name: morfeu-grafana
+    env_file: .env.observability
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:?defina GF_SECURITY_ADMIN_PASSWORD no .env.observability}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_DISABLE_LOGIN_FORM: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+    ports:
+      # Só em localhost (túnel SSH).
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./configs/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./configs/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - morfeu-grafana:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+    mem_limit: 256m
+    restart: unless-stopped
+    logging: *logging
+    networks:
+      - morfeu-network
+
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    container_name: morfeu-node-exporter
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run|var/lib/docker/.+)($$|/)
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    mem_limit: 64m
+    restart: unless-stopped
+    logging: *logging
+    networks:
+      - morfeu-network
+
+  cadvisor:
+    image: ghcr.io/google/cadvisor:v0.60.6
+    container_name: morfeu-cadvisor
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=30s
+      - --store_container_labels=false
+      - --disable_metrics=advtcp,cpu_topology,cpuset,hugetlb,memory_numa,percpu,process,referenced_memory,resctrl,sched,tcp,udp
+    privileged: false
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    mem_limit: 192m
+    restart: unless-stopped
+    logging: *logging
+    networks:
+      - morfeu-network
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.20.1
+    container_name: morfeu-postgres-exporter
+    env_file: .env.observability
+    environment:
+      DATA_SOURCE_PASS: ${DATA_SOURCE_PASS:?defina DATA_SOURCE_PASS (= PG_MONITOR_PASSWORD) no .env.observability}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 64m
+    restart: unless-stopped
+    logging: *logging
+    networks:
+      - morfeu-network
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.92.1
+    container_name: morfeu-redis-exporter
+    env_file: .env.observability
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?defina REDIS_PASSWORD no .env.prod}
+    depends_on:
+      redis:
+        condition: service_healthy
+    mem_limit: 64m
+    restart: unless-stopped
+    logging: *logging
+    networks:
+      - morfeu-network
+
+volumes:
+  morfeu-postgres:
+  morfeu-redis:
+  morfeu-rabbitmq:
+  morfeu-prometheus:
+  morfeu-loki:
+  morfeu-grafana:
+  morfeu-tempo:
+
+networks:
+  morfeu-network:
+    driver: bridge

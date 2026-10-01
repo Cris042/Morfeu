@@ -172,3 +172,67 @@ func TestValidarPagamento(t *testing.T) {
 		}
 	}
 }
+
+// TestValidarRedis cobre RF04/CA04: produção só aceita redis(s)://:senha@host.
+func TestValidarRedis(t *testing.T) {
+	casos := []struct {
+		nome, ambiente, url, recusa string
+	}{
+		{"dev com url sem senha", "dev", "redis://localhost:6379/0", ""},
+		{"dev com formato legado", "dev", "localhost:6379", ""},
+		{"produção com senha", "producao", "redis://:s3nha-longa@redis:6379/0", ""},
+		{"produção com rediss e usuário", "producao", "rediss://u:s3nha@redis:6379/1", ""},
+		{"produção sem senha", "producao", "redis://redis:6379/0", "senha"},
+		{"produção com senha vazia", "producao", "redis://:@redis:6379/0", "senha"},
+		{"produção com formato legado", "producao", "redis:6379", "REDIS_URL"},
+		{"produção com host:porta", "producao", "localhost:6379", "REDIS_URL"},
+		{"produção com esquema errado", "producao", "http://:x@redis:6379", "REDIS_URL"},
+	}
+	for _, c := range casos {
+		cfg := Config{Ambiente: c.ambiente, RedisURL: c.url}
+		err := cfg.validarRedis()
+		if c.recusa == "" && err != nil || c.recusa != "" && (err == nil || !strings.Contains(err.Error(), c.recusa)) {
+			t.Errorf("%s: err = %v", c.nome, err)
+		}
+		if err != nil && strings.Contains(err.Error(), "s3nha") {
+			t.Errorf("%s: a mensagem vaza a senha: %v", c.nome, err)
+		}
+	}
+}
+
+// TestLoadConfig_UrlsDosRoles: sem as URLs novas, tudo cai em DATABASE_URL.
+func TestLoadConfig_UrlsDosRoles(t *testing.T) {
+	os.Clearenv()
+	t.Setenv("DATABASE_URL", "postgres://app@h/db")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.DatabaseMigrateURL != cfg.DatabaseURL || cfg.DatabasePurgeURL != cfg.DatabaseURL {
+		t.Errorf("fallback esperado: migrate=%q purga=%q", cfg.DatabaseMigrateURL, cfg.DatabasePurgeURL)
+	}
+
+	t.Setenv("DATABASE_MIGRATE_URL", "postgres://migrator@h/db")
+	t.Setenv("DATABASE_PURGE_URL", "postgres://purge@h/db")
+	cfg, err = LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.DatabaseMigrateURL != "postgres://migrator@h/db" || cfg.DatabasePurgeURL != "postgres://purge@h/db" {
+		t.Errorf("URLs explícitas ignoradas: migrate=%q purga=%q", cfg.DatabaseMigrateURL, cfg.DatabasePurgeURL)
+	}
+}
+
+// TestLoadConfig_ProducaoExigeSenhaDoRedis: o boot recusa (CA04).
+func TestLoadConfig_ProducaoExigeSenhaDoRedis(t *testing.T) {
+	os.Clearenv()
+	t.Setenv("AMBIENTE", "producao")
+	t.Setenv("REDIS_URL", "redis://redis:6379/0")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("produção com Redis sem senha deveria falhar")
+	}
+	t.Setenv("REDIS_URL", "redis://:uma-senha-longa@redis:6379/0")
+	if _, err := LoadConfig(); err != nil {
+		t.Fatalf("produção com senha: %v", err)
+	}
+}
