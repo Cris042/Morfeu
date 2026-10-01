@@ -8,7 +8,13 @@ import (
 	"testing"
 )
 
+// chavePublicaAge tem o formato de um destinatário age (pública por definição).
+const chavePublicaAge = "age1" + "qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz8lsn7"
+
 const senhaForte = "a3f9c1d27b8e4f60a1b2c3d4e5f60718" // 32 caracteres, sem placeholder
+
+// chavePrivadaAge é montada em runtime: o literal contíguo dispararia o gitleaks (falso positivo).
+var chavePrivadaAge = "AGE-SECRET-" + "KEY-" + strings.Repeat("1", 40)
 
 func envProd(sobrescritas map[string]string) string {
 	v := map[string]string{
@@ -17,6 +23,10 @@ func envProd(sobrescritas map[string]string) string {
 		"PG_PURGE_PASSWORD": senhaForte, "PG_BACKUP_PASSWORD": senhaForte,
 		"PG_MONITOR_PASSWORD": senhaForte, "REDIS_PASSWORD": senhaForte,
 		"RABBITMQ_DEFAULT_USER": "mq_cinema", "RABBITMQ_DEFAULT_PASS": senhaForte,
+		"BACKUP_AGE_RECIPIENT": chavePublicaAge, "BACKUP_S3_ENDPOINT": "https://ns.compat.objectstorage.sa-saopaulo-1.oraclecloud.com",
+		"BACKUP_S3_REGION": "sa-saopaulo-1", "BACKUP_S3_BUCKET": "cinema-backups",
+		"BACKUP_S3_ACCESS_KEY_ID": "chaveid" + senhaForte, "BACKUP_S3_SECRET_ACCESS_KEY": "segredo" + senhaForte,
+		"BACKUP_HEARTBEAT_URL": "https://hc-ping.com/0a1b2c3d",
 	}
 	for k, val := range sobrescritas {
 		v[k] = val
@@ -56,6 +66,15 @@ func TestPreflight(t *testing.T) {
 		{"senha curta", ".env.prod", envProd(map[string]string{"PG_PURGE_PASSWORD": strings.Repeat("x", 12)}), false, "PG_PURGE_PASSWORD"},
 		{"usuário padrão", ".env.prod", envProd(map[string]string{"RABBITMQ_DEFAULT_USER": "guest"}), false, "RABBITMQ_DEFAULT_USER"},
 		{"variável ausente", ".env.prod", strings.ReplaceAll(envProd(nil), "PG_BACKUP_PASSWORD="+senhaForte+"\n", ""), false, "PG_BACKUP_PASSWORD"},
+		{"backup: recipient ausente", ".env.prod", strings.ReplaceAll(envProd(nil), "BACKUP_AGE_RECIPIENT="+chavePublicaAge+"\n", ""), false, "BACKUP_AGE_RECIPIENT"},
+		{"backup: recipient placeholder", ".env.prod", envProd(map[string]string{"BACKUP_AGE_RECIPIENT": "age1troque-pela-chave-publica"}), false, "BACKUP_AGE_RECIPIENT"},
+		{"backup: recipient não é age1", ".env.prod", envProd(map[string]string{"BACKUP_AGE_RECIPIENT": "ssh-ed25519 AAAA"}), false, "BACKUP_AGE_RECIPIENT"},
+		{"backup: chave privada no .env", ".env.prod", envProd(nil) + "# " + chavePrivadaAge + "\n", false, "AGE-SECRET-KEY"},
+		{"backup: chave privada no lugar do recipient", ".env.prod", envProd(map[string]string{"BACKUP_AGE_RECIPIENT": chavePrivadaAge}), false, "BACKUP_AGE_RECIPIENT"},
+		{"backup: credencial S3 vazia", ".env.prod", envProd(map[string]string{"BACKUP_S3_SECRET_ACCESS_KEY": ""}), false, "BACKUP_S3_SECRET_ACCESS_KEY"},
+		{"backup: endpoint http", ".env.prod", envProd(map[string]string{"BACKUP_S3_ENDPOINT": "http://s3.exemplo.com"}), false, "BACKUP_S3_ENDPOINT"},
+		{"backup: heartbeat http", ".env.prod", envProd(map[string]string{"BACKUP_HEARTBEAT_URL": "http://hc-ping.com/0a1b2c3d"}), false, "BACKUP_HEARTBEAT_URL"},
+		{"backup: heartbeat vazio é opcional", ".env.prod", envProd(map[string]string{"BACKUP_HEARTBEAT_URL": ""}), true, ""},
 		{"observability válido", ".env.observability", "GF_SECURITY_ADMIN_PASSWORD=" + senhaForte + "\nDATA_SOURCE_PASS=" + senhaForte +
 			"\nDISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/1/abc\nHEALTHCHECKS_PING_URL=https://hc-ping.com/0a1b2c3d\n", true, ""},
 		{"observability com placeholder de dev", ".env.observability", "GF_SECURITY_ADMIN_PASSWORD=" + senhaForte + "\nDATA_SOURCE_PASS=" + senhaForte +
@@ -70,7 +89,7 @@ func TestPreflight(t *testing.T) {
 			if c.variavel != "" && !strings.Contains(saida, c.variavel) {
 				t.Errorf("a saída deveria citar %s: %s", c.variavel, saida)
 			}
-			for _, segredo := range []string{senhaForte, "troque-esta-senha-por-algo", "abc123XYZ789", "sem-webhook"} {
+			for _, segredo := range []string{senhaForte, "troque-esta-senha-por-algo", "abc123XYZ789", "sem-webhook", chavePrivadaAge, "segredo" + senhaForte} {
 				if strings.Contains(saida, segredo) {
 					t.Errorf("a saída ecoa um valor (%q): %s", segredo, saida)
 				}

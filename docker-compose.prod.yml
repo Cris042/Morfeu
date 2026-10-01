@@ -262,6 +262,51 @@ services:
     networks:
       - morfeu-network
 
+  # ---- Backup (task 0043, ADR 0013): pg_dump | age | Object Storage, 1x por noite ----
+
+  backup:
+    build:
+      context: ./scripts/backup
+      dockerfile: ../../deploy/backup/Dockerfile
+    image: morfeu-backup:local
+    container_name: morfeu-backup
+    init: true
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGDATABASE: morfeu
+      PGUSER: morfeu_backup
+      PGPASSWORD: ${PG_BACKUP_PASSWORD:?defina PG_BACKUP_PASSWORD no .env.prod}
+      # Só a chave PÚBLICA (age1…) fica na VM; a privada vive fora (docs/backup.md).
+      BACKUP_AGE_RECIPIENT: ${BACKUP_AGE_RECIPIENT:?defina BACKUP_AGE_RECIPIENT (age1...) no .env.prod}
+      BACKUP_DESTINO: backup:${BACKUP_S3_BUCKET:?defina BACKUP_S3_BUCKET no .env.prod}
+      # Vazio = sem ping; com valor, precisa ser https (preflight).
+      BACKUP_HEARTBEAT_URL: ${BACKUP_HEARTBEAT_URL:-}
+      # Remote S3 do rclone por env (sem arquivo de config no disco).
+      RCLONE_CONFIG_BACKUP_TYPE: s3
+      RCLONE_CONFIG_BACKUP_PROVIDER: Other
+      RCLONE_CONFIG_BACKUP_ENDPOINT: ${BACKUP_S3_ENDPOINT:?defina BACKUP_S3_ENDPOINT no .env.prod}
+      RCLONE_CONFIG_BACKUP_REGION: ${BACKUP_S3_REGION:?defina BACKUP_S3_REGION no .env.prod}
+      RCLONE_CONFIG_BACKUP_ACCESS_KEY_ID: ${BACKUP_S3_ACCESS_KEY_ID:?defina BACKUP_S3_ACCESS_KEY_ID no .env.prod}
+      RCLONE_CONFIG_BACKUP_SECRET_ACCESS_KEY: ${BACKUP_S3_SECRET_ACCESS_KEY:?defina BACKUP_S3_SECRET_ACCESS_KEY no .env.prod}
+      # A credencial do job não cria/lista bucket nem apaga objetos (docs/backup.md).
+      RCLONE_CONFIG_BACKUP_NO_CHECK_BUCKET: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    restart: unless-stopped
+    logging: *logging
+    networks:
+      - morfeu-network
+
 volumes:
   morfeu-postgres:
   morfeu-redis:

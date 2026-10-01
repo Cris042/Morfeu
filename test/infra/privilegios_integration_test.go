@@ -38,27 +38,36 @@ const (
 // (ADR 0013) e devolve host:porta.
 func subirPGComRoles(t *testing.T) (host, porta string) {
 	t.Helper()
+	return subirPGComRolesEm(t, "", "")
+}
+
+// subirPGComRolesEm é o mesmo PG, opcionalmente numa rede Docker com um alias
+// (o container de backup da task 0043 o alcança por nome).
+func subirPGComRolesEm(t *testing.T, rede, alias string) (host, porta string) {
+	t.Helper()
 	ctx := context.Background()
 	script, err := filepath.Abs("../../configs/postgres/02-roles.sh")
 	if err != nil {
 		t.Fatal(err)
 	}
-	pg, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        "postgres:16-alpine",
-			ExposedPorts: []string{"5432/tcp"},
-			Env: map[string]string{
-				"POSTGRES_USER": "postgres", "POSTGRES_PASSWORD": "postgres-so-de-teste", "POSTGRES_DB": bancoRoles,
-				"PG_MIGRATOR_PASSWORD": senhaMigr, "PG_APP_PASSWORD": senhaApp,
-				"PG_PURGE_PASSWORD": senhaPurge, "PG_BACKUP_PASSWORD": senhaBackup,
-			},
-			Files: []testcontainers.ContainerFile{{
-				HostFilePath: script, ContainerFilePath: "/docker-entrypoint-initdb.d/02-roles.sh", FileMode: 0o755,
-			}},
-			WaitingFor: wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(120 * time.Second),
+	req := testcontainers.ContainerRequest{
+		Image:        "postgres:16-alpine",
+		ExposedPorts: []string{"5432/tcp"},
+		Env: map[string]string{
+			"POSTGRES_USER": "postgres", "POSTGRES_PASSWORD": "postgres-so-de-teste", "POSTGRES_DB": bancoRoles,
+			"PG_MIGRATOR_PASSWORD": senhaMigr, "PG_APP_PASSWORD": senhaApp,
+			"PG_PURGE_PASSWORD": senhaPurge, "PG_BACKUP_PASSWORD": senhaBackup,
 		},
-		Started: true,
-	})
+		Files: []testcontainers.ContainerFile{{
+			HostFilePath: script, ContainerFilePath: "/docker-entrypoint-initdb.d/02-roles.sh", FileMode: 0o755,
+		}},
+		WaitingFor: wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(120 * time.Second),
+	}
+	if rede != "" {
+		req.Networks = []string{rede}
+		req.NetworkAliases = map[string][]string{rede: {alias}}
+	}
+	pg, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{ContainerRequest: req, Started: true})
 	if err != nil {
 		t.Fatalf("subir postgres: %v", err)
 	}

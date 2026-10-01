@@ -4,7 +4,21 @@
 
 ## Estado corrente (2026-10-01)
 
-**E10 concluído (PR #74 mergeado). Épico E11 refinado** (`docs/refinamentos/E11-hardening-backup.md`, ADR 0013): 3 tasks — 0042 (hardening + roles) → 0043 (backup/restore) → 0044 (limpeza operacional). Próxima: **0042**.
+**E10 concluído (PR #74 mergeado). Épico E11 refinado** (`docs/refinamentos/E11-hardening-backup.md`, ADR 0013): 3 tasks — 0042 (hardening + roles) → 0043 (backup/restore) → 0044 (limpeza operacional). 0042 ✅ (PR #76); próxima: **0043**.
+
+**Task 0043 — Backup cifrado e restore validado (E11 T2): em implementação** (branch `feature/0043-backup-restore`, PRD `docs/prd/0043-backup-restore.md`).
+
+### Plano da task 0043
+
+1. ~~Imagem + `backup.sh`~~ — stream `pg_dump | age | rclone rcat`, sha256/tamanho por FIFO, snapshot único (manifesto = dump), heartbeat.
+2. ~~`agendar.sh`~~.
+3. ~~`restore.sh` + `invariantes.sql`~~.
+4. ~~Compose de prod + preflight + exemplos~~ — serviço `backup`; preflight recusa chave privada/placeholder.
+5. ~~Testes~~ — ida e volta com imagem real + matriz de erro (CA01–CA05), invariantes reprovando divergência, S3 opcional (`rclone serve s3`).
+6. ~~Runbook, checklist, `lib.md`~~ — `docs/backup.md`, `docs/deploy-checklist.md`, 4 linhas em `lib.md`, `make backup-teste`.
+7. Lint + suíte ok; **pendente: passe de julgamento (auditoria) + CI**. Desvios no PRD (índice `holds_assento_ocupado`, `rclone serve s3` no lugar do MinIO, contexto `./scripts/backup`, mem 128m).
+
+---
 
 **Task 0042 — Hardening do compose, senha do Redis e roles do PG (E11 T1): auditoria APROVADA em 2026-10-01 (`security`), PR #76** (branch `feature/0042-hardening-roles`, PRD `docs/prd/0042-hardening-roles.md`).
 

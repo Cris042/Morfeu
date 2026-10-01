@@ -50,3 +50,4 @@ Convenção: `NNNN-titulo-kebab.md`, numeração sequencial a partir de `0001`. 
 | 0040 | [Traces: Tempo + OTLP + tail sampling no Alloy](./0040-tempo-otlp.md) | E10 (T1) | concluída (auditoria APROVADA; PR #73) | `feature/0040-tempo-otlp` | [0040](../prd/0040-tempo-otlp.md) |
 | 0041 | [Dashboards de negócio, alertas e watchdog](./0041-dashboards-alertas.md) | E10 (T2) | concluída (auditoria APROVADA; PR #74) | `feature/0041-dashboards-alertas` | [0041](../prd/0041-dashboards-alertas.md) |
 | 0042 | [Hardening do compose, senha do Redis e roles do PG](./0042-hardening-roles.md) | E11 (T1) | concluída (auditoria APROVADA; PR #76) | `feature/0042-hardening-roles` | [0042](../prd/0042-hardening-roles.md) |
+| 0043 | [Backup cifrado e restore validado](./0043-backup-restore.md) | E11 (T2) | em implementação | `feature/0043-backup-restore` | [0043](../prd/0043-backup-restore.md) |
