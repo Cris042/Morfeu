@@ -83,7 +83,7 @@ O worker (`-mode=worker|all`) roda na partida e a cada 24 h duas limpezas em lot
 
 Outras retenções: outbox publicada 7 dias (0027), trilha de auditoria 12 meses (0037); **pedidos, `pedido_eventos` e ingressos não são apagados** (decisão do usuário, E11).
 
-**Alerta `morfeu-limpeza-parada`:** alguma limpeza sem sucesso há > 48 h. Veja no log do worker `limpeza diária` (atributo `alvo`, campo de erro) — worker parado ou erro no DELETE. Atenção: o alerta usa `min()` entre os alvos; um alvo que **nunca** teve sucesso desde o boot não tem série e não é coberto pelo `min` — confira `limpeza_ultima_execucao_timestamp` por `alvo` e os logs após o 1º deploy.
+**Alerta `morfeu-limpeza-parada`:** alguma limpeza sem sucesso há > 48 h. Veja no log do worker `limpeza diária` (atributo `alvo`, campo de erro) — worker parado ou erro no DELETE. A partida do worker grava o marco de cada alvo, então um alvo que **nunca** tem sucesso também dispara 48 h depois do boot.
 
 **Mensagens `retidas` no replay da DLQ:** o `replay-dlq` não republica mensagem cujo evento (Timestamp) é anterior a `agora − 30 dias` (ou sem Timestamp): o registro de dedup dela já pode ter sido limpo e o efeito (e-mail de ingresso/estorno) poderia se repetir. Elas ficam na DLQ e aparecem em `retidas=N` na saída e no log (não consomem o `-limite`). Procedimento: use `-dry-run` para listar os `message_id`, verifique **à mão** se o efeito já aconteceu (ex.: o e-mail foi enviado? o estorno consta no gateway?) e só então decida reenviar (publicando manualmente) ou descartar a mensagem pelo painel do RabbitMQ.
 

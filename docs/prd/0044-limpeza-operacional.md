@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0044-limpeza-operacional.md
 - **Branch:** feature/0044-limpeza-operacional
 - **Data:** 2026-10-01
-- **Status:** em implementação
+- **Status:** concluído
 
 ## Objetivo
 
@@ -35,13 +35,13 @@ Duas limpezas em lotes no worker, guarda de idade no replay da DLQ, migration de
 
 ## Critérios de aceite
 
-- [ ] CA01 — `processed_messages`: linha 1 s antes da janela some, exatamente na borda/1 s depois fica; lotes (mais de 1 lote apagado por inteiro); idempotente (2ª execução apaga 0).
-- [ ] CA02 — Holds: `liberado`/`expirado` com 7 dias + 1 s somem; com 7 dias − 1 s ficam; `ativo` e `convertido` antigos ficam; idempotente.
-- [ ] CA03 — Concorrência: limpeza rodando junto com o sweeper e com uma reserva nova não perde hold vivo nem falha (teste com goroutines).
-- [ ] CA04 — Replay: mensagem com evento mais velho que a janela fica na DLQ (`retidas` = 1, nada republicado); mais nova é republicada.
-- [ ] CA05 — Alerta `morfeu-limpeza-parada` provisionado (19 regras por uid); contrato verde.
-- [ ] CA06 — Runbook (`docs/observabilidade.md`): alerta novo, retenções e o que fazer com mensagens retidas no replay; pendência do E6 baixada do `state.md`.
-- [ ] CA07 — CI verde.
+- [x] CA01 — `processed_messages`: linha 1 s antes da janela some, exatamente na borda/1 s depois fica; lotes (mais de 1 lote apagado por inteiro); idempotente (2ª execução apaga 0).
+- [x] CA02 — Holds: `liberado`/`expirado` com 7 dias + 1 s somem; com 7 dias − 1 s ficam; `ativo` e `convertido` antigos ficam; idempotente.
+- [x] CA03 — Concorrência: limpeza rodando junto com o sweeper e com uma reserva nova não perde hold vivo nem falha (teste com goroutines).
+- [x] CA04 — Replay: mensagem com evento mais velho que a janela fica na DLQ (`retidas` = 1, nada republicado); mais nova é republicada.
+- [x] CA05 — Alerta `morfeu-limpeza-parada` provisionado (19 regras por uid); contrato verde.
+- [x] CA06 — Runbook (`docs/observabilidade.md`): alerta novo, retenções e o que fazer com mensagens retidas no replay; pendência do E6 baixada do `state.md`.
+- [x] CA07 — CI verde.
 
 ## Plano de testes
 
@@ -93,7 +93,7 @@ Nenhuma nova.
 - Helper `morta()` dos testes de replay passa a gravar `Timestamp` (os antigos virariam retidas); `mortaEm()` novo.
 - Logs dizem "limpeza diária" (o `misspell` do lint acusa "operacional"); nome do alerta e do runbook mantidos.
 - Os `TestMain` de `outbox`/`reserva` não aplicam a 019 (cada um tem metade das tabelas); a 019 foi validada em PG efêmero (up → down → up, `EXPLAIN` usa o índice parcial) e pelo job `migrations` do CI.
-- O gauge só é gravado no sucesso: um alvo que nunca teve sucesso desde o boot não dispara o alerta (mesmo comportamento aceito na purga da 0037 — registrado no runbook).
+- O gauge também é gravado na partida do worker (achado da auditoria): um alvo que nunca tem sucesso dispara o alerta 48 h depois do boot, em vez de ficar sem série.
 
 ## Estratégia de rollback
 

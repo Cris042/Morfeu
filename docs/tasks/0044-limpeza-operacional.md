@@ -1,7 +1,7 @@
 # Task 0044 — Limpeza operacional (E11, T3)
 
 - **Data:** 2026-10-01
-- **Status:** em implementação
+- **Status:** concluída (auditoria APROVADA em 2026-10-01)
 - **Branch:** `feature/0044-limpeza-operacional`
 - **PRD:** docs/prd/0044-limpeza-operacional.md
 - **Item do roadmap:** E11 — Hardening + backup (3ª e última). Refinamento: `docs/refinamentos/E11-hardening-backup.md` §T3 (decisão do usuário: sem apagar pedidos).

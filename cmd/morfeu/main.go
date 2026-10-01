@@ -714,13 +714,18 @@ func iniciarLimpezaOperacional(ctx context.Context, mode string, dbPool *pgxpool
 		os.Exit(1)
 	}
 	ultima, err := meter.Int64Gauge("limpeza_ultima_execucao_timestamp",
-		metric.WithDescription("Unix time da última limpeza bem-sucedida, por alvo."))
+		metric.WithDescription("Unix time da última limpeza bem-sucedida (ou da partida do worker), por alvo."))
 	if err != nil {
 		log.ErrorMsg("métrica da limpeza", zap.Error(err))
 		os.Exit(1)
 	}
+	// A partida também conta como marco: um alvo que nunca tem sucesso passa a
+	// disparar o alerta de limpeza parada depois de 48 h (sem série, ficaria cego).
+	partida := time.Now().Unix()
 	for _, alvo := range []string{alvoProcessedMessages, alvoHolds} {
-		removidos.Add(ctx, 0, metric.WithAttributes(attribute.String("alvo", alvo)))
+		attrs := metric.WithAttributes(attribute.String("alvo", alvo))
+		removidos.Add(ctx, 0, attrs)
+		ultima.Record(ctx, partida, attrs)
 	}
 	registrar := func(alvo string, n int64, err error) {
 		if err != nil {
