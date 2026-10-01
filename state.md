@@ -8,7 +8,7 @@ Atualizado ao final de cada task e antes de cada PR (regras em `roles.md` §6.11
 
 - **Última task concluída:** **0039 — SPA: sessões e pedidos do operador + E2E do backoffice (E9 T3b)** — auditoria APROVADA (2026-10-01), PR #71. **E9 concluído (PRs #67–#71).** Antes: E8 (PRs #62–#66). **E8 concluído (PRs #62–#66) e M4 ✅.** Antes: E7 (PRs #57–#60), E6 (PRs #51–#56).
 - **Épico E0 refinado (2026-07-09) e perguntas respondidas (2026-07-11):** cerimônia por épico (§6.14) em `docs/refinamentos/E0-walking-skeleton.md` — task 0002 reescopada; **usuário aprovou a reordenação** (E0c dividido em E0c-CI/E0c-CD; ordem: conformidade ✅ → **E0c-CI** → E0b → E0c-CD → E0d; roadmap atualizado) e **autorizou o ADR 0007 de mensageria** (criado). PRDs de E0b/E0c/E0d desbloqueados na nova ordem.
-- **Task atual:** **0040 — Tempo + OTLP + tail sampling** (E10 T1); depois **0041** (dashboards, alertas, watchdog). E9 refinado em 2026-10-01 (`docs/refinamentos/E9-backoffice.md`). Usuário autorizou merge de cada PR quando o CI passar. **E0c-CD segue bloqueada** (VM Oracle).
+- **Task atual:** **0041 — dashboards de negócio, alertas e watchdog** (E10 T2, última do E10). Antes: 0040 (PR #73). E9 refinado em 2026-10-01 (`docs/refinamentos/E9-backoffice.md`). Usuário autorizou merge de cada PR quando o CI passar. **E0c-CD segue bloqueada** (VM Oracle).
 - **PRD atual:** nenhum.
 - **ADRs ativos:** 0001 (Go+Echo) · 0002 (sqlc+pgx) · 0003 (fronteiras/camadas) · 0004 (padrões de código Go) · 0005 (DDD tático + patterns) · 0006 (estratégia de testes) — aceitos em 2026-07-07 — · **0007 (Mensageria: RabbitMQ)** — aceito em 2026-07-11 com autorização explícita (pergunta 2 do refinamento E0). · **0008 (Trava de assento: PG com índice único parcial, expiração lazy e sweeper)** — aceito em 2026-09-29 com autorização explícita (refinamento E4). · **0009 (Frontend SPA: React + TS + Vite, fronteira `/api` por proxy, estáticos pelo Caddy)** — aceito em 2026-09-29 com autorização explícita (refinamento E5). · **0010 (Saga do checkout: pivô síncrono no webhook, estorno como única compensação)** — aceito em 2026-09-30 com autorização explícita (refinamento E6). · **0011 (Cancelamento como nova entrada da saga)** — aceito em 2026-10-01 com autorização explícita (refinamento E9). · **0012 (Amostragem de traces por tail sampling no Alloy)** — aceito em 2026-10-01 com autorização explícita (refinamento E10).
 
@@ -48,7 +48,9 @@ Atualizado ao final de cada task e antes de cada PR (regras em `roles.md` §6.11
 
 ## Pendências técnicas
 
-- **Para o E10 (alertas — achado da 0037):** alerta "purga da trilha de auditoria parada > 48 h" (`time() - max(auditoria_purga_ultima_execucao_timestamp) > 172800`) e textos dos alertas `morfeu-saga-estorno*` cobrindo cancelamentos (ADR 0011); a lista fechada vai a 17 regras (atualizar `test/observabilidade`).
+- **E0c-CD (deploy) herda do E10:** monitor HTTP externo da URL pública + aceite manual do watchdog (desligar o Grafana e ver o aviso do healthchecks.io chegar); `.env.observability` da VM com `HEALTHCHECKS_PING_URL` real.
+
+- ~~Para o E10: alerta de purga da trilha parada + textos dos alertas de estorno~~ → feitos na task 0041.
 
 - ~~Teste instável `TestRelay_BrokerIndisponivelNaoCrashaEReentrega`~~ → corrigido na task 0021 (broker parado antes de enfileirar + `t.Cleanup` que religa).
 - **Ambiente local sem navegador para o Playwright** (WSL sem Chrome e sem libasound/libxcomposite/libxrandr — instalar exige `sudo`, decisão do usuário): E2E local só pela imagem oficial `mcr.microsoft.com/playwright` (~2 GB); o CI é o gate.

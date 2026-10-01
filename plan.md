@@ -4,7 +4,17 @@
 
 ## Estado corrente (2026-10-01)
 
-**E10 refinado** (`docs/refinamentos/E10-observabilidade.md`, ADR 0012). **Task 0040 — Traces: Tempo + OTLP + tail sampling no Alloy (E10 T1): auditoria APROVADA em 2026-10-01 (`security`), PR #73** (branch `feature/0040-tempo-otlp`).
+**Task 0041 — Dashboards de negócio, alertas e watchdog (E10 T2): implementada, em auditoria** (branch `feature/0041-dashboards-alertas`, sobre a 0040). Última task do E10.
+
+### Plano da task 0041
+
+1. ~~Dashboards~~ — 4 de negócio (funil; compensações/cancelamentos; reservas/ocupação; gateway/e-mail) só com métricas existentes.
+2. ~~Alertas~~ — purga da trilha parada > 48 h; watchdog sempre ativo → contact point `heartbeat-externo` (healthchecks.io por env, rota própria, nunca ao Discord); textos de estorno cobrindo cancelamentos. 18 regras.
+3. ~~Testes~~ — contrato dashboards/alertas × métricas do código (mutação conferida); stack com 7 dashboards, 3 datasources, 18 regras por uid e 2 contact points.
+4. ~~Runbook~~ — `docs/observabilidade.md` (traces, alertas novos, healthchecks.io, pendências da E0c-CD).
+5. Passe de julgamento → PR.
+
+---
 
 ### Plano da task 0040
 
