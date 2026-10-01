@@ -80,8 +80,8 @@ func runReplayDLQ(args []string) error {
 		return err
 	}
 	defer func() { _ = cli.Close() }()
-	r, err := cli.Reprocessar(ctx, *fila, *limite, *dryRun)
-	fmt.Printf("fila=%s dry_run=%t lidas=%d republicadas=%d\n", *fila, *dryRun, r.Lidas, r.Republicadas)
+	r, err := cli.Reprocessar(ctx, *fila, *limite, *dryRun, time.Now().Add(-outbox.JanelaDedup))
+	fmt.Printf("fila=%s dry_run=%t lidas=%d republicadas=%d retidas=%d\n", *fila, *dryRun, r.Lidas, r.Republicadas, r.Retidas)
 	for _, id := range r.MessageIDs {
 		fmt.Println(id)
 	}
@@ -447,6 +447,7 @@ func montarReserva(dbPool *pgxpool.Pool, sessoes reserva.FonteSessoes, redisClie
 func iniciarRotinasDaSaga(ctx context.Context, e *echo.Echo, mode string, cfg *config.Config, cli *broker.Client, dbPool *pgxpool.Pool, f fonteDoEmail, wg *sync.WaitGroup, log *logger.Logger) {
 	iniciarTarefasPedido(ctx, mode, f.pedidos, wg)
 	iniciarPurgaAuditoria(ctx, mode, cfg, dbPool, wg, log)
+	iniciarLimpezaOperacional(ctx, mode, dbPool, wg, log)
 	if cli != nil {
 		sender := iniciarNotificacao(ctx, cfg, cli, dbPool, f, wg, log)
 		// E-mail verificável no E2E do M4 (PRD 0035): só no processo único
@@ -687,6 +688,81 @@ func iniciarPurgaAuditoria(ctx context.Context, mode string, cfg *config.Config,
 			}
 		})
 	}()
+}
+
+// intervaloLimpezaOperacional: dedup vencido e holds terminais saem 1×/dia.
+const intervaloLimpezaOperacional = 24 * time.Hour
+
+// Alvos da limpeza diária (atributo `alvo` das métricas — cardinalidade fixa).
+const (
+	alvoProcessedMessages = "processed_messages"
+	alvoHolds             = "holds"
+)
+
+// iniciarLimpezaOperacional roda, no worker (PRD 0044), a limpeza diária de
+// processed_messages (janela do dedup) e de holds terminais, com métricas de
+// removidos e da última execução bem-sucedida (alerta de limpeza parada).
+func iniciarLimpezaOperacional(ctx context.Context, mode string, dbPool *pgxpool.Pool, wg *sync.WaitGroup, log *logger.Logger) {
+	if mode != modeWorker && mode != modeAll {
+		return
+	}
+	meter := otel.Meter("morfeu/limpeza")
+	removidos, err := meter.Int64Counter("limpeza_removidos_total",
+		metric.WithDescription("Linhas removidas pela limpeza diária, por alvo."))
+	if err != nil {
+		log.ErrorMsg("métrica da limpeza", zap.Error(err))
+		os.Exit(1)
+	}
+	ultima, err := meter.Int64Gauge("limpeza_ultima_execucao_timestamp",
+		metric.WithDescription("Unix time da última limpeza bem-sucedida, por alvo."))
+	if err != nil {
+		log.ErrorMsg("métrica da limpeza", zap.Error(err))
+		os.Exit(1)
+	}
+	for _, alvo := range []string{alvoProcessedMessages, alvoHolds} {
+		removidos.Add(ctx, 0, metric.WithAttributes(attribute.String("alvo", alvo)))
+	}
+	registrar := func(alvo string, n int64, err error) {
+		if err != nil {
+			log.ErrorMsg("limpeza diária", zap.String("alvo", alvo), zap.Error(err))
+			return
+		}
+		attrs := metric.WithAttributes(attribute.String("alvo", alvo))
+		removidos.Add(ctx, n, attrs)
+		ultima.Record(ctx, time.Now().Unix(), attrs)
+		if n > 0 {
+			log.Info("limpeza diária", zap.String("alvo", alvo), zap.Int64("removidos", n))
+		}
+	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		rodarLimpezaOperacional(ctx, dbPool, intervaloLimpezaOperacional, time.Now, registrar)
+	}()
+}
+
+// rodarLimpezaOperacional executa as duas limpezas na partida e a cada
+// intervalo, até o ctx acabar. O erro de uma não impede a outra.
+func rodarLimpezaOperacional(ctx context.Context, pool outbox.Pool, intervalo time.Duration, agora func() time.Time, registrar func(alvo string, n int64, err error)) {
+	t := time.NewTicker(intervalo)
+	defer t.Stop()
+	for {
+		n, err := outbox.LimparProcessadas(ctx, pool, agora().Add(-outbox.JanelaDedup))
+		if ctx.Err() != nil {
+			return
+		}
+		registrar(alvoProcessedMessages, n, err)
+		n, err = reserva.LimparHoldsTerminais(ctx, pool, agora().Add(-reserva.RetencaoHoldsTerminais))
+		if ctx.Err() != nil {
+			return
+		}
+		registrar(alvoHolds, n, err)
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
 }
 
 // iniciarTarefasPedido roda reconciliação + estornos da saga (PRD 0025) em

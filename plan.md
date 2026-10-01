@@ -4,7 +4,21 @@
 
 ## Estado corrente (2026-10-01)
 
-**E10 concluído (PR #74 mergeado). Épico E11 refinado** (`docs/refinamentos/E11-hardening-backup.md`, ADR 0013): 3 tasks — 0042 (hardening + roles) → 0043 (backup/restore) → 0044 (limpeza operacional). 0042 ✅ (PR #76); próxima: **0043**.
+**E10 concluído (PR #74 mergeado). Épico E11 refinado** (`docs/refinamentos/E11-hardening-backup.md`, ADR 0013): 3 tasks — 0042 (hardening + roles) → 0043 (backup/restore) → 0044 (limpeza operacional). 0042 ✅ (PR #76), 0043 ✅ (PR #77); próxima: **0044**.
+
+**Task 0044 — Limpeza operacional (E11 T3): em implementação** (branch `feature/0044-limpeza-operacional`, PRD `docs/prd/0044-limpeza-operacional.md`).
+
+### Plano da task 0044
+
+1. Migration 019 (índices).
+2. Queries + sqlc.
+3. `outbox.LimparProcessadas` (30 dias) e `reserva.LimparHoldsTerminais` (7 dias).
+4. Guarda de idade no replay da DLQ.
+5. Rotina diária + métricas no worker.
+6. Alerta `morfeu-limpeza-parada` + testes.
+7. Runbook; lint + suíte + passe de julgamento.
+
+---
 
 **Task 0043 — Backup cifrado e restore validado (E11 T2): auditoria APROVADA em 2026-10-01 (`security`), PR #77** (branch `feature/0043-backup-restore`, PRD `docs/prd/0043-backup-restore.md`).
 

@@ -20,7 +20,7 @@ import (
 // subir nenhum container.
 
 // prefixosDoApp: métricas do próprio binário (as de exporters ficam de fora).
-var prefixosDoApp = []string{"checkout_", "saga_", "cancelamentos_", "pedidos_", "gateway_", "morfeu_", "reserva_", "sessao_", "auditoria_", "auth_", "tmdb_"}
+var prefixosDoApp = []string{"checkout_", "saga_", "cancelamentos_", "pedidos_", "gateway_", "morfeu_", "reserva_", "sessao_", "auditoria_", "limpeza_", "auth_", "tmdb_"}
 
 var (
 	nomeMetrica = regexp.MustCompile(`[a-z_][a-z0-9_]*`)
@@ -141,7 +141,7 @@ func TestContrato_AlertasCitamMetricasDoApp(t *testing.T) {
 	}
 	var exprs []string
 	coletarExprs(cfg, &exprs)
-	if len(exprs) < 18 {
+	if len(exprs) < 19 {
 		t.Fatalf("só %d expressões nas regras", len(exprs))
 	}
 	for _, e := range exprs {

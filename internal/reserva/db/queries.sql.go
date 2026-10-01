@@ -280,6 +280,31 @@ func (q *Queries) LiberarHold(ctx context.Context, arg LiberarHoldParams) (int64
 	return result.RowsAffected(), nil
 }
 
+const limparHoldsTerminais = `-- name: LimparHoldsTerminais :execrows
+DELETE FROM holds
+WHERE id IN (
+    SELECT id FROM holds
+    WHERE status IN ('liberado', 'expirado') AND atualizado_em < $1::timestamptz
+    LIMIT $2::int
+)
+`
+
+type LimparHoldsTerminaisParams struct {
+	AntesDe time.Time `db:"antes_de"`
+	Limite  int32     `db:"limite"`
+}
+
+// Limpeza (PRD 0044): só terminais sem efeito (liberado/expirado) com
+// atualizado_em anterior ao corte, em lote. ativo e convertido nunca entram
+// (convertido ocupa o índice da trava). Usa holds_terminais_atualizado_em_idx.
+func (q *Queries) LimparHoldsTerminais(ctx context.Context, arg LimparHoldsTerminaisParams) (int64, error) {
+	result, err := q.db.Exec(ctx, limparHoldsTerminais, arg.AntesDe, arg.Limite)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const ocupadosDaSessao = `-- name: OcupadosDaSessao :many
 SELECT assento_codigo
 FROM holds

@@ -42,11 +42,18 @@ func limparFilasDeFilmes(t *testing.T, ch *amqp.Channel) {
 	}
 }
 
-// morta publica direto na DLQ uma mensagem como o dead-letter a deixaria.
+// morta publica direto na DLQ uma mensagem como o dead-letter a deixaria,
+// com o evento ocorrido agora (dentro da janela do dedup).
 func morta(t *testing.T, ch *amqp.Channel, id string) {
 	t.Helper()
+	mortaEm(t, ch, id, time.Now())
+}
+
+// mortaEm é morta com o instante do evento (Timestamp AMQP) escolhido.
+func mortaEm(t *testing.T, ch *amqp.Channel, id string, evento time.Time) {
+	t.Helper()
 	err := ch.PublishWithContext(context.Background(), "", broker.QueueFilmeCriadoDLQ, false, false, amqp.Publishing{
-		MessageId: id, Type: "catalogo.filme_criado", ContentType: "application/json", DeliveryMode: amqp.Persistent,
+		MessageId: id, Timestamp: evento, Type: "catalogo.filme_criado", ContentType: "application/json", DeliveryMode: amqp.Persistent,
 		Headers: amqp.Table{"aggregate_id": "42", "x-death": amqp.Table{"count": int64(3)}}, Body: []byte(`{"id":42}`),
 	})
 	if err != nil {
@@ -63,6 +70,47 @@ func profundidade(t *testing.T, ch *amqp.Channel, fila string) int {
 	return q.Messages
 }
 
+func corteReplay() time.Time { return time.Now().Add(-outbox.JanelaDedup) }
+
+// TestReplayDLQ_RetemMensagemAlemDaJanela cobre CA04 (PRD 0044): evento mais
+// velho que a janela do dedup fica na DLQ (retida, sem ack nem publish); o
+// mais novo é republicado; sem Timestamp também é retido (opção segura).
+func TestReplayDLQ_RetemMensagemAlemDaJanela(t *testing.T) {
+	cli := clienteTeste(t)
+	ch := canalTeste(t)
+	limparFilasDeFilmes(t, ch)
+	corte := corteReplay()
+	nova := uuid.NewString()
+	mortaEm(t, ch, uuid.NewString(), corte.Add(-time.Second)) // velha
+	mortaEm(t, ch, nova, corte.Add(time.Second))              // dentro da janela
+	mortaEm(t, ch, uuid.NewString(), time.Time{})             // sem timestamp
+	pollUntil(t, 5*time.Second, func() bool { return profundidade(t, ch, broker.QueueFilmeCriadoDLQ) == 3 })
+
+	// Dry-run conta as retidas sem publicar.
+	r, err := cli.Reprocessar(context.Background(), broker.QueueFilmeCriadoDLQ, 10, true, corte)
+	if err != nil || r.Lidas != 3 || r.Retidas != 2 || r.Republicadas != 0 {
+		t.Fatalf("dry-run: %+v %v", r, err)
+	}
+	if !pollUntil(t, 5*time.Second, func() bool { return profundidade(t, ch, broker.QueueFilmeCriadoDLQ) == 3 }) {
+		t.Fatal("dry-run deveria devolver tudo à DLQ")
+	}
+
+	r, err = cli.Reprocessar(context.Background(), broker.QueueFilmeCriadoDLQ, 10, false, corte)
+	if err != nil || r.Lidas != 3 || r.Retidas != 2 || r.Republicadas != 1 {
+		t.Fatalf("replay: %+v %v", r, err)
+	}
+	if !pollUntil(t, 5*time.Second, func() bool {
+		return profundidade(t, ch, broker.QueueFilmeCriado) == 1 && profundidade(t, ch, broker.QueueFilmeCriadoDLQ) == 2
+	}) {
+		t.Fatal("esperado 1 republicada e 2 retidas na DLQ")
+	}
+	d, ok, err := ch.Get(broker.QueueFilmeCriado, true)
+	if err != nil || !ok || d.MessageId != nova {
+		t.Fatalf("republicada errada: ok=%v id=%s err=%v", ok, d.MessageId, err)
+	}
+	limparFilasDeFilmes(t, ch)
+}
+
 // TestReplayDLQ cobre CA01–CA03: dry-run não publica e devolve; replay
 // republica na fila de origem com o MESMO message_id e esvazia a DLQ até o
 // limite; fila fora da lista é recusada.
@@ -76,7 +124,7 @@ func TestReplayDLQ(t *testing.T) {
 	}
 	pollUntil(t, 5*time.Second, func() bool { return profundidade(t, ch, broker.QueueFilmeCriadoDLQ) == 3 })
 
-	r, err := cli.Reprocessar(context.Background(), broker.QueueFilmeCriadoDLQ, 10, true)
+	r, err := cli.Reprocessar(context.Background(), broker.QueueFilmeCriadoDLQ, 10, true, corteReplay())
 	if err != nil || r.Lidas != 3 || r.Republicadas != 0 {
 		t.Fatalf("dry-run: %+v %v", r, err)
 	}
@@ -87,7 +135,7 @@ func TestReplayDLQ(t *testing.T) {
 		t.Fatal("dry-run publicou")
 	}
 
-	r, err = cli.Reprocessar(context.Background(), broker.QueueFilmeCriadoDLQ, 2, false)
+	r, err = cli.Reprocessar(context.Background(), broker.QueueFilmeCriadoDLQ, 2, false, corteReplay())
 	if err != nil || r.Lidas != 2 || r.Republicadas != 2 {
 		t.Fatalf("replay: %+v %v", r, err)
 	}
@@ -109,7 +157,7 @@ func TestReplayDLQ(t *testing.T) {
 		}
 	}
 
-	if _, err := cli.Reprocessar(context.Background(), "qualquer.fila", 1, false); !errors.Is(err, broker.ErrFilaNaoPermitida) {
+	if _, err := cli.Reprocessar(context.Background(), "qualquer.fila", 1, false, corteReplay()); !errors.Is(err, broker.ErrFilaNaoPermitida) {
 		t.Fatalf("fila fora da lista: %v", err)
 	}
 	limparFilasDeFilmes(t, ch)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
@@ -32,7 +33,10 @@ var ErrFilaNaoPermitida = errors.New("broker: fila fora da lista de replay")
 type ResultadoReplay struct {
 	Lidas        int
 	Republicadas int
-	MessageIDs   []string
+	// Retidas: não republicadas porque o evento é mais velho que o corte do
+	// dedup (PRD 0044); continuam na DLQ para decisão manual.
+	Retidas    int
+	MessageIDs []string
 }
 
 // Reprocessar devolve até limite mensagens da DLQ à exchange morfeu.events com
@@ -41,7 +45,13 @@ type ResultadoReplay struct {
 // duplica (o dedup do consumidor absorve), nunca perde. O message_id é
 // preservado — é a chave do dedup. Em dry-run nada é publicado nem
 // confirmado: as mensagens lidas voltam à DLQ quando o canal fecha.
-func (c *Client) Reprocessar(ctx context.Context, dlq string, limite int, dryRun bool) (ResultadoReplay, error) {
+//
+// corte é o instante a partir do qual o dedup do consumidor ainda vale
+// (agora − janela do dedup): mensagem com Timestamp anterior ao corte — ou sem
+// Timestamp, opção segura — NÃO é republicada nem confirmada (conta em
+// Retidas), pois o registro de dedup dela pode ter sido limpo e o efeito
+// repetiria. Retidas não consomem o limite.
+func (c *Client) Reprocessar(ctx context.Context, dlq string, limite int, dryRun bool, corte time.Time) (ResultadoReplay, error) {
 	var out ResultadoReplay
 	routingKey, ok := FilasReplay[dlq]
 	if !ok {
@@ -70,16 +80,16 @@ func (c *Client) Reprocessar(ctx context.Context, dlq string, limite int, dryRun
 	if err := ch.Confirm(false); err != nil {
 		return out, fmt.Errorf("broker: confirm no canal de replay: %w", err)
 	}
-	err = moverLote(ctx, ch, dlq, routingKey, limite, dryRun, &out)
+	err = moverLote(ctx, ch, dlq, routingKey, limite, dryRun, corte, &out)
 	c.logger.Info("replay da DLQ", zap.String("fila", dlq), zap.Bool("dry_run", dryRun),
-		zap.Int("lidas", out.Lidas), zap.Int("republicadas", out.Republicadas), zap.Strings("message_ids", out.MessageIDs))
+		zap.Int("lidas", out.Lidas), zap.Int("republicadas", out.Republicadas), zap.Int("retidas", out.Retidas), zap.Strings("message_ids", out.MessageIDs))
 	return out, err
 }
 
 // moverLote lê até limite mensagens da DLQ e, fora do dry-run, republica cada
 // uma com confirm antes do ack.
-func moverLote(ctx context.Context, ch *amqp.Channel, dlq, routingKey string, limite int, dryRun bool, out *ResultadoReplay) error {
-	for out.Lidas < limite {
+func moverLote(ctx context.Context, ch *amqp.Channel, dlq, routingKey string, limite int, dryRun bool, corte time.Time, out *ResultadoReplay) error {
+	for out.Lidas-out.Retidas < limite {
 		d, ok, err := ch.Get(dlq, false)
 		if err != nil {
 			return fmt.Errorf("broker: ler %s: %w", dlq, err)
@@ -89,6 +99,11 @@ func moverLote(ctx context.Context, ch *amqp.Channel, dlq, routingKey string, li
 		}
 		out.Lidas++
 		out.MessageIDs = append(out.MessageIDs, d.MessageId)
+		if d.Timestamp.IsZero() || d.Timestamp.Before(corte) {
+			// Sem ack: a entrega volta à DLQ quando o canal fecha.
+			out.Retidas++
+			continue
+		}
 		if dryRun {
 			continue
 		}

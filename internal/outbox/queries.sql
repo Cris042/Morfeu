@@ -47,3 +47,13 @@ WHERE id IN (
     WHERE published_at < now() - make_interval(days => @dias::int)
     LIMIT @limite::int
 );
+
+-- name: LimparProcessadas :execrows
+-- Limpeza do dedup (PRD 0044): apaga, em lote, registros com processed_at
+-- anterior ao corte (janela de 30 dias). Usa processed_messages_processed_at_idx.
+DELETE FROM processed_messages
+WHERE (message_id, consumidor) IN (
+    SELECT message_id, consumidor FROM processed_messages
+    WHERE processed_at < @antes_de::timestamptz
+    LIMIT @limite::int
+);

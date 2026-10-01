@@ -515,6 +515,34 @@ groups:
         annotations:
           summary: "Purga da trilha de auditoria parada"
           description: "A purga diária (retenção de 12 meses — doc.md §10, LGPD) não conclui há mais de 48 h: worker parado ou erro no DELETE (log ‘purga da trilha de auditoria’). Sem ela a tabela eventos_auditoria só cresce."
+      - uid: morfeu-limpeza-parada
+        title: "Limpeza operacional parada há mais de 48 h"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'time() - min(limpeza_ultima_execucao_timestamp)'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [172800]}
+        for: 0m
+        # Sem série = processo sem worker (ex.: só -mode=api): não é alerta.
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "Limpeza de processed_messages/holds parada"
+          description: "Alguma limpeza diária (processed_messages 30 d, holds terminais 7 d — PRD 0044) não conclui há mais de 48 h: worker parado ou erro no DELETE (log ‘limpeza diária’, atributo alvo). Runbook: docs/observabilidade.md, seção Limpeza operacional."
       - uid: morfeu-watchdog
         title: "Watchdog (heartbeat externo)"
         condition: C
