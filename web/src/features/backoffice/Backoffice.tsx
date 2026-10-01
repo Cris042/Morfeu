@@ -4,7 +4,9 @@ import { useSessao } from '../../api/sessao'
 import { Carregando, Vazio } from '../../ui/Estado'
 import styles from './Backoffice.module.css'
 import { Filmes } from './Filmes'
+import { PedidoDoOperador, Pedidos } from './Pedidos'
 import { Salas } from './Salas'
+import { Sessoes } from './Sessoes'
 
 /**
  * Área do operador (PRD 0038), carregada em chunk próprio. O guarda de papel
@@ -37,11 +39,20 @@ export function Backoffice() {
         <NavLink to="/backoffice/salas" className={({ isActive }) => (isActive ? styles.ativa : styles.aba)}>
           Salas
         </NavLink>
+        <NavLink to="/backoffice/sessoes" className={({ isActive }) => (isActive ? styles.ativa : styles.aba)}>
+          Sessões
+        </NavLink>
+        <NavLink to="/backoffice/pedidos" className={({ isActive }) => (isActive ? styles.ativa : styles.aba)}>
+          Pedidos
+        </NavLink>
       </nav>
       <Routes>
         <Route index element={<Navigate to="filmes" replace />} />
         <Route path="filmes" element={<Filmes />} />
         <Route path="salas" element={<Salas />} />
+        <Route path="sessoes" element={<Sessoes />} />
+        <Route path="pedidos" element={<Pedidos />} />
+        <Route path="pedidos/:id" element={<PedidoDoOperador />} />
       </Routes>
     </section>
   )

@@ -45,3 +45,11 @@ export function contagem(ms: number): string {
   const seg = total % 60
   return `${String(min).padStart(2, '0')}:${String(seg).padStart(2, '0')}`
 }
+
+/**
+ * "2099-10-01T20:30" (datetime-local, no fuso do cinema) → ISO UTC. O Brasil
+ * não tem horário de verão desde 2019: o fuso do cinema é UTC−3 fixo.
+ */
+export function paraUTCDoCinema(local: string): string {
+  return new Date(`${local}:00-03:00`).toISOString()
+}
