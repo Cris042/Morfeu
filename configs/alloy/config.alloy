@@ -45,3 +45,117 @@ loki.write "loki" {
     url = "http://loki:3100/loki/api/v1/push"
   }
 }
+
+// Traces (task 0040, ADR 0012): o app exporta 100% por OTLP/HTTP; aqui o
+// tail sampling guarda erros, lentos (> 300 ms — SLO do E12) e 10% do resto,
+// e manda ao Tempo. Receptor só na rede interna (sem porta publicada).
+otelcol.receiver.otlp "app" {
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+
+  output {
+    traces = [otelcol.processor.memory_limiter.traces.input]
+  }
+}
+
+// Antes de guardar traces em memória: recusa entrada perto do teto do container.
+otelcol.processor.memory_limiter "traces" {
+  check_interval = "1s"
+  limit          = "400MiB"
+  spike_limit    = "100MiB"
+
+  output {
+    traces = [otelcol.processor.attributes.sanitizar.input]
+  }
+}
+
+// Defesa em profundidade: a sanitização primária é no app (internal/telemetria).
+otelcol.processor.attributes "sanitizar" {
+  action {
+    key    = "url.query"
+    action = "delete"
+  }
+  action {
+    key    = "url.full"
+    action = "delete"
+  }
+  action {
+    key    = "http.url"
+    action = "delete"
+  }
+  action {
+    key    = "http.target"
+    action = "delete"
+  }
+  action {
+    pattern = "^http\\.(request|response)\\.header\\..*"
+    action  = "delete"
+  }
+  action {
+    pattern = "^db\\.query\\.parameter\\..*"
+    action  = "delete"
+  }
+  action {
+    pattern = "^(client\\.(address|port)|network\\.peer\\.address|net\\.peer\\.ip|http\\.client_ip|user_agent\\.original)$"
+    action  = "delete"
+  }
+
+  output {
+    traces = [otelcol.processor.tail_sampling.traces.input]
+  }
+}
+
+otelcol.processor.tail_sampling "traces" {
+  decision_wait                   = "10s"
+  num_traces                      = 20000
+  expected_new_traces_per_sec     = 100
+  drop_pending_traces_on_shutdown = true
+
+  policy {
+    name = "erros"
+    type = "status_code"
+
+    status_code {
+      status_codes = ["ERROR"]
+    }
+  }
+
+  policy {
+    name = "lentos"
+    type = "latency"
+
+    latency {
+      threshold_ms = 300
+    }
+  }
+
+  policy {
+    name = "amostra"
+    type = "probabilistic"
+
+    probabilistic {
+      sampling_percentage = 10
+    }
+  }
+
+  output {
+    traces = [otelcol.processor.batch.traces.input]
+  }
+}
+
+otelcol.processor.batch "traces" {
+  output {
+    traces = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "tempo:4317"
+
+    tls {
+      insecure = true
+    }
+  }
+}

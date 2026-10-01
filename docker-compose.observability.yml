@@ -4,7 +4,8 @@
 # (atalho: make obs-up). Segredos só via .env.observability (gitignored).
 #
 # Regra de exposição (doc.md §14.5): SÓ o Grafana publica porta, e em
-# 127.0.0.1. Prometheus, Loki, Alloy e exporters ficam na rede interna.
+# 127.0.0.1. Prometheus, Loki, Tempo, Alloy (inclusive o receptor OTLP) e
+# exporters ficam na rede interna.
 
 services:
   prometheus:
@@ -46,10 +47,30 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       - loki
-    mem_limit: 256m
+      - tempo
+    # Tail sampling guarda traces em memória durante a decisão (ADR 0012).
+    mem_limit: 512m
     restart: unless-stopped
     networks:
       - morfeu-network
+
+  # Traces (task 0040, ADR 0012): monolítico, disco local, retenção 72 h.
+  tempo:
+    image: grafana/tempo:2.10.4
+    container_name: morfeu-tempo
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    volumes:
+      - ./configs/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      - morfeu-tempo:/var/tempo
+    mem_limit: 384m
+    restart: unless-stopped
+    networks:
+      - morfeu-network
+
+  # Com a stack de observabilidade, o app exporta os traces ao Alloy.
+  app:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
 
   grafana:
     image: grafana/grafana:13.2.3
@@ -71,6 +92,7 @@ services:
     depends_on:
       - prometheus
       - loki
+      - tempo
     mem_limit: 256m
     restart: unless-stopped
     networks:
@@ -141,3 +163,4 @@ volumes:
   morfeu-prometheus:
   morfeu-loki:
   morfeu-grafana:
+  morfeu-tempo:

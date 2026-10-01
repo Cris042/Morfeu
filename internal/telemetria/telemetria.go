@@ -1,6 +1,7 @@
 // Package telemetria é a plataforma de observabilidade do binário (PRD 0006,
 // refinamento E0 §"Task E0d"): TracerProvider com sampling e exporter de
-// descarte explícito (sem Tempo até o E6/E10), MeterProvider exportando no
+// descarte sem coletor ou OTLP/HTTP para o Alloy (tail sampling → Tempo —
+// ADR 0012, PRD 0040), MeterProvider exportando no
 // formato Prometheus num registry dedicado e o handler de /metrics. Domínios
 // nunca importam este pacote nem OTel (ADR 0003) — a instrumentação entra por
 // middleware (Echo), tracer do pgx e pelo broker.
@@ -64,6 +65,9 @@ type Config struct {
 	Servico        string
 	Versao         string
 	TaxaAmostragem float64
+	// EndpointOTLP é o coletor (Alloy) para os traces — ex.:
+	// http://alloy:4318. Vazio = amostragem de cabeça + descarte (ADR 0012).
+	EndpointOTLP string
 }
 
 // Telemetria agrupa os providers e o registry de /metrics.
@@ -85,11 +89,20 @@ func Iniciar(ctx context.Context, cfg Config) (*Telemetria, error) {
 		return nil, fmt.Errorf("telemetria: resource: %w", err)
 	}
 
+	// ADR 0012: com coletor, o app exporta tudo e o Alloy decide (erros,
+	// lentos, 10%); sem coletor, a taxa de cabeça segue como plano B.
 	sampler := sdktrace.ParentBased(sdktrace.TraceIDRatioBased(cfg.TaxaAmostragem))
+	processador := sdktrace.NewSimpleSpanProcessor(ExporterDescarte{})
+	if cfg.EndpointOTLP != "" {
+		sampler = sdktrace.ParentBased(sdktrace.AlwaysSample())
+		if processador, err = processadorOTLP(ctx, cfg.EndpointOTLP); err != nil {
+			return nil, err
+		}
+	}
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithResource(res),
 		sdktrace.WithSampler(sampler),
-		sdktrace.WithSpanProcessor(sdktrace.NewSimpleSpanProcessor(ExporterDescarte{})),
+		sdktrace.WithSpanProcessor(processador),
 	)
 
 	registry := prometheus.NewRegistry()
@@ -138,9 +151,8 @@ func (t *Telemetria) Shutdown(ctx context.Context) error {
 	return errors.Join(t.TracerProvider.Shutdown(ctx), t.MeterProvider.Shutdown(ctx))
 }
 
-// ExporterDescarte é o exporter de traces explícito desta fase: spans
-// amostrados são descartados (sem Tempo/OTLP até o E6/E10). Existe para que o
-// pipeline de traces esteja completo — trocar por OTLP é mudar uma linha.
+// ExporterDescarte é o exporter de traces sem coletor configurado (dev sem a
+// stack de observabilidade, testes): spans amostrados são descartados.
 type ExporterDescarte struct{}
 
 // ExportSpans descarta os spans.

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/network"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"gopkg.in/yaml.v3"
 )
@@ -31,6 +32,7 @@ const (
 	imgLoki       = "grafana/loki:3.7.8"
 	imgAlloy      = "grafana/alloy:v1.20.1"
 	imgGrafana    = "grafana/grafana:13.2.3"
+	imgTempo      = "grafana/tempo:2.10.4"
 )
 
 func arquivo(t *testing.T, rel, destino string) testcontainers.ContainerFile {
@@ -117,12 +119,13 @@ func TestLoki_ConfigValida(t *testing.T) {
 	})
 }
 
-// TestAlloy_ConfigValida cobre CA04: `alloy fmt` falha em sintaxe inválida.
+// TestAlloy_ConfigValida cobre CA04: `alloy validate` falha em sintaxe ou
+// componente/argumento inválido (inclui o pipeline de traces — PRD 0040).
 func TestAlloy_ConfigValida(t *testing.T) {
 	t.Parallel() // containers próprios e portas efêmeras: isolados entre si
 	c := iniciar(t, testcontainers.ContainerRequest{
 		Image:      imgAlloy,
-		Cmd:        []string{"fmt", "/etc/alloy/config.alloy"},
+		Cmd:        []string{"validate", "/etc/alloy/config.alloy"},
 		Files:      []testcontainers.ContainerFile{arquivo(t, "configs/alloy/config.alloy", "/etc/alloy/config.alloy")},
 		WaitingFor: wait.ForExit().WithExitTimeout(60 * time.Second),
 	})
@@ -133,7 +136,7 @@ func TestAlloy_ConfigValida(t *testing.T) {
 	if estado.ExitCode != 0 {
 		logs, _ := c.Logs(context.Background())
 		b, _ := io.ReadAll(logs)
-		t.Fatalf("alloy fmt saiu com %d: %s", estado.ExitCode, b)
+		t.Fatalf("alloy validate saiu com %d: %s", estado.ExitCode, b)
 	}
 }
 
@@ -193,7 +196,7 @@ func TestGrafana_Provisionamento(t *testing.T) {
 		t.Errorf("esperava 3 dashboards na pasta Morfeu, recebi %d: %v", len(dashboards), dashboards)
 	}
 
-	for _, uid := range []string{"prometheus", "loki"} {
+	for _, uid := range []string{"prometheus", "loki", "tempo"} {
 		if code := getJSON(t, base+"/api/datasources/uid/"+uid, true, nil); code != http.StatusOK {
 			t.Errorf("datasource %s: status %d", uid, code)
 		}
@@ -238,6 +241,86 @@ func TestCompose_SoGrafanaPublicaPorta(t *testing.T) {
 			if nome != "grafana" || !strings.HasPrefix(p, "127.0.0.1:") {
 				t.Errorf("serviço %s publica porta proibida: %q", nome, p)
 			}
+		}
+	}
+}
+
+// spanOTLP monta um trace OTLP/JSON de 1 span (ids em hex, como o OTLP/HTTP).
+func spanOTLP(traceID string, erro bool, duracao time.Duration) string {
+	fim := time.Now()
+	inicio := fim.Add(-duracao)
+	status := 1
+	if erro {
+		status = 2
+	}
+	return fmt.Sprintf(`{"resourceSpans":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"morfeu-teste"}}]},`+
+		`"scopeSpans":[{"spans":[{"traceId":"%s","spanId":"%s","name":"GET /teste","kind":2,`+
+		`"startTimeUnixNano":"%d","endTimeUnixNano":"%d","status":{"code":%d}}]}]}]}`,
+		traceID, traceID[:16], inicio.UnixNano(), fim.UnixNano(), status)
+}
+
+// TestTraces_TailSamplingAteOTempo (PRD 0040, ADR 0012): Alloy e Tempo com
+// as configs reais numa rede própria; um trace com erro e um lento enviados
+// ao receptor OTLP do Alloy chegam ao Tempo (100% dos erros e dos lentos).
+// O rápido sem erro é probabilístico (10%) — não se afirma nada sobre ele.
+func TestTraces_TailSamplingAteOTempo(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	rede, err := network.New(ctx)
+	if err != nil {
+		t.Fatalf("rede: %v", err)
+	}
+	t.Cleanup(func() { _ = rede.Remove(context.Background()) })
+	tempo := iniciar(t, testcontainers.ContainerRequest{
+		Image:          imgTempo,
+		Cmd:            []string{"-config.file=/etc/tempo/tempo.yml"},
+		ExposedPorts:   []string{"3200/tcp"},
+		Networks:       []string{rede.Name},
+		NetworkAliases: map[string][]string{rede.Name: {"tempo"}},
+		Files:          []testcontainers.ContainerFile{arquivo(t, "configs/tempo/tempo.yml", "/etc/tempo/tempo.yml")},
+		WaitingFor:     wait.ForHTTP("/ready").WithPort("3200/tcp").WithStartupTimeout(120 * time.Second),
+	})
+	alloy := iniciar(t, testcontainers.ContainerRequest{
+		Image:        imgAlloy,
+		Cmd:          []string{"run", "--server.http.listen-addr=0.0.0.0:12345", "/etc/alloy/config.alloy"},
+		ExposedPorts: []string{"4318/tcp", "12345/tcp"},
+		Networks:     []string{rede.Name},
+		Files:        []testcontainers.ContainerFile{arquivo(t, "configs/alloy/config.alloy", "/etc/alloy/config.alloy")},
+		WaitingFor:   wait.ForListeningPort("4318/tcp").WithStartupTimeout(90 * time.Second),
+	})
+	otlp := endereco(t, alloy, "4318/tcp") + "/v1/traces"
+	ids := map[string]string{
+		"erro":  "0af7651916cd43dd8448eb211c80319c",
+		"lento": "1bf7651916cd43dd8448eb211c80319d",
+	}
+	enviar := func(corpo string) {
+		resp, err := http.Post(otlp, "application/json", strings.NewReader(corpo))
+		if err != nil {
+			t.Fatalf("POST OTLP: %v", err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("OTLP respondeu %d", resp.StatusCode)
+		}
+	}
+	enviar(spanOTLP(ids["erro"], true, 5*time.Millisecond))
+	enviar(spanOTLP(ids["lento"], false, 900*time.Millisecond))
+
+	base := endereco(t, tempo, "3200/tcp")
+	for nome, id := range ids {
+		deadline := time.Now().Add(60 * time.Second) // decision_wait 10 s + ingestão
+		for {
+			resp, err := http.Get(base + "/api/traces/" + id)
+			if err == nil {
+				_ = resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					break
+				}
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("trace %s (%s) não chegou ao Tempo pelo tail sampling", nome, id)
+			}
+			time.Sleep(2 * time.Second)
 		}
 	}
 }
