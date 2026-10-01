@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0041-dashboards-alertas.md
 - **Branch:** feature/0041-dashboards-alertas
 - **Data:** 2026-10-01
-- **Status:** em andamento
+- **Status:** concluído
 
 ## Objetivo
 
@@ -33,12 +33,12 @@ Configuração do Grafana (dashboards, alertas, contact point, rota), testes e r
 
 ## Critérios de aceite
 
-- [ ] CA01 — Contrato dashboards × métricas e alertas × métricas verde; mutação (typo numa métrica) falha o teste.
-- [ ] CA02 — Grafana real aceita o provisioning: 7 dashboards, 3 datasources, 18 regras por uid, 2 contact points.
-- [ ] CA03 — Rota do watchdog só para o heartbeat (o watchdog não chega ao Discord).
-- [ ] CA04 — Runbook (`docs/observabilidade.md`) com os alertas novos, o passo a passo do healthchecks.io e o que fica para a E0c-CD.
-- [ ] CA05 — Pendências do E9 baixadas do `state.md`.
-- [ ] CA06 — CI verde.
+- [x] CA01 — Contrato dashboards × métricas e alertas × métricas verde; mutação (typo numa métrica) falha o teste.
+- [x] CA02 — Grafana real aceita o provisioning: 7 dashboards, 3 datasources, 18 regras por uid, 2 contact points.
+- [x] CA03 — Rota do watchdog só para o heartbeat (o watchdog não chega ao Discord).
+- [x] CA04 — Runbook (`docs/observabilidade.md`) com os alertas novos, o passo a passo do healthchecks.io e o que fica para a E0c-CD.
+- [x] CA05 — Pendências do E9 baixadas do `state.md`.
+- [x] CA06 — CI verde.
 
 ## Plano de testes
 

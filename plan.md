@@ -4,7 +4,7 @@
 
 ## Estado corrente (2026-10-01)
 
-**Task 0041 — Dashboards de negócio, alertas e watchdog (E10 T2): implementada, em auditoria** (branch `feature/0041-dashboards-alertas`, sobre a 0040). Última task do E10.
+**Task 0041 — Dashboards de negócio, alertas e watchdog (E10 T2): auditoria APROVADA em 2026-10-01 (`qa`), PR #74** (branch `feature/0041-dashboards-alertas`, sobre a 0040). Última task do E10.
 
 ### Plano da task 0041
 
@@ -12,7 +12,7 @@
 2. ~~Alertas~~ — purga da trilha parada > 48 h; watchdog sempre ativo → contact point `heartbeat-externo` (healthchecks.io por env, rota própria, nunca ao Discord); textos de estorno cobrindo cancelamentos. 18 regras.
 3. ~~Testes~~ — contrato dashboards/alertas × métricas do código (mutação conferida); stack com 7 dashboards, 3 datasources, 18 regras por uid e 2 contact points.
 4. ~~Runbook~~ — `docs/observabilidade.md` (traces, alertas novos, healthchecks.io, pendências da E0c-CD).
-5. Passe de julgamento → PR.
+5. ~~Passe de julgamento~~ — APROVADO, sem bloqueantes. Resolvido: o contrato ignora valores de label entre aspas (falso positivo latente). Registrados: contrato não valida valores de label; rota do watchdog verificada só no aceite manual da E0c-CD.
 
 ---
 

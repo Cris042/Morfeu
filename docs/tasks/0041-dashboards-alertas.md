@@ -1,7 +1,7 @@
 # Task 0041 — Dashboards de negócio, alertas e watchdog (E10, T2)
 
 - **Data:** 2026-10-01
-- **Status:** em andamento
+- **Status:** concluída (auditoria APROVADA em 2026-10-01)
 - **Branch:** `feature/0041-dashboards-alertas` (sobre a 0040)
 - **PRD:** docs/prd/0041-dashboards-alertas.md
 - **Item do roadmap:** E10 — Observabilidade completa (2ª e última). Refinamento: `docs/refinamentos/E10-observabilidade.md` §T2.

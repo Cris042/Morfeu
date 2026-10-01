@@ -26,6 +26,8 @@ var (
 	nomeMetrica = regexp.MustCompile(`[a-z_][a-z0-9_]*`)
 	instrumento = regexp.MustCompile(`(?:Counter|Histogram|Gauge|UpDownCounter)\("([a-z0-9_]+)"|contador\("([a-z0-9_]+)"`)
 	sufixosProm = []string{"_bucket", "_count", "_sum"}
+	// literal: valores de label (ex.: etapa="gateway_falhou") não são métricas.
+	literal = regexp.MustCompile(`"[^"]*"`)
 )
 
 // declaradas lê os nomes de instrumentos do código Go (cmd/ e internal/).
@@ -67,7 +69,7 @@ func doApp(nome string) bool {
 
 func conferir(t *testing.T, origem, expr string, metricas map[string]bool) {
 	t.Helper()
-	for _, tok := range nomeMetrica.FindAllString(expr, -1) {
+	for _, tok := range nomeMetrica.FindAllString(literal.ReplaceAllString(expr, ""), -1) {
 		if !doApp(tok) {
 			continue
 		}
