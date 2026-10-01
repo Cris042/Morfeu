@@ -177,7 +177,7 @@ func (q *Queries) EncerrarCobranca(ctx context.Context, id uuid.UUID) error {
 }
 
 const estornosPendentes = `-- name: EstornosPendentes :many
-SELECT id, payment_intent_id, tentativas_estorno, atualizado_em
+SELECT id, payment_intent_id, tentativas_estorno, atualizado_em, motivo_estorno
 FROM pedidos
 WHERE status = 'estorno_pendente'
 ORDER BY atualizado_em
@@ -189,6 +189,7 @@ type EstornosPendentesRow struct {
 	PaymentIntentID   *string   `db:"payment_intent_id"`
 	TentativasEstorno int16     `db:"tentativas_estorno"`
 	AtualizadoEm      time.Time `db:"atualizado_em"`
+	MotivoEstorno     *string   `db:"motivo_estorno"`
 }
 
 // Job de estorno (PRD 0025): o backoff por tentativas é aplicado no serviço.
@@ -206,7 +207,41 @@ func (q *Queries) EstornosPendentes(ctx context.Context, limite int32) ([]Estorn
 			&i.PaymentIntentID,
 			&i.TentativasEstorno,
 			&i.AtualizadoEm,
+			&i.MotivoEstorno,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const eventosDoPedido = `-- name: EventosDoPedido :many
+SELECT de, para, ocorrido_em
+FROM pedido_eventos
+WHERE pedido_id = $1
+ORDER BY id
+`
+
+type EventosDoPedidoRow struct {
+	De         *string   `db:"de"`
+	Para       string    `db:"para"`
+	OcorridoEm time.Time `db:"ocorrido_em"`
+}
+
+func (q *Queries) EventosDoPedido(ctx context.Context, pedidoID uuid.UUID) ([]EventosDoPedidoRow, error) {
+	rows, err := q.db.Query(ctx, eventosDoPedido, pedidoID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []EventosDoPedidoRow
+	for rows.Next() {
+		var i EventosDoPedidoRow
+		if err := rows.Scan(&i.De, &i.Para, &i.OcorridoEm); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -327,6 +362,38 @@ func (q *Queries) IngressosAtivosDoPedido(ctx context.Context, pedidoID uuid.UUI
 	return items, nil
 }
 
+const ingressosDoPedido = `-- name: IngressosDoPedido :many
+SELECT assento_codigo, status
+FROM ingressos
+WHERE pedido_id = $1
+ORDER BY assento_codigo
+`
+
+type IngressosDoPedidoRow struct {
+	AssentoCodigo string `db:"assento_codigo"`
+	Status        string `db:"status"`
+}
+
+func (q *Queries) IngressosDoPedido(ctx context.Context, pedidoID uuid.UUID) ([]IngressosDoPedidoRow, error) {
+	rows, err := q.db.Query(ctx, ingressosDoPedido, pedidoID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []IngressosDoPedidoRow
+	for rows.Next() {
+		var i IngressosDoPedidoRow
+		if err := rows.Scan(&i.AssentoCodigo, &i.Status); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const inserirPedido = `-- name: InserirPedido :many
 INSERT INTO pedidos (id, codigo, email, usuario_id, dono_hash, sessao_id, assentos, total_centavos, status, expira_em, criado_em, atualizado_em)
 VALUES ($1, $2, $3, $4, $5, $6, $7::varchar[], $8, 'aguardando_pagamento', $9, $10, $10)
@@ -433,6 +500,69 @@ func (q *Queries) ListarPedidosDoUsuario(ctx context.Context, arg ListarPedidosD
 	return items, nil
 }
 
+const listarPedidosOperador = `-- name: ListarPedidosOperador :many
+SELECT id, sessao_id, email, assentos::text[] AS assentos, total_centavos, status, motivo_estorno, criado_em
+FROM pedidos
+WHERE ($1::bigint IS NULL OR sessao_id = $1::bigint)
+  AND ($2::text IS NULL OR status = $2::text)
+ORDER BY criado_em DESC, id
+LIMIT $4::int OFFSET $3::int
+`
+
+type ListarPedidosOperadorParams struct {
+	SessaoID     *int64  `db:"sessao_id"`
+	Status       *string `db:"status"`
+	Deslocamento int32   `db:"deslocamento"`
+	Limite       int32   `db:"limite"`
+}
+
+type ListarPedidosOperadorRow struct {
+	ID            uuid.UUID `db:"id"`
+	SessaoID      int64     `db:"sessao_id"`
+	Email         string    `db:"email"`
+	Assentos      []string  `db:"assentos"`
+	TotalCentavos int64     `db:"total_centavos"`
+	Status        string    `db:"status"`
+	MotivoEstorno *string   `db:"motivo_estorno"`
+	CriadoEm      time.Time `db:"criado_em"`
+}
+
+// Backoffice (PRD 0037): filtros opcionais por sessão e status, mais recentes
+// primeiro, paginado. Nunca devolve o código (credencial do convidado).
+func (q *Queries) ListarPedidosOperador(ctx context.Context, arg ListarPedidosOperadorParams) ([]ListarPedidosOperadorRow, error) {
+	rows, err := q.db.Query(ctx, listarPedidosOperador,
+		arg.SessaoID,
+		arg.Status,
+		arg.Deslocamento,
+		arg.Limite,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListarPedidosOperadorRow
+	for rows.Next() {
+		var i ListarPedidosOperadorRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SessaoID,
+			&i.Email,
+			&i.Assentos,
+			&i.TotalCentavos,
+			&i.Status,
+			&i.MotivoEstorno,
+			&i.CriadoEm,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const marcarEstorno = `-- name: MarcarEstorno :execrows
 UPDATE pedidos
 SET status = 'estorno_pendente', motivo_estorno = $1, atualizado_em = $2
@@ -458,6 +588,52 @@ func (q *Queries) MarcarEstorno(ctx context.Context, arg MarcarEstornoParams) (i
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const pedidoOperador = `-- name: PedidoOperador :many
+SELECT id, sessao_id, email, assentos::text[] AS assentos, total_centavos, status, motivo_estorno, criado_em
+FROM pedidos
+WHERE id = $1
+`
+
+type PedidoOperadorRow struct {
+	ID            uuid.UUID `db:"id"`
+	SessaoID      int64     `db:"sessao_id"`
+	Email         string    `db:"email"`
+	Assentos      []string  `db:"assentos"`
+	TotalCentavos int64     `db:"total_centavos"`
+	Status        string    `db:"status"`
+	MotivoEstorno *string   `db:"motivo_estorno"`
+	CriadoEm      time.Time `db:"criado_em"`
+}
+
+func (q *Queries) PedidoOperador(ctx context.Context, id uuid.UUID) ([]PedidoOperadorRow, error) {
+	rows, err := q.db.Query(ctx, pedidoOperador, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PedidoOperadorRow
+	for rows.Next() {
+		var i PedidoOperadorRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SessaoID,
+			&i.Email,
+			&i.Assentos,
+			&i.TotalCentavos,
+			&i.Status,
+			&i.MotivoEstorno,
+			&i.CriadoEm,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const pedidoParaNotificacao = `-- name: PedidoParaNotificacao :many

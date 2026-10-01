@@ -78,7 +78,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 		defer pool.Close()
-		for _, arq := range []string{"001_initial_schema.up.sql", "002_outbox_events.up.sql", "007_filmes.up.sql"} {
+		for _, arq := range []string{"001_initial_schema.up.sql", "002_outbox_events.up.sql", "007_filmes.up.sql", "017_eventos_auditoria.up.sql"} {
 			ddl, err := os.ReadFile("../../migrations/" + arq)
 			if err == nil {
 				_, err = pool.Exec(ctx, string(ddl))
@@ -243,6 +243,13 @@ func TestBackoffice_CRUDEArquivamento(t *testing.T) {
 	}
 	if code, _ := a.req(t, http.MethodPost, "/backoffice/filmes/999999/arquivar", a.operador, nil); code != http.StatusNotFound {
 		t.Errorf("arquivar inexistente: %d", code)
+	}
+	// Trilha do operador na mesma TX de cada mutação (PRD 0037).
+	var trilha string
+	_ = pool.QueryRow(context.Background(), `SELECT string_agg(acao, ',' ORDER BY id) FROM eventos_auditoria WHERE alvo_tipo = 'filme' AND alvo_id = $1`,
+		fmt.Sprint(f.ID)).Scan(&trilha)
+	if !strings.HasPrefix(trilha, "filme_criado,filme_atualizado,filme_arquivado") {
+		t.Errorf("trilha do filme: %q", trilha)
 	}
 	if code, _ := a.req(t, http.MethodGet, fmt.Sprintf("/filmes/%d", f.ID), "", nil); code != http.StatusNotFound {
 		t.Errorf("arquivado não pode aparecer no detalhe público: %d", code)

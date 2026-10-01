@@ -32,6 +32,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
+	"github.com/mclovin137/morfeu/internal/auditoria"
 	"github.com/mclovin137/morfeu/internal/autenticacao"
 	"github.com/mclovin137/morfeu/internal/broker"
 	"github.com/mclovin137/morfeu/internal/cache"
@@ -347,7 +348,7 @@ func registrarRotasDeDominio(e *echo.Echo, mode string, cfg *config.Config, dbPo
 	}
 	identidadeHandler, emissor := montarIdentidade(cfg, dbPool, redisClient, log)
 	identidadeHandler.RegistrarRotas(e)
-	exigirOperador := autenticacao.Exigir(emissor, autenticacao.PapelOperador)
+	exigirOperador := comAtorDaTrilha(autenticacao.Exigir(emissor, autenticacao.PapelOperador))
 	catalogoHandler.RegistrarRotasBackoffice(e, exigirOperador)
 	sessaoHandler.RegistrarRotasBackoffice(e, exigirOperador, operadorDaRequisicao)
 	reservaHandler.RegistrarRotas(e)
@@ -360,7 +361,22 @@ func registrarRotasDeDominio(e *echo.Echo, mode string, cfg *config.Config, dbPo
 		pedidoHandler.ComRotasDeTeste()
 	}
 	pedidoHandler.RegistrarRotas(e)
+	pedidoHandler.RegistrarRotasBackoffice(e, exigirOperador)
 	return pedidoServico, sessaoServico
+}
+
+// comAtorDaTrilha completa o RBAC do operador: depois do token validado, o
+// operador vai para o context como ator da trilha de auditoria (PRD 0037) —
+// os services gravam a trilha sem conhecer autenticação (ADR 0003).
+func comAtorDaTrilha(exigir echo.MiddlewareFunc) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return exigir(func(c echo.Context) error {
+			if id, ok := autenticacao.UsuarioID(c); ok {
+				c.SetRequest(c.Request().WithContext(auditoria.ComAtor(c.Request().Context(), id)))
+			}
+			return next(c)
+		})
+	}
 }
 
 // operadorDaRequisicao identifica o operador para o log de auditoria mínima
@@ -433,6 +449,7 @@ func montarReserva(dbPool *pgxpool.Pool, sessoes reserva.FonteSessoes, redisClie
 // consumidor de notificação (PRD 0028; só com broker).
 func iniciarRotinasDaSaga(ctx context.Context, e *echo.Echo, mode string, cfg *config.Config, cli *broker.Client, dbPool *pgxpool.Pool, f fonteDoEmail, wg *sync.WaitGroup, log *logger.Logger) {
 	iniciarTarefasPedido(ctx, mode, f.pedidos, wg)
+	iniciarPurgaAuditoria(ctx, mode, dbPool, wg, log)
 	if cli != nil {
 		sender := iniciarNotificacao(ctx, cfg, cli, dbPool, f, wg, log)
 		// E-mail verificável no E2E do M4 (PRD 0035): só no processo único
@@ -618,6 +635,47 @@ func (f fonteDoEmail) CarregarEstorno(ctx context.Context, id uuid.UUID) (notifi
 		return notificacao.DadosEstorno{}, err
 	}
 	return notificacao.DadosEstorno{PedidoID: id, Para: d.Email, Codigo: d.Codigo, TotalCentavos: d.TotalCentavos}, nil
+}
+
+// intervaloPurgaAuditoria: a trilha é purgada (retenção de 12 meses) 1×/dia.
+const intervaloPurgaAuditoria = 24 * time.Hour
+
+// iniciarPurgaAuditoria roda a purga da trilha do operador no worker (PRD
+// 0037) com métricas de removidos e da última execução (alerta de purga
+// parada).
+func iniciarPurgaAuditoria(ctx context.Context, mode string, dbPool *pgxpool.Pool, wg *sync.WaitGroup, log *logger.Logger) {
+	if mode != modeWorker && mode != modeAll {
+		return
+	}
+	meter := otel.Meter("morfeu/auditoria")
+	removidos, err := meter.Int64Counter("auditoria_purga_removidos_total",
+		metric.WithDescription("Eventos da trilha de auditoria removidos pela retenção de 12 meses."))
+	if err != nil {
+		log.ErrorMsg("métrica da purga", zap.Error(err))
+		os.Exit(1)
+	}
+	ultima, err := meter.Int64Gauge("auditoria_purga_ultima_execucao_timestamp",
+		metric.WithDescription("Unix time da última purga bem-sucedida da trilha de auditoria."))
+	if err != nil {
+		log.ErrorMsg("métrica da purga", zap.Error(err))
+		os.Exit(1)
+	}
+	removidos.Add(ctx, 0)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		auditoria.RodarPurga(ctx, dbPool, intervaloPurgaAuditoria, time.Now, func(n int64, err error) {
+			if err != nil {
+				log.ErrorMsg("purga da trilha de auditoria", zap.Error(err))
+				return
+			}
+			removidos.Add(ctx, n)
+			ultima.Record(ctx, time.Now().Unix())
+			if n > 0 {
+				log.Info("trilha de auditoria purgada", zap.Int64("removidos", n))
+			}
+		})
+	}()
 }
 
 // iniciarTarefasPedido roda reconciliação + estornos da saga (PRD 0025) em

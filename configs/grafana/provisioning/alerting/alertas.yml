@@ -1,6 +1,7 @@
 # Alertas mínimos (task 0007, RF06) — lista FECHADA do refinamento E0d,
 # + 1 do refinamento E1 (task 0010: reuso de refresh token), + 2 da reserva (E4)
-# + 5 da saga do checkout (refinamento E6, task 0026), + 2 do e-mail (E7, task 0029).
+# + 5 da saga do checkout (refinamento E6, task 0026), + 2 do e-mail (E7, task 0029)
+# + 1 da trilha de auditoria (refinamento E9, task 0037: purga parada).
 # Grafana-managed; roteados ao Discord. Webhook só via env ($DISCORD_WEBHOOK_URL).
 # Cada regra segue o padrão A (query instantânea) → C (threshold). Nova regra
 # exige atualizar o PRD — a lista é fechada ("sem mais um alerta").
@@ -301,7 +302,7 @@ groups:
           severity: warning
         annotations:
           summary: "Estorno automático executado"
-          description: "Um pagamento não pôde virar venda (divergência, pagamento tardio ou assento perdido) e foi estornado (ADR 0010). Isolado é esperado; repetido indica problema no checkout — ver logs do pedido pelo pedido_id."
+          description: "Um pagamento não pôde virar venda (divergência, pagamento tardio ou assento perdido) e foi estornado (ADR 0010). Isolado é esperado; repetido indica problema no checkout — ver logs do pedido pelo pedido_id. Cancelamentos (ADR 0011) não contam aqui — ver cancelamentos_total."
       - uid: morfeu-saga-estorno-preso
         title: "Estorno pendente há mais de 30 min"
         condition: C
@@ -328,7 +329,7 @@ groups:
           severity: critical
         annotations:
           summary: "Estorno pendente há mais de 30 min"
-          description: "Cliente cobrado sem ingresso e o estorno não concluiu (gateway fora, breaker aberto ou erro persistente). Ver os logs ‘estorno falhou’ e o gateway; o job repete com backoff até 1 h."
+          description: "Dinheiro a devolver (pagamento sem venda ou pedido cancelado) e o estorno não concluiu (gateway fora, breaker aberto ou erro persistente). Ver os logs ‘estorno falhou’ e o gateway; o job repete com backoff até 1 h."
       - uid: morfeu-saga-reconciliacao-parada
         title: "Pedidos vencidos não reconciliados"
         condition: C
@@ -465,3 +466,30 @@ groups:
         annotations:
           summary: "Falhas de envio de e-mail acima de 20%"
           description: "Mais de 20% das entregas falharam de forma transitória em 15 min (com ao menos 5 envios): provedor instável ou rede. As mensagens voltam à fila e, após 3 tentativas, vão à DLQ."
+      - uid: morfeu-auditoria-purga-parada
+        title: "Purga da trilha de auditoria parada há mais de 48 h"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'time() - max(auditoria_purga_ultima_execucao_timestamp)'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [172800]}
+        for: 0m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "Purga da trilha de auditoria parada"
+          description: "A purga diária (retenção de 12 meses — doc.md §10) não conclui há mais de 48 h: worker parado ou erro no DELETE (ver log ‘purga da trilha de auditoria’). Sem ela a tabela eventos_auditoria só cresce."

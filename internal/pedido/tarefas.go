@@ -196,7 +196,7 @@ func (s *Servico) ExecutarEstornos(ctx context.Context) ResumoTarefas {
 			continue
 		}
 		tentados++
-		if err := s.estornarUm(ctx, p.ID, p.PaymentIntentID, int(p.TentativasEstorno)); err != nil {
+		if err := s.estornarUm(ctx, p.ID, p.PaymentIntentID, int(p.TentativasEstorno), p.MotivoEstorno); err != nil {
 			out.Falhas++
 			continue
 		}
@@ -208,7 +208,7 @@ func (s *Servico) ExecutarEstornos(ctx context.Context) ResumoTarefas {
 // ChaveEstorno é a chave de idempotência do estorno de um pedido.
 func ChaveEstorno(id uuid.UUID) string { return "estorno-" + id.String() }
 
-func (s *Servico) estornarUm(ctx context.Context, id uuid.UUID, intencao *string, tentativas int) error {
+func (s *Servico) estornarUm(ctx context.Context, id uuid.UUID, intencao *string, tentativas int, motivo *string) error {
 	campos := []zap.Field{zap.String("pedido_id", id.String()), zap.Int("tentativas", tentativas)}
 	if intencao == nil {
 		// Não deveria existir (o pivô sempre grava a cobrança): exige olhar humano.
@@ -250,7 +250,9 @@ func (s *Servico) estornarUm(ctx context.Context, id uuid.UUID, intencao *string
 		return err
 	}
 	s.cfg.Funil(ctx, EtapaEstornado)
-	s.cfg.Compensacao(ctx, PassoEstorno)
+	if ehCompensacao(motivo) {
+		s.cfg.Compensacao(ctx, PassoEstorno)
+	}
 	s.logger.Info("pedido: estornado", campos...)
 	return nil
 }
@@ -262,4 +264,18 @@ func backoffEstorno(tentativas int) time.Duration {
 		d *= 2
 	}
 	return min(d, backoffEstornoMaximo)
+}
+
+// ehCompensacao: só o estorno automático (pagamento que não pôde virar venda —
+// ADR 0010) é compensação da saga; cancelamento é pedido do cliente, do
+// operador ou da sessão (ADR 0011) e não dispara o alerta de compensação.
+func ehCompensacao(motivo *string) bool {
+	if motivo == nil {
+		return true
+	}
+	switch *motivo {
+	case MotivoCancelamento, MotivoOperador, MotivoSessaoCancelada:
+		return false
+	}
+	return true
 }

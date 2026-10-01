@@ -86,7 +86,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 		defer pool.Close()
-		for _, arq := range []string{"001_initial_schema.up.sql", "002_outbox_events.up.sql", "007_filmes.up.sql", "008_salas_sessoes.up.sql"} {
+		for _, arq := range []string{"001_initial_schema.up.sql", "002_outbox_events.up.sql", "007_filmes.up.sql", "008_salas_sessoes.up.sql", "017_eventos_auditoria.up.sql"} {
 			ddl, err := os.ReadFile("../../migrations/" + arq)
 			if err == nil {
 				_, err = pool.Exec(ctx, string(ddl))
@@ -244,6 +244,13 @@ func TestSessao_FimSnapshotEBordas(t *testing.T) {
 	}
 	if code, corpo = a.req(t, http.MethodPost, fmt.Sprintf("/backoffice/sessoes/%d/cancelar", s.ID), a.operador, nil); code != http.StatusOK || corpo != `{"pedidos_estornados":0}` {
 		t.Errorf("cancelar de novo deveria ser idempotente (200, 0): %d %s", code, corpo)
+	}
+	// Trilha (PRD 0037): criação e cancelamento, uma vez cada.
+	var trilha string
+	_ = pool.QueryRow(context.Background(), `SELECT string_agg(acao, ',' ORDER BY id) FROM eventos_auditoria WHERE alvo_tipo = 'sessao' AND alvo_id = $1`,
+		fmt.Sprint(s.ID)).Scan(&trilha)
+	if trilha != "sessao_criada,sessao_cancelada" {
+		t.Errorf("trilha da sessão: %q", trilha)
 	}
 	if code, corpo := a.criarSessao(t, 1, sala, base); code != http.StatusCreated {
 		t.Errorf("horário da cancelada deveria estar livre: %d %s", code, corpo)

@@ -4,7 +4,20 @@
 
 ## Estado corrente (2026-10-01)
 
-**E9 refinado** (`docs/refinamentos/E9-backoffice.md`, ADR 0011). **Task 0036 — Backend: cancelamento pelo cliente e de sessão com vendidos (E9 T1): auditoria APROVADA em 2026-10-01 (`qa`), PR #68** (branch `feature/0036-cancelamento`, da main `7a1d87e`).
+**Task 0037 — Trilha de auditoria + consulta e cancelamento de pedido pelo operador (E9 T2): implementada, em auditoria** (branch `feature/0037-auditoria-operador`, da main `8ecc2a8`).
+
+### Plano da task 0037
+
+1. ~~Migration 017 + `internal/auditoria`~~ — trilha só com IDs (CHECKs), trigger contra UPDATE/TRUNCATE, `Registrar` na TX do chamador com o ator do context, purga em lotes + job diário no worker + métricas.
+2. ~~Trilha nas mutações~~ — filmes (criar/editar/arquivar/importar), salas, sessões (criar/cancelar) — as que não tinham TX passam a abrir.
+3. ~~Operador no pedido~~ — `GET /backoffice/pedidos` (filtros, e-mail mascarado, sem código), detalhe, `POST …/cancelar` (sem janela; 409 com a sessão iniciada; trilha na TX).
+4. ~~Main + RBAC~~ — `comAtorDaTrilha`, rotas, purga; teste sobre todas as rotas `/backoffice/*` do main.
+5. ~~Achado na revisão dos alertas~~ — cancelamento contava como compensação da saga (dispararia "Estorno automático executado" a cada cancelamento) → só estornos automáticos contam; alerta novo de purga parada (16 → 17, teste da stack atualizado).
+6. Lint (0) + suíte `-race` completa verdes → passe de julgamento → PR.
+
+---
+
+### Task 0036 — cancelamento: CONCLUÍDA e MERGEADA (PR #68, `8ecc2a8`). E9 refinado (PR #67). (branch `feature/0036-cancelamento`, da main `7a1d87e`).
 
 ### Plano da task 0036
 

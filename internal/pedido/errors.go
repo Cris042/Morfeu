@@ -15,6 +15,7 @@ var (
 	ErrTransicaoConcorrente = errors.New("pedido: outro caminho já transicionou o pedido")
 	ErrNaoCancelavel        = errors.New("pedido: só pedido pago, sem ingresso usado, pode ser cancelado")
 	ErrForaDaJanela         = errors.New("pedido: cancelamento só até 2h antes da sessão")
+	ErrSessaoJaComecou      = errors.New("pedido: a sessão já começou")
 )
 
 // ErroValidacao lista os campos inválidos (sem ecoar os valores — o e-mail é PII).

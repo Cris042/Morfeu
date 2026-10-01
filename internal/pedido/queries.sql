@@ -90,7 +90,7 @@ LIMIT @limite::int;
 
 -- name: EstornosPendentes :many
 -- Job de estorno (PRD 0025): o backoff por tentativas é aplicado no serviço.
-SELECT id, payment_intent_id, tentativas_estorno, atualizado_em
+SELECT id, payment_intent_id, tentativas_estorno, atualizado_em, motivo_estorno
 FROM pedidos
 WHERE status = 'estorno_pendente'
 ORDER BY atualizado_em
@@ -170,3 +170,30 @@ FROM pedidos
 WHERE sessao_id = @sessao_id
 ORDER BY id
 FOR UPDATE;
+
+-- name: ListarPedidosOperador :many
+-- Backoffice (PRD 0037): filtros opcionais por sessão e status, mais recentes
+-- primeiro, paginado. Nunca devolve o código (credencial do convidado).
+SELECT id, sessao_id, email, assentos::text[] AS assentos, total_centavos, status, motivo_estorno, criado_em
+FROM pedidos
+WHERE (sqlc.narg('sessao_id')::bigint IS NULL OR sessao_id = sqlc.narg('sessao_id')::bigint)
+  AND (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text)
+ORDER BY criado_em DESC, id
+LIMIT @limite::int OFFSET @deslocamento::int;
+
+-- name: PedidoOperador :many
+SELECT id, sessao_id, email, assentos::text[] AS assentos, total_centavos, status, motivo_estorno, criado_em
+FROM pedidos
+WHERE id = @id;
+
+-- name: IngressosDoPedido :many
+SELECT assento_codigo, status
+FROM ingressos
+WHERE pedido_id = @pedido_id
+ORDER BY assento_codigo;
+
+-- name: EventosDoPedido :many
+SELECT de, para, ocorrido_em
+FROM pedido_eventos
+WHERE pedido_id = @pedido_id
+ORDER BY id;

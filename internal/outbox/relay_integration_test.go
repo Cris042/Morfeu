@@ -124,6 +124,7 @@ func setupPostgres(ctx context.Context) (testcontainers.Container, string, error
 		"../../migrations/003_processed_messages.up.sql",
 		"../../migrations/004_catalogo_filmes_projetados.up.sql",
 		"../../migrations/007_filmes.up.sql",
+		"../../migrations/017_eventos_auditoria.up.sql", // catalogo.Criar grava a trilha (PRD 0037)
 	} {
 		ddl, err := os.ReadFile(arq)
 		if err != nil {

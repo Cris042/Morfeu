@@ -99,6 +99,7 @@ linters:
             - github.com/labstack/echo/v4
             - github.com/google/uuid
             - go.uber.org/zap
+            - github.com/mclovin137/morfeu/internal/auditoria
             - github.com/mclovin137/morfeu/internal/cache
             - github.com/mclovin137/morfeu/internal/catalogo/db
             - github.com/mclovin137/morfeu/internal/outbox
@@ -138,6 +139,7 @@ linters:
             - $gostd
             - github.com/labstack/echo/v4
             - go.uber.org/zap
+            - github.com/mclovin137/morfeu/internal/auditoria
             - github.com/mclovin137/morfeu/internal/cache
             - github.com/mclovin137/morfeu/internal/outbox
             - github.com/mclovin137/morfeu/internal/sessao/db
@@ -158,6 +160,8 @@ linters:
             - github.com/mclovin137/morfeu/internal/outbox
             - github.com/mclovin137/morfeu/internal/reserva/db
 
+        # internal/auditoria (PRD 0037) é plataforma, como o outbox: catalogo,
+        # sessao e pedido gravam a trilha do operador na própria TX.
         # Módulo pedido (PRD 0023, ADR 0010): não importa outros módulos (sessao e
         # reserva chegam por portas ligadas no main) nem driver/SDK de gateway —
         # só a porta pagamento.Gateway.
@@ -171,6 +175,7 @@ linters:
             - github.com/labstack/echo/v4
             - github.com/google/uuid
             - go.uber.org/zap
+            - github.com/mclovin137/morfeu/internal/auditoria
             - github.com/mclovin137/morfeu/internal/outbox
             - github.com/mclovin137/morfeu/internal/pedido/db
             - github.com/mclovin137/morfeu/internal/pedido/pagamento
