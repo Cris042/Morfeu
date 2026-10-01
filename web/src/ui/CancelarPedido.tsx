@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { ErroApi } from '../api/client'
 import styles from './CancelarPedido.module.css'
@@ -26,6 +26,19 @@ export function CancelarPedido({ aoCancelar }: { aoCancelar: () => Promise<unkno
   const [confirmando, setConfirmando] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState('')
+  // Teclado: ao abrir a confirmação o foco vai para "Manter pedido" (a opção
+  // segura); ao desistir, volta para o botão (auditoria 0038).
+  const manter = useRef<HTMLButtonElement>(null)
+  const abrir = useRef<HTMLButtonElement>(null)
+  const jaAbriu = useRef(false)
+  useEffect(() => {
+    if (confirmando) {
+      jaAbriu.current = true
+      manter.current?.focus()
+    } else if (jaAbriu.current) {
+      abrir.current?.focus()
+    }
+  }, [confirmando])
 
   async function cancelar() {
     setEnviando(true)
@@ -50,13 +63,13 @@ export function CancelarPedido({ aoCancelar }: { aoCancelar: () => Promise<unkno
             <button type="button" className={styles.perigo} disabled={enviando} onClick={() => void cancelar()}>
               {enviando ? 'Cancelando…' : 'Sim, cancelar'}
             </button>
-            <button type="button" className={styles.secundario} disabled={enviando} onClick={() => { setConfirmando(false) }}>
+            <button ref={manter} type="button" className={styles.secundario} disabled={enviando} onClick={() => { setConfirmando(false) }}>
               Manter pedido
             </button>
           </div>
         </div>
       ) : (
-        <button type="button" className={styles.secundario} onClick={() => { setConfirmando(true) }}>
+        <button ref={abrir} type="button" className={styles.secundario} onClick={() => { setConfirmando(true) }}>
           Cancelar pedido
         </button>
       )}

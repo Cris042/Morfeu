@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0038-spa-cancelar-backoffice.md
 - **Branch:** feature/0038-spa-cancelar-backoffice
 - **Data:** 2026-10-01
-- **Status:** em andamento
+- **Status:** concluído
 
 ## Objetivo
 
@@ -35,13 +35,13 @@ Cancelamento pelo cliente na SPA; área do operador com filmes e salas.
 
 ## Critérios de aceite
 
-- [ ] CA01 — Conta: cancelável mostra o botão; confirmar chama `POST /pedidos/{id}/cancelar` com Bearer e o detalhe recarrega sem o botão; não cancelável não mostra; 409 `fora_da_janela` explicado.
-- [ ] CA02 — Convidado: cancela com as mesmas credenciais; storage vazio; ingressos somem.
-- [ ] CA03 — Guarda: visitante → login; cliente → área restrita sem chamadas; operador entra pelo menu.
-- [ ] CA04 — Filmes: lista/arquivado; busca e importação (corpo `{"tmdb_id":…}`); tag do TMDB exibida como texto; arquivar só após confirmar; TMDB fora do ar explicado.
-- [ ] CA05 — Salas: JSON inválido não chega à API; criação envia nome + layout; `layout_em_uso` explicado na edição.
-- [ ] CA06 — Lint, typecheck, testes e build verdes; chunk `Backoffice-*.js` separado.
-- [ ] CA07 — E2E do cancelamento verde no CI (M3/M4 intactos).
+- [x] CA01 — Conta: cancelável mostra o botão; confirmar chama `POST /pedidos/{id}/cancelar` com Bearer e o detalhe recarrega sem o botão; não cancelável não mostra; 409 `fora_da_janela` explicado.
+- [x] CA02 — Convidado: cancela com as mesmas credenciais; storage vazio; ingressos somem.
+- [x] CA03 — Guarda: visitante → login; cliente → área restrita sem chamadas; operador entra pelo menu.
+- [x] CA04 — Filmes: lista/arquivado; busca e importação (corpo `{"tmdb_id":…}`); tag do TMDB exibida como texto; arquivar só após confirmar; TMDB fora do ar explicado.
+- [x] CA05 — Salas: JSON inválido não chega à API; criação envia nome + layout; `layout_em_uso` explicado na edição.
+- [x] CA06 — Lint, typecheck, testes e build verdes; chunk `Backoffice-*.js` separado.
+- [x] CA07 — E2E do cancelamento verde no CI (M3/M4 intactos).
 
 ## Plano de testes
 
@@ -70,9 +70,9 @@ Cancelamento pelo cliente na SPA; área do operador com filmes e salas.
 
 - `web/src/api/{client.ts, conta.ts, consulta.ts, tipos.ts}`, `web/src/app/{App.tsx, MenuConta.tsx}`
 - `web/src/features/conta/{MeusPedidos.tsx, Conta.test.tsx}`, `web/src/features/consulta/{Consulta.tsx, Consulta.test.tsx}`, `web/e2e/m4.spec.ts`
-- `docs/tasks/README.md`, `plan.md`, `state.md`
+- `docs/tasks/README.md`, `docs/roadmap.md`, `plan.md`, `state.md`
 
-Total: 24.
+Total: 25.
 
 ## Dependências utilizadas
 

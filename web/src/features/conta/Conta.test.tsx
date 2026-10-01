@@ -163,6 +163,10 @@ describe('meus pedidos', () => {
     abrir(`/conta/pedidos/${id}`)
     await userEvent.click(await screen.findByRole('button', { name: 'Cancelar pedido' }))
     expect(screen.getByText(/Os ingressos deixam de valer na hora/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Manter pedido' })).toHaveFocus()
+    await userEvent.click(screen.getByRole('button', { name: 'Manter pedido' }))
+    expect(screen.getByRole('button', { name: 'Cancelar pedido' })).toHaveFocus()
+    await userEvent.click(screen.getByRole('button', { name: 'Cancelar pedido' }))
     // Depois de cancelar, o detalhe recarrega e já não oferece o botão.
     const f = apiFalsa({
       '/api/auth/refresh': sessaoOk,
