@@ -159,8 +159,19 @@ func getJSON(t *testing.T, url string, autenticado bool, destino any) int {
 	return resp.StatusCode
 }
 
+// regrasEsperadas é a lista FECHADA de alertas, por uid (task 0041): regra
+// nova exige atualizar o PRD e esta lista — não basta mudar uma contagem.
+var regrasEsperadas = []string{
+	"morfeu-disco-80", "morfeu-api-fora", "morfeu-erro-5xx", "morfeu-dlq-crescendo", "morfeu-consumidor-parado", "morfeu-pg-conexoes",
+	"morfeu-refresh-reuso", "morfeu-trava-recusas", "morfeu-sweeper-parado",
+	"morfeu-saga-estorno", "morfeu-saga-estorno-preso", "morfeu-saga-reconciliacao-parada", "morfeu-gateway-breaker", "morfeu-saga-latencia",
+	"morfeu-email-recusado", "morfeu-email-falhando",
+	"morfeu-auditoria-purga-parada", "morfeu-watchdog",
+}
+
 // TestGrafana_Provisionamento cobre CA03: o provisioning do repo é aceito no
-// boot e expõe 3 dashboards, 2 datasources, 16 alertas e o contact point.
+// boot e expõe 7 dashboards, 3 datasources, as 18 regras (por uid) e os
+// contact points do Discord e do heartbeat.
 func TestGrafana_Provisionamento(t *testing.T) {
 	t.Parallel() // containers próprios e portas efêmeras: isolados entre si
 	files := append(arquivosDe(t, "configs/grafana/provisioning", "/etc/grafana/provisioning"),
@@ -173,6 +184,7 @@ func TestGrafana_Provisionamento(t *testing.T) {
 			"GF_AUTH_ANONYMOUS_ENABLED":  "false",
 			"GF_USERS_ALLOW_SIGN_UP":     "false",
 			"DISCORD_WEBHOOK_URL":        "http://127.0.0.1:9/sem-webhook-configurado",
+			"HEALTHCHECKS_PING_URL":      "http://127.0.0.1:9/sem-heartbeat-configurado",
 		},
 		Files:      files,
 		WaitingFor: wait.ForHTTP("/api/health").WithPort("3000/tcp").WithStartupTimeout(120 * time.Second),
@@ -187,13 +199,13 @@ func TestGrafana_Provisionamento(t *testing.T) {
 		getJSON(t, base+"/api/search?type=dash-db&folderUIDs=morfeu", true, &dashboards)
 		getJSON(t, base+"/api/v1/provisioning/alert-rules", true, &regras)
 		getJSON(t, base+"/api/v1/provisioning/contact-points", true, &contatos)
-		if (len(dashboards) == 3 && len(regras) == 16 && len(contatos) > 0) || time.Now().After(deadline) {
+		if (len(dashboards) == 7 && len(regras) == len(regrasEsperadas) && len(contatos) > 1) || time.Now().After(deadline) {
 			break
 		}
 		time.Sleep(time.Second)
 	}
-	if len(dashboards) != 3 {
-		t.Errorf("esperava 3 dashboards na pasta Morfeu, recebi %d: %v", len(dashboards), dashboards)
+	if len(dashboards) != 7 {
+		t.Errorf("esperava 7 dashboards na pasta Morfeu (3 do E0d + 4 de negócio do E10), recebi %d: %v", len(dashboards), dashboards)
 	}
 
 	for _, uid := range []string{"prometheus", "loki", "tempo"} {
@@ -202,18 +214,27 @@ func TestGrafana_Provisionamento(t *testing.T) {
 		}
 	}
 
-	if len(regras) != 16 {
-		t.Errorf("esperava 16 regras de alerta (6 do E0d + reuso de refresh do E1 + 2 da reserva do E4 + 5 da saga do E6 + 2 do e-mail do E7), recebi %d", len(regras))
-	}
-
-	achou := false
-	for _, cp := range contatos {
-		if cp["name"] == "discord-morfeu" && cp["type"] == "discord" {
-			achou = true
+	provisionadas := map[string]bool{}
+	for _, r := range regras {
+		if uid, ok := r["uid"].(string); ok {
+			provisionadas[uid] = true
 		}
 	}
-	if !achou {
-		t.Errorf("contact point discord-morfeu ausente: %v", contatos)
+	for _, uid := range regrasEsperadas {
+		if !provisionadas[uid] {
+			t.Errorf("regra %s ausente", uid)
+		}
+	}
+	if len(regras) != len(regrasEsperadas) {
+		t.Errorf("esperava exatamente %d regras (lista fechada), recebi %d", len(regrasEsperadas), len(regras))
+	}
+
+	tipos := map[string]any{}
+	for _, cp := range contatos {
+		tipos[fmt.Sprint(cp["name"])] = cp["type"]
+	}
+	if tipos["discord-morfeu"] != "discord" || tipos["heartbeat-externo"] != "webhook" {
+		t.Errorf("contact points esperados (discord-morfeu/discord, heartbeat-externo/webhook): %v", tipos)
 	}
 
 	if code := getJSON(t, base+"/api/search", false, nil); code != http.StatusUnauthorized {
