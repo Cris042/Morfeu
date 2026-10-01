@@ -4,6 +4,8 @@
 
 ## Estado corrente (2026-10-01)
 
+**E10 concluído (PR #74 mergeado). Épico E11 refinado** (`docs/refinamentos/E11-hardening-backup.md`, ADR 0013): 3 tasks — 0042 (hardening + roles) → 0043 (backup/restore) → 0044 (limpeza operacional). Próxima: **0042**.
+
 **Task 0041 — Dashboards de negócio, alertas e watchdog (E10 T2): auditoria APROVADA em 2026-10-01 (`qa`), PR #74** (branch `feature/0041-dashboards-alertas`, sobre a 0040). Última task do E10.
 
 ### Plano da task 0041
