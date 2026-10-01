@@ -4,7 +4,18 @@
 
 ## Estado corrente (2026-10-01)
 
-**Task 0038 — SPA: cancelar pedido + backoffice de filmes e salas (E9 T3a): auditoria APROVADA em 2026-10-01 (`qa`), PR #70** (branch `feature/0038-spa-cancelar-backoffice`, da main `4403b0b`). A T3 do refinamento foi dividida em 0038/0039 (passaria de 30 arquivos — previsto no refinamento).
+**Task 0039 — SPA: sessões e pedidos do operador + E2E do backoffice (E9 T3b): implementada, em auditoria** (branch `feature/0039-spa-sessoes-pedidos`, sobre a 0038). Última task do E9.
+
+### Plano da task 0039
+
+1. ~~API e fuso~~ — hooks de sessões/pedidos do operador; `paraUTCDoCinema` (UTC−3 fixo).
+2. ~~Telas~~ — Sessões (programar; cancelar mostrando antes os pedidos pagos afetados) e Pedidos (filtros, detalhe com histórico, cancelar).
+3. ~~Testes~~ — 6 de componente (13 no backoffice); E2E `backoffice.spec.ts` (sala → sessão → pública → compra D6 → operador cancela) + operador semeado no workflow de E2E.
+4. Lint + typecheck + build → passe de julgamento → PR.
+
+---
+
+### Task 0038 — SPA: cancelar + backoffice de filmes e salas: CONCLUÍDA (PR #70)
 
 ### Plano da task 0038
 

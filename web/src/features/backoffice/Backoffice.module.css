@@ -72,6 +72,7 @@
 }
 
 .campo input,
+.campo select,
 .campo textarea {
   padding: var(--espaco-3);
   font: inherit;
@@ -89,6 +90,7 @@
 }
 
 .campo input:focus-visible,
+.campo select:focus-visible,
 .campo textarea:focus-visible {
   outline: none;
   box-shadow: var(--halo);

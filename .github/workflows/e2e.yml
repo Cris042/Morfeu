@@ -68,6 +68,15 @@ jobs:
       - name: Semear a sessão de teste
         run: docker compose exec -T postgres psql -U postgres -d morfeu -v ON_ERROR_STOP=1 < web/e2e/seed.sql
 
+      - name: Semear o operador de teste (backoffice — PRD 0039)
+        run: |
+          email="operador-e2e@morfeu.dev"
+          senha=$(docker compose exec -T app /app seed-operador -nome "Operador E2E" -email "$email" | sed -n 's/.*guarde-a): //p')
+          test -n "$senha"
+          echo "::add-mask::$senha"
+          echo "E2E_OPERADOR_EMAIL=$email" >> "$GITHUB_ENV"
+          echo "E2E_OPERADOR_SENHA=$senha" >> "$GITHUB_ENV"
+
       - name: Setup Node (versão do .nvmrc, cache do npm)
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -81,7 +90,7 @@ jobs:
           npm ci --no-fund
           npx playwright install --with-deps chromium
 
-      - name: Playwright (M3, caminho feliz e sessão entre abas)
+      - name: Playwright (M3, M4, cancelamento e backoffice)
         working-directory: web
         run: npx playwright test
 
