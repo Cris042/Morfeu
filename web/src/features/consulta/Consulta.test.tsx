@@ -19,6 +19,7 @@ const pedido = {
   total_centavos: 6400,
   status: 'pago',
   expira_em: '2099-10-01T23:30:00Z',
+  cancelavel: false,
 }
 
 async function consultar(email: string, codigo: string) {
@@ -48,6 +49,23 @@ describe('consulta de convidado', () => {
     renderizar(<Consulta />)
     await consultar('ana@exemplo.com', 'ABCD2345EFGH6789')
     expect(await screen.findByText(/aparecem aqui quando o pagamento é confirmado/)).toBeInTheDocument()
+  })
+
+  it('convidado cancela com as mesmas credenciais, só em memória (PRD 0038)', async () => {
+    const f = apiFalsa({
+      '/api/pedidos/consulta': { corpo: { pedido: { ...pedido, cancelavel: true }, ingressos: [{ assento: 'C4', ref }] } },
+      '/api/pedidos/consulta/cancelar': { corpo: { pedido: { ...pedido, status: 'estorno_pendente' }, ingressos: [] } },
+    })
+    renderizar(<Consulta />)
+    await consultar('ana@exemplo.com', 'ABCD2345EFGH6789')
+    await userEvent.click(await screen.findByRole('button', { name: 'Cancelar pedido' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Sim, cancelar' }))
+    expect(await screen.findByText('Estorno em andamento')).toBeInTheDocument()
+    expect(screen.getByText(/Pedido cancelado: o valor volta/)).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Ingresso C4' })).not.toBeInTheDocument()
+    const cancelar = f.mock.calls.find(([u]) => u === '/api/pedidos/consulta/cancelar')
+    expect(cancelar?.[1]?.body).toBe('{"email":"ana@exemplo.com","codigo":"ABCD2345EFGH6789"}')
+    expect(window.localStorage.length + window.sessionStorage.length).toBe(0)
   })
 
   it.each([

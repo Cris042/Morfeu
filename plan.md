@@ -4,7 +4,19 @@
 
 ## Estado corrente (2026-10-01)
 
-**Task 0037 — Trilha de auditoria + consulta e cancelamento de pedido pelo operador (E9 T2): auditoria APROVADA em 2026-10-01 (`security`), PR #69** (branch `feature/0037-auditoria-operador`, da main `8ecc2a8`).
+**Task 0038 — SPA: cancelar pedido + backoffice de filmes e salas (E9 T3a): auditoria APROVADA em 2026-10-01 (`qa`), PR #70** (branch `feature/0038-spa-cancelar-backoffice`, da main `4403b0b`). A T3 do refinamento foi dividida em 0038/0039 (passaria de 30 arquivos — previsto no refinamento).
+
+### Plano da task 0038
+
+1. ~~Tipos/API~~ — `cancelavel`, `useCancelarDaConta`, `cancelarPorConsulta`, `api.put`, `api/backoffice.ts`.
+2. ~~Cancelar~~ — `ui/CancelarPedido` (confirmação + mensagens) na conta e na consulta (credenciais só em memória).
+3. ~~Backoffice~~ — rota lazy `/backoffice/*` com guarda de papel; Filmes (TMDB, arquivar) e Salas (layout em JSON); link no menu do operador.
+4. ~~Testes~~ — 3 de conta, 1 de consulta, 7 do backoffice (99 no total, verdes); E2E do cancelamento do convidado em `m4.spec.ts` (roda no CI).
+5. ~~Lint + typecheck + build + passe de julgamento~~ — APROVADO, sem bloqueantes. Resolvido: foco do teclado na confirmação do cancelamento (vai a "Manter pedido" e volta ao botão) + teste; contagem do PRD. Registrados: testes de componente para 429/`nao_cancelavel`/`tmdb_sem_duracao`/`nome_em_uso` (mapeamento trivial); `window.confirm` no arquivar (acessível, ação rara).
+
+---
+
+### Task 0037 — trilha de auditoria + operador: CONCLUÍDA e MERGEADA (PR #69, `4403b0b`)
 
 ### Plano da task 0037
 

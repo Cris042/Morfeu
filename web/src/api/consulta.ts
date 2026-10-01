@@ -20,6 +20,11 @@ export function consultarPedido(email: string, codigo: string) {
   return api.post<ResultadoConsulta>('/pedidos/consulta', { email, codigo })
 }
 
+/** Cancela o pedido do convidado com as mesmas credenciais da consulta (PRD 0036). */
+export function cancelarPorConsulta(email: string, codigo: string) {
+  return api.post<ResultadoConsulta>('/pedidos/consulta/cancelar', { email, codigo })
+}
+
 /** GET /i/{ref} — o ingresso válido (404 inválido; 410 expirado/cancelado). */
 export interface Ingresso {
   assento: string

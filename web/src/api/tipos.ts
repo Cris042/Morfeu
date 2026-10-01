@@ -70,4 +70,6 @@ export interface Pedido {
   total_centavos: number
   status: StatusPedido
   expira_em: string
+  /** O cliente ainda pode cancelar (pago e até 2h antes — decidido no servidor, PRD 0036). */
+  cancelavel: boolean
 }
