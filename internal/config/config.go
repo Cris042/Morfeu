@@ -18,11 +18,13 @@ type Config struct {
 	RedisURL    string
 	RabbitMQURL string
 	LogLevel    string
-	AppPort     string
-	CacheTTL    time.Duration
-	PoolMinSize int
-	PoolMaxSize int
-	PoolTimeout time.Duration
+	// OTLPEndpoint: coletor de traces (Alloy) — vazio = sem exportação (ADR 0012).
+	OTLPEndpoint string
+	AppPort      string
+	CacheTTL     time.Duration
+	PoolMinSize  int
+	PoolMaxSize  int
+	PoolTimeout  time.Duration
 
 	// Autenticação (PRD 0009). JWTSegredo nunca tem default nem é logado.
 	JWTSegredo        string
@@ -64,11 +66,12 @@ func LoadConfig() (*Config, error) {
 		// Sem default de credencial real (RNF01 do PRD 0002 — nunca guest/guest
 		// hardcoded); o default aqui é só para dev local com o docker-compose
 		// deste repo, cujo usuário/senha vêm de .env.docker-compose (gitignored).
-		RabbitMQURL: getEnv("RABBITMQ_URL", "amqp://morfeu:morfeu@localhost:5672/"),
-		LogLevel:    getEnv("LOG_LEVEL", "info"),
-		AppPort:     getEnv("APP_PORT", "8080"),
-		PoolMinSize: getEnvInt("POOL_MIN_SIZE", 5),
-		PoolMaxSize: getEnvInt("POOL_MAX_SIZE", 25),
+		RabbitMQURL:  getEnv("RABBITMQ_URL", "amqp://morfeu:morfeu@localhost:5672/"),
+		LogLevel:     getEnv("LOG_LEVEL", "info"),
+		OTLPEndpoint: getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
+		AppPort:      getEnv("APP_PORT", "8080"),
+		PoolMinSize:  getEnvInt("POOL_MIN_SIZE", 5),
+		PoolMaxSize:  getEnvInt("POOL_MAX_SIZE", 25),
 
 		JWTSegredo: getEnv("JWT_SEGREDO", ""),
 		JWTKid:     getEnv("JWT_KID", "k1"),

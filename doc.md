@@ -36,7 +36,7 @@ flowchart LR
     WK --> MAIL["📧 Resend/Brevo"]
     API <--> STRIPE["💳 Stripe sandbox<br/>(webhook assinado)"]
     API --> TMDB["🎬 TMDB API"]
-    OBS["📊 Prometheus · Grafana · Loki · (Tempo)"] -.observa.-> API
+    OBS["📊 Prometheus · Grafana · Loki · Tempo"] -.observa.-> API
     OBS -.alerta.-> DC["Discord"]
 ```
 
@@ -281,7 +281,7 @@ ADRs de padrão de código criados em 2026-07-07 (confronto multiagente sobre pr
 |---|---|---|
 | Métricas | Prometheus + Grafana (self-hosted, provisionados por arquivo) | R$ 0 |
 | Logs | Loki + **Grafana Alloy** como agente único (Promtail deprecado) | R$ 0 |
-| Traces | OTel SDK **desde o dia 1** (sampling 10% + 100% erros); servidor **Tempo entra com a saga** (E6/E10) | R$ 0 |
+| Traces | OTel SDK **desde o dia 1**; **Tempo no E10** — o app exporta 100% por OTLP/HTTP e o **Alloy decide por tail sampling** (100% erros, 100% acima de 300 ms, 10% do resto — ADR 0012); retenção 72 h | R$ 0 |
 | Alertas | Grafana Alerting → **Discord** (webhook) + UptimeRobot/healthchecks.io externos | R$ 0 |
 | Exporters | node_exporter, cAdvisor, postgres_exporter, redis_exporter, `rabbitmq_prometheus` | R$ 0 |
 

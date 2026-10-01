@@ -4,7 +4,18 @@
 
 ## Estado corrente (2026-10-01)
 
-**Task 0039 — SPA: sessões e pedidos do operador + E2E do backoffice (E9 T3b): auditoria APROVADA em 2026-10-01 (`qa`, após 1 correção), PR #71** (branch `feature/0039-spa-sessoes-pedidos`, sobre a 0038). Última task do E9.
+**E10 refinado** (`docs/refinamentos/E10-observabilidade.md`, ADR 0012). **Task 0040 — Traces: Tempo + OTLP + tail sampling no Alloy (E10 T1): implementada, em auditoria** (branch `feature/0040-tempo-otlp`).
+
+### Plano da task 0040
+
+1. ~~App~~ — `otlptracehttp` v1.46.0; `exportacao.go` (lote sem bloquear, sem retry; `Sanitizar` remove query/URL/headers/parâmetros e troca o path pela rota); sampler `AlwaysSample` com coletor, cabeça 10% + descarte sem.
+2. ~~Stack~~ — Tempo 2.10.4 (local, 72 h, sem porta); Alloy com receptor OTLP → memory_limiter → remoção de atributos → tail sampling (ERROR, > 300 ms, 10%) → Tempo, 512 MB; datasource Tempo + derived field `trace_id` no Loki; `app` com `OTEL_EXPORTER_OTLP_ENDPOINT` no compose de observabilidade.
+3. ~~Testes~~ — coletor falso (sanitização), coletor fora (não bloqueia), `alloy validate`, Alloy→Tempo real (erro e lento chegam).
+4. Lint 0; govulncheck sem vulnerabilidade alcançável → passe de julgamento → PR.
+
+---
+
+### Task 0039 — SPA: sessões e pedidos do operador: CONCLUÍDA e MERGEADA (PR #71). **E9 concluído.**
 
 ### Plano da task 0039
 

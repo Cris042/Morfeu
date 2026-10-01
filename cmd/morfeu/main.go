@@ -169,7 +169,7 @@ func runServer(mode string) {
 		zap.String("mode", mode),
 	)
 
-	tel := iniciarTelemetria(log)
+	tel := iniciarTelemetria(cfg, log)
 	defer encerrarTelemetria(tel, log)
 
 	dbPool, err := createDBPool(cfg, log)
@@ -236,11 +236,12 @@ func runServer(mode string) {
 
 // iniciarTelemetria sobe traces + métricas (RF01/RF02, PRD 0006); falha é
 // fatal — sem providers o processo perderia a observabilidade em silêncio.
-func iniciarTelemetria(log *logger.Logger) *telemetria.Telemetria {
+func iniciarTelemetria(cfg *config.Config, log *logger.Logger) *telemetria.Telemetria {
 	tel, err := telemetria.Iniciar(context.Background(), telemetria.Config{
 		Servico:        "morfeu",
 		Versao:         versao,
 		TaxaAmostragem: telemetria.TaxaAmostragemPadrao,
+		EndpointOTLP:   cfg.OTLPEndpoint,
 	})
 	if err != nil {
 		log.ErrorMsg("Failed to start telemetry", zap.Error(err))
