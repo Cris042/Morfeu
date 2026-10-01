@@ -205,10 +205,12 @@ func TestCancelar_CicloCompleto(t *testing.T) {
 	if _, err := a.reserva.Travar(context.Background(), p.SessaoID, []string{"A1"}, d); err == nil {
 		t.Fatal("assento não pode voltar à venda antes do estorno")
 	}
-	// O banco é compartilhado pela suíte: estornos de outros testes (outro
-	// fake) falham aqui — o que importa é este pedido.
-	for range 3 {
-		a.servico.ExecutarEstornos(context.Background())
+	// Estorno só deste pedido (o lote do job é global e o banco é
+	// compartilhado pela suíte — isolado contra resíduos de outros testes).
+	var pi *string
+	_ = pool.QueryRow(context.Background(), `SELECT payment_intent_id FROM pedidos WHERE id = $1`, p.ID).Scan(&pi)
+	if err := a.servico.estornarUm(context.Background(), p.ID, pi, 0); err != nil {
+		t.Fatalf("estornar: %v", err)
 	}
 	if statusDe(t, p.ID) != string(Estornado) || vezes(a.gateway.Estornos(), ChaveEstorno(p.ID)) != 1 {
 		t.Fatalf("status %s, estornos %v", statusDe(t, p.ID), a.gateway.Estornos())

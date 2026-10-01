@@ -43,4 +43,4 @@ Convenção: `NNNN-titulo-kebab.md`, numeração sequencial a partir de `0001`. 
 | 0033 | [SPA: checkout e pagamento](./0033-spa-checkout.md) | E8 (T3) | concluída (auditoria APROVADA; PR #64) | `feature/0033-spa-checkout` | [0033](../prd/0033-spa-checkout.md) |
 | 0034 | [Backend: consulta de convidado e página do ingresso](./0034-consulta-ingresso.md) | E8 (T4) | concluída (auditoria APROVADA; PR #65) | `feature/0034-consulta-ingresso` | [0034](../prd/0034-consulta-ingresso.md) |
 | 0035 | [SPA: consulta e ingresso + E2E do M4](./0035-spa-consulta-m4.md) | E8 (T5) | concluída (auditoria APROVADA; PR #66) | `feature/0035-spa-consulta-m4` | [0035](../prd/0035-spa-consulta-m4.md) |
-| 0036 | [Backend: cancelamento pelo cliente e de sessão com vendidos](./0036-cancelamento.md) | E9 (T1) | em andamento | `feature/0036-cancelamento` | [0036](../prd/0036-cancelamento.md) |
+| 0036 | [Backend: cancelamento pelo cliente e de sessão com vendidos](./0036-cancelamento.md) | E9 (T1) | concluída (auditoria APROVADA; PR #68) | `feature/0036-cancelamento` | [0036](../prd/0036-cancelamento.md) |

@@ -4,15 +4,15 @@
 
 ## Estado corrente (2026-10-01)
 
-**E9 refinado** (`docs/refinamentos/E9-backoffice.md`, ADR 0011). **Task 0036 — Backend: cancelamento pelo cliente e de sessão com vendidos (E9 T1): implementada, em auditoria** (branch `feature/0036-cancelamento`, da main `7a1d87e`).
+**E9 refinado** (`docs/refinamentos/E9-backoffice.md`, ADR 0011). **Task 0036 — Backend: cancelamento pelo cliente e de sessão com vendidos (E9 T1): auditoria APROVADA em 2026-10-01 (`qa`), PR #68** (branch `feature/0036-cancelamento`, da main `7a1d87e`).
 
 ### Plano da task 0036
 
 1. ~~Migration 016 + máquina de estados + janela~~ — motivos `cancelamento|operador|sessao_cancelada`, índice `pedidos(sessao_id)`; `pago + CancelamentoSolicitado → estorno_pendente`; `DentroDaJanela` inclusiva.
 2. ~~Serviço e rotas~~ — `POST /pedidos/:id/cancelar` (conta) e `POST /pedidos/consulta/cancelar` (convidado, mesmo caminho/limite da consulta); `cancelavel` nas visões; métrica `cancelamentos_total{origem}`.
 3. ~~Sessão~~ — `CancelarSessao` numa TX com a porta `PedidosDaSessao` (ligada no main), 409 `sessao_iniciada`, resposta `{"pedidos_estornados": n}`; pivô estorna pagamento de sessão cancelada.
-4. ~~Testes~~ — 8 de integração (conta, convidado, recusas, ciclo completo, concorrência, sessão com estados mistos, pivô, corrida pivô × sessão) + unit da janela/matriz. **Desvios achados pelos testes:** (a) deadlock pivô × cancelamento da sessão (FK de `ingressos` pede KEY SHARE na sessão) → trava da sessão com `FOR NO KEY UPDATE`; (b) `LiberarDoPedido` não devolvia holds vendidos — o assento de pedido estornado nunca voltaria → passa a liberar `convertido` também (ADR 0011 ajustado; teste da reserva atualizado).
-5. Lint (0) + suíte `-race` completa verdes → passe de julgamento → PR. SPA do cancelamento → 0038.
+4. ~~Testes~~ — 8 de integração (conta, convidado, recusas, ciclo completo, concorrência, sessão com estados mistos, pivô, corrida pivô × sessão) + unit da janela/matriz. **Desvios achados pelos testes:** (a) deadlock pivô × cancelamento da sessão (FK de `ingressos` pede KEY SHARE na sessão) → trava da sessão com `FOR NO KEY UPDATE`; (b) `LiberarDoPedido` não devolvia holds vendidos — o assento de pedido estornado nunca voltaria → passa a liberar `convertido` também (texto do ADR 0011 explicitado no #67; teste da reserva atualizado).
+5. ~~Lint + suíte `-race` + passe de julgamento~~ — APROVADO, sem bloqueantes. Resolvidos: teste do ciclo isolado do lote global do job (estorno só do próprio pedido); `CancelarSessao` recusa rodar sem a porta do pedido; lista de arquivos do PRD. Registrados: cenários cliente × cancelamento da sessão e `tem_usado` concorrente (relevante quando o check-in existir). SPA do cancelamento → 0038.
 
 ---
 

@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0036-cancelamento.md
 - **Branch:** feature/0036-cancelamento
 - **Data:** 2026-10-01
-- **Status:** em andamento
+- **Status:** concluído
 
 ## Objetivo
 
@@ -47,16 +47,16 @@ Domínio, migration, serviço, rotas, porta `sessao → pedido`, pivô, métrica
 
 ## Critérios de aceite
 
-- [ ] CA01 — Tabela de transições: `pago + CancelamentoSolicitado → estorno_pendente`; o evento é ilegal em todos os outros estados.
-- [ ] CA02 — Fronteira: início − 2h01 e − 2h00 cancelável; − 1h59 e sessão iniciada não (unit com relógio fixo).
-- [ ] CA03 — Logado cancela o próprio pedido → 200 `estorno_pendente`, `cancelavel=false`, ingressos cancelados, `/i/*` → 410, métrica `cliente`; repetir → 200 sem segundo evento na trilha; pedido de outra conta → 404; sem token → 401; sem anti-CSRF → 403.
-- [ ] CA04 — Convidado cancela por e-mail + código → 200 com `ingressos: []`; e-mail errado/código inexistente → idênticos ao 404 da consulta; teto de requisições compartilhado com a consulta.
-- [ ] CA05 — Fora da janela → 409 `fora_da_janela`; pedido `aguardando_pagamento` → 409 `nao_cancelavel`; ingresso `usado` → 409.
-- [ ] CA06 — Ciclo completo: cancelado → job de estorno → `estornado`, assentos liberados (novo hold no mesmo assento aceito), evento `pedido.estornado` na outbox.
-- [ ] CA07 — Corrida: N cancelamentos concorrentes do mesmo pedido → exatamente 1 transição e 1 estorno no gateway.
-- [ ] CA08 — Sessão com pedidos em estados mistos (pago ×2, aguardando, expirado, estornado) → só os pagos vão a `estorno_pendente` (`sessao_cancelada`), ingressos cancelados; resposta `pedidos_estornados: 2`; repetir → 0; sessão iniciada → 409; inexistente → 404.
-- [ ] CA09 — Pagamento confirmado depois do cancelamento da sessão → `estorno_pendente` (`sessao_cancelada`), nenhum ingresso emitido.
-- [ ] CA10 — Lint, suíte `-race` e CI verdes; M3/M4 intactos.
+- [x] CA01 — Tabela de transições: `pago + CancelamentoSolicitado → estorno_pendente`; o evento é ilegal em todos os outros estados.
+- [x] CA02 — Fronteira: início − 2h01 e − 2h00 cancelável; − 1h59 e sessão iniciada não (unit com relógio fixo).
+- [x] CA03 — Logado cancela o próprio pedido → 200 `estorno_pendente`, `cancelavel=false`, ingressos cancelados, `/i/*` → 410, métrica `cliente`; repetir → 200 sem segundo evento na trilha; pedido de outra conta → 404; sem token → 401; sem anti-CSRF → 403.
+- [x] CA04 — Convidado cancela por e-mail + código → 200 com `ingressos: []`; e-mail errado/código inexistente → idênticos ao 404 da consulta; teto de requisições compartilhado com a consulta.
+- [x] CA05 — Fora da janela → 409 `fora_da_janela`; pedido `aguardando_pagamento` → 409 `nao_cancelavel`; ingresso `usado` → 409.
+- [x] CA06 — Ciclo completo: cancelado → job de estorno → `estornado`, assentos liberados (novo hold no mesmo assento aceito), evento `pedido.estornado` na outbox.
+- [x] CA07 — Corrida: N cancelamentos concorrentes do mesmo pedido → exatamente 1 transição e 1 estorno no gateway.
+- [x] CA08 — Sessão com pedidos em estados mistos (pago ×2, aguardando, expirado, estornado) → só os pagos vão a `estorno_pendente` (`sessao_cancelada`), ingressos cancelados; resposta `pedidos_estornados: 2`; repetir → 0; sessão iniciada → 409; inexistente → 404.
+- [x] CA09 — Pagamento confirmado depois do cancelamento da sessão → `estorno_pendente` (`sessao_cancelada`), nenhum ingresso emitido.
+- [x] CA10 — Lint, suíte `-race` e CI verdes; M3/M4 intactos.
 
 ## Plano de testes
 
@@ -86,11 +86,12 @@ Domínio, migration, serviço, rotas, porta `sessao → pedido`, pivô, métrica
 ## Arquivos que serão modificados
 
 - `internal/pedido/{estados.go, errors.go, queries.sql, service.go, repositorio.go, pivo.go, handler.go, consulta.go, dominio_test.go, handler_test.go}`, `internal/pedido/db/queries.sql.go` (gerado)
-- `internal/sessao/{service.go, handler.go, queries.sql, handler_test.go}`, `internal/sessao/db/queries.sql.go` (gerado)
+- `internal/sessao/{service.go, handler.go, errors.go, queries.sql, handler_test.go}`, `internal/sessao/db/queries.sql.go` (gerado)
+- `internal/reserva/{pedido.go, queries.sql, pedido_test.go}`, `internal/reserva/db/queries.sql.go` (gerado) — desvio achado pelos testes: `LiberarDoPedido` devolve também os holds vendidos no estorno
 - `cmd/morfeu/main.go`, `.golangci.yml`
 - `doc.md`, `docs/tasks/README.md`, `plan.md`, `state.md`
 
-Total: ~28.
+Total previsto ~28; real 32 (29 autorais + 3 gerados — ver plan.md).
 
 ## Dependências utilizadas
 

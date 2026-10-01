@@ -31,6 +31,7 @@ import (
 	"github.com/mclovin137/morfeu/internal/cache"
 	"github.com/mclovin137/morfeu/internal/catalogo"
 	catalogodb "github.com/mclovin137/morfeu/internal/catalogo/db"
+	"github.com/mclovin137/morfeu/internal/outbox"
 	"github.com/mclovin137/morfeu/internal/sessao/db"
 )
 
@@ -102,6 +103,13 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+// semPedidos é a porta do pedido sem pedidos (PRD 0036).
+type semPedidos struct{}
+
+func (semPedidos) CancelarPedidosDaSessao(context.Context, outbox.Tx, int64) (int64, error) {
+	return 0, nil
+}
+
 type ambiente struct {
 	e         *echo.Echo
 	operador  string
@@ -132,6 +140,7 @@ func montarAmbiente(t *testing.T, agora func() time.Time) *ambiente {
 	if err != nil {
 		t.Fatalf("serviço: %v", err)
 	}
+	s.LigarPedidos(semPedidos{}, nil) // a porta real é testada na suíte do pedido
 	e := echo.New()
 	NovoHandler(s, logTeste).RegistrarRotasPublicas(e)
 	NovoHandler(s, logTeste).RegistrarRotasBackoffice(e, autenticacao.Exigir(emissor, autenticacao.PapelOperador),

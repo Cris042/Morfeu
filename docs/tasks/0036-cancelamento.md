@@ -1,7 +1,7 @@
 # Task 0036 — Backend: cancelamento pelo cliente e cancelamento de sessão com vendidos (E9, T1)
 
 - **Data:** 2026-10-01
-- **Status:** em andamento
+- **Status:** concluída (auditoria APROVADA em 2026-10-01)
 - **Branch:** `feature/0036-cancelamento` (da main `7a1d87e`)
 - **PRD:** docs/prd/0036-cancelamento.md
 - **Item do roadmap:** E9 — Backoffice restante (1ª de 3). Refinamento: `docs/refinamentos/E9-backoffice.md` §T1. ADR 0011.

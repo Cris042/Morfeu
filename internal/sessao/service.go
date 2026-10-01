@@ -58,10 +58,10 @@ type PedidosDaSessao interface {
 
 // Config agrupa as dependências injetadas pelo main.
 type Config struct {
-	Filmes     FonteFilmes
+	Filmes FonteFilmes
 	// Pool abre a TX do cancelamento da sessão (PRD 0036); nil só em testes
 	// que não cancelam sessão.
-	Pool outbox.Pool
+	Pool       outbox.Pool
 	AoConflito func(context.Context) // incrementa sessao_conflitos_total (RF07)
 	Agora      func() time.Time
 	Cache      cache.Cache // opcional (PRD 0014): cache das sessões públicas
@@ -313,8 +313,9 @@ func (s *Servico) ListarSessoesBackoffice(ctx context.Context, f FiltroSessoes) 
 // pedidos pagos vão para estorno pela porta do pedido (ADR 0011); sessão
 // agendada que já começou não é cancelada. Devolve quantos pedidos foram.
 func (s *Servico) CancelarSessao(ctx context.Context, id int64, operador string) (int64, error) {
-	if s.cfg.Pool == nil {
-		return 0, errors.New("sessao: cancelar sem pool")
+	if s.cfg.Pool == nil || s.pedidos == nil {
+		// Sem a porta, pedidos pagos ficariam sem estorno (auditoria 0036).
+		return 0, errors.New("sessao: cancelar sem pool ou sem a porta do pedido")
 	}
 	var filmeID, n int64
 	err := outbox.WithTx(ctx, s.cfg.Pool, func(tx outbox.Tx) error {
@@ -348,10 +349,8 @@ func (s *Servico) cancelarNaTx(ctx context.Context, tx outbox.Tx, id int64) (fil
 	if _, err := q.CancelarSessao(ctx, id); err != nil {
 		return 0, 0, fmt.Errorf("sessao: cancelar sessão: %w", err)
 	}
-	if s.pedidos != nil {
-		if n, err = s.pedidos.CancelarPedidosDaSessao(ctx, tx, id); err != nil {
-			return 0, 0, fmt.Errorf("sessao: estornar pedidos: %w", err)
-		}
+	if n, err = s.pedidos.CancelarPedidosDaSessao(ctx, tx, id); err != nil {
+		return 0, 0, fmt.Errorf("sessao: estornar pedidos: %w", err)
 	}
 	return linhas[0].FilmeID, n, nil
 }
