@@ -10,7 +10,7 @@ import { Carregando, Falha, Vazio } from '../../ui/Estado'
 import { hora, preco } from '../../ui/formato'
 import styles from './Conta.module.css'
 
-const ROTULOS: Record<StatusPedido, string> = {
+export const ROTULOS: Record<StatusPedido, string> = {
   aguardando_pagamento: 'Aguardando pagamento',
   pago: 'Pago',
   expirado: 'Expirado',

@@ -92,8 +92,8 @@ func NovoStripe(cfg ConfigStripe) (*Stripe, error) {
 // pedido (retry não duplica cobrança).
 func (s *Stripe) CriarCobranca(ctx context.Context, c Cobranca) (Intencao, error) {
 	params := &stripe.PaymentIntentCreateParams{
-		Amount:                  stripe.Int64(c.ValorCentavos),
-		Currency:                stripe.String(c.Moeda),
+		Amount:   stripe.Int64(c.ValorCentavos),
+		Currency: stripe.String(c.Moeda),
 		// Sem métodos de redirecionamento (PRD 0033): o SPA confirma na própria
 		// página e o client_secret nunca volta numa URL de retorno.
 		AutomaticPaymentMethods: &stripe.PaymentIntentCreateAutomaticPaymentMethodsParams{

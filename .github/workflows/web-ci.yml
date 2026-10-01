@@ -6,9 +6,9 @@ name: Web CI
 on:
   push:
     branches: [main]
-    paths: ["web/**", ".github/workflows/web-ci.yml"]
+    paths: ["web/**", "configs/caddy/**", ".github/workflows/web-ci.yml"]
   pull_request:
-    paths: ["web/**", ".github/workflows/web-ci.yml"]
+    paths: ["web/**", "configs/caddy/**", ".github/workflows/web-ci.yml"]
 
 permissions:
   contents: read
@@ -60,6 +60,15 @@ jobs:
         run: |
           ! grep -rl -e '__teste' -e 'Pagar (teste)' dist/
           ! grep -rlE 'sk_(test|live)_|rk_(test|live)_|whsec_' dist/
+
+      # O E2E roda sob a mesma CSP do Caddy (PRD 0035): a cópia do preview
+      # não pode divergir da fonte.
+      - name: CSP do preview igual à do Caddy
+        run: |
+          csp=$(grep -o 'Content-Security-Policy "[^"]*"' ../configs/caddy/seguranca.caddy | sed 's/^Content-Security-Policy "//; s/"$//')
+          test -n "$csp"
+          # Linha exata (sem texto extra antes/depois da política).
+          grep -qxF "  \"$csp\"" vite.config.ts
 
       - name: Auditoria de dependências (gate)
         run: npm audit --audit-level=high

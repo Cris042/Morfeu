@@ -28,7 +28,7 @@
   padding: 22px 0 var(--espaco-8);
   border-top: 1px solid var(--veludo);
   font-size: 0.8rem;
-  color: #7a7096;
+  color: var(--nevoa); /* #7a7096 dava 4,08:1 (axe, PRD 0035) */
 }
 
 .menu {
