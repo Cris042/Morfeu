@@ -180,10 +180,11 @@ func (h *Handler) cancelarSessao(c echo.Context, operador string) error {
 	if !ok {
 		return naoEncontrado(c)
 	}
-	if err := h.servico.CancelarSessao(c.Request().Context(), id, operador); err != nil {
+	n, err := h.servico.CancelarSessao(c.Request().Context(), id, operador)
+	if err != nil {
 		return h.responderErro(c, err)
 	}
-	return c.NoContent(http.StatusNoContent)
+	return c.JSON(http.StatusOK, map[string]int64{"pedidos_estornados": n})
 }
 
 func (h *Handler) responderErro(c echo.Context, err error) error {
@@ -206,6 +207,8 @@ func (h *Handler) responderErro(c echo.Context, err error) error {
 		return c.JSON(http.StatusUnprocessableEntity, map[string]string{"erro": "sala_inexistente"})
 	case errors.Is(err, ErrFilmeIndisponivel):
 		return c.JSON(http.StatusUnprocessableEntity, map[string]string{"erro": "filme_indisponivel"})
+	case errors.Is(err, ErrSessaoIniciada):
+		return c.JSON(http.StatusConflict, map[string]string{"erro": "sessao_iniciada"})
 	case errors.Is(err, ErrSalaNaoEncontrada), errors.Is(err, ErrSessaoNaoEncontrada):
 		return naoEncontrado(c)
 	default:

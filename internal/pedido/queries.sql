@@ -68,7 +68,7 @@ WHERE id = @id
 FOR UPDATE;
 
 -- name: MarcarEstorno :execrows
--- CAS para estorno_pendente, registrando o motivo (divergencia|tardio|emissao).
+-- CAS para estorno_pendente, registrando o motivo (ADR 0010/0011).
 UPDATE pedidos
 SET status = 'estorno_pendente', motivo_estorno = @motivo, atualizado_em = @agora
 WHERE id = @id AND status = @de;
@@ -148,3 +148,25 @@ SELECT i.assento_codigo, i.status, i.versao_token, i.sessao_id, p.status AS stat
 FROM ingressos i
 JOIN pedidos p ON p.id = i.pedido_id
 WHERE i.id = @id;
+
+-- name: TravarParaCancelar :many
+-- Cancelamento (PRD 0036): trava o pedido e diz se algum ingresso já foi usado.
+SELECT p.id, p.sessao_id, p.status, p.usuario_id,
+       EXISTS (SELECT 1 FROM ingressos i WHERE i.pedido_id = p.id AND i.status = 'usado') AS tem_usado
+FROM pedidos p
+WHERE p.id = @id
+FOR UPDATE OF p;
+
+-- name: CancelarIngressosDoPedido :execrows
+-- Ingressos invalidados na TX do cancelamento (ADR 0011): o /i/* vira 410.
+UPDATE ingressos SET status = 'cancelado'
+WHERE pedido_id = @pedido_id AND status = 'ativo';
+
+-- name: TravarPedidosDaSessao :many
+-- Cancelamento da sessão (PRD 0036 RF11): trava TODOS os pedidos da sessão
+-- (ordem fixa contra deadlock) — um pivô em curso termina antes.
+SELECT id, status
+FROM pedidos
+WHERE sessao_id = @sessao_id
+ORDER BY id
+FOR UPDATE;

@@ -65,6 +65,20 @@ func (q *Queries) BuscarPedidoDoDono(ctx context.Context, arg BuscarPedidoDoDono
 	return items, nil
 }
 
+const cancelarIngressosDoPedido = `-- name: CancelarIngressosDoPedido :execrows
+UPDATE ingressos SET status = 'cancelado'
+WHERE pedido_id = $1 AND status = 'ativo'
+`
+
+// Ingressos invalidados na TX do cancelamento (ADR 0011): o /i/* vira 410.
+func (q *Queries) CancelarIngressosDoPedido(ctx context.Context, pedidoID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, cancelarIngressosDoPedido, pedidoID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const contarPresos = `-- name: ContarPresos :one
 SELECT
     count(*) FILTER (WHERE status = 'aguardando_pagamento' AND expira_em <= $1)::bigint AS aguardando_vencido,
@@ -432,7 +446,7 @@ type MarcarEstornoParams struct {
 	De     string    `db:"de"`
 }
 
-// CAS para estorno_pendente, registrando o motivo (divergencia|tardio|emissao).
+// CAS para estorno_pendente, registrando o motivo (ADR 0010/0011).
 func (q *Queries) MarcarEstorno(ctx context.Context, arg MarcarEstornoParams) (int64, error) {
 	result, err := q.db.Exec(ctx, marcarEstorno,
 		arg.Motivo,
@@ -756,6 +770,49 @@ func (q *Queries) Transicionar(ctx context.Context, arg TransicionarParams) (int
 	return result.RowsAffected(), nil
 }
 
+const travarParaCancelar = `-- name: TravarParaCancelar :many
+SELECT p.id, p.sessao_id, p.status, p.usuario_id,
+       EXISTS (SELECT 1 FROM ingressos i WHERE i.pedido_id = p.id AND i.status = 'usado') AS tem_usado
+FROM pedidos p
+WHERE p.id = $1
+FOR UPDATE OF p
+`
+
+type TravarParaCancelarRow struct {
+	ID        uuid.UUID  `db:"id"`
+	SessaoID  int64      `db:"sessao_id"`
+	Status    string     `db:"status"`
+	UsuarioID *uuid.UUID `db:"usuario_id"`
+	TemUsado  bool       `db:"tem_usado"`
+}
+
+// Cancelamento (PRD 0036): trava o pedido e diz se algum ingresso já foi usado.
+func (q *Queries) TravarParaCancelar(ctx context.Context, id uuid.UUID) ([]TravarParaCancelarRow, error) {
+	rows, err := q.db.Query(ctx, travarParaCancelar, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TravarParaCancelarRow
+	for rows.Next() {
+		var i TravarParaCancelarRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SessaoID,
+			&i.Status,
+			&i.UsuarioID,
+			&i.TemUsado,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const travarPedido = `-- name: TravarPedido :many
 SELECT id, sessao_id, assentos::text[] AS assentos, total_centavos, status, payment_intent_id
 FROM pedidos
@@ -790,6 +847,41 @@ func (q *Queries) TravarPedido(ctx context.Context, id uuid.UUID) ([]TravarPedid
 			&i.Status,
 			&i.PaymentIntentID,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const travarPedidosDaSessao = `-- name: TravarPedidosDaSessao :many
+SELECT id, status
+FROM pedidos
+WHERE sessao_id = $1
+ORDER BY id
+FOR UPDATE
+`
+
+type TravarPedidosDaSessaoRow struct {
+	ID     uuid.UUID `db:"id"`
+	Status string    `db:"status"`
+}
+
+// Cancelamento da sessão (PRD 0036 RF11): trava TODOS os pedidos da sessão
+// (ordem fixa contra deadlock) — um pivô em curso termina antes.
+func (q *Queries) TravarPedidosDaSessao(ctx context.Context, sessaoID int64) ([]TravarPedidosDaSessaoRow, error) {
+	rows, err := q.db.Query(ctx, travarPedidosDaSessao, sessaoID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TravarPedidosDaSessaoRow
+	for rows.Next() {
+		var i TravarPedidosDaSessaoRow
+		if err := rows.Scan(&i.ID, &i.Status); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

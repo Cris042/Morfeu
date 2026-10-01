@@ -18,6 +18,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/mclovin137/morfeu/internal/cache"
+	"github.com/mclovin137/morfeu/internal/outbox"
 	"github.com/mclovin137/morfeu/internal/sessao/db"
 )
 
@@ -47,9 +48,20 @@ type FonteFilmes interface {
 	DuracaoFilmeAtivo(ctx context.Context, filmeID int64) (duracaoMin int32, ok bool, err error)
 }
 
+// PedidosDaSessao é a porta transacional para o módulo pedido (ADR 0011): na
+// TX do cancelamento da sessão, manda para estorno os pedidos pagos dela e
+// devolve quantos foram. O adapter é ligado no main (nenhum módulo importa o
+// outro).
+type PedidosDaSessao interface {
+	CancelarPedidosDaSessao(ctx context.Context, tx outbox.Tx, sessaoID int64) (int64, error)
+}
+
 // Config agrupa as dependências injetadas pelo main.
 type Config struct {
 	Filmes     FonteFilmes
+	// Pool abre a TX do cancelamento da sessão (PRD 0036); nil só em testes
+	// que não cancelam sessão.
+	Pool outbox.Pool
 	AoConflito func(context.Context) // incrementa sessao_conflitos_total (RF07)
 	Agora      func() time.Time
 	Cache      cache.Cache // opcional (PRD 0014): cache das sessões públicas
@@ -60,6 +72,16 @@ type Servico struct {
 	q      *db.Queries
 	cfg    Config
 	logger *zap.Logger
+	// pedidos e aoEstornar são ligados depois de criar o pedido (que depende
+	// deste serviço) — ver LigarPedidos.
+	pedidos    PedidosDaSessao
+	aoEstornar func(ctx context.Context, n int64)
+}
+
+// LigarPedidos liga a porta do pedido (ADR 0011). aoEstornar roda depois do
+// commit com o número de pedidos mandados para estorno (métrica).
+func (s *Servico) LigarPedidos(p PedidosDaSessao, aoEstornar func(ctx context.Context, n int64)) {
+	s.pedidos, s.aoEstornar = p, aoEstornar
 }
 
 // NovoServico cria o serviço; Filmes é obrigatório.
@@ -287,20 +309,55 @@ func (s *Servico) ListarSessoesBackoffice(ctx context.Context, f FiltroSessoes) 
 }
 
 // CancelarSessao tira a sessão da programação (idempotente), libera o
-// horário na EXCLUDE e invalida a lista pública do filme. Cancelar com
-// ingressos vendidos é E9.
-func (s *Servico) CancelarSessao(ctx context.Context, id int64, operador string) error {
-	filmes, err := s.q.CancelarSessao(ctx, id)
+// horário na EXCLUDE e invalida a lista pública do filme. Numa TX única, os
+// pedidos pagos vão para estorno pela porta do pedido (ADR 0011); sessão
+// agendada que já começou não é cancelada. Devolve quantos pedidos foram.
+func (s *Servico) CancelarSessao(ctx context.Context, id int64, operador string) (int64, error) {
+	if s.cfg.Pool == nil {
+		return 0, errors.New("sessao: cancelar sem pool")
+	}
+	var filmeID, n int64
+	err := outbox.WithTx(ctx, s.cfg.Pool, func(tx outbox.Tx) error {
+		var err error
+		filmeID, n, err = s.cancelarNaTx(ctx, tx, id)
+		return err
+	})
 	if err != nil {
-		return fmt.Errorf("sessao: cancelar sessão: %w", err)
+		return 0, err
 	}
-	if len(filmes) == 0 {
-		return ErrSessaoNaoEncontrada
+	if s.aoEstornar != nil {
+		s.aoEstornar(ctx, n)
 	}
-	s.invalidarFilme(ctx, filmes[0])
-	s.logger.Info("sessão cancelada", zap.String("operador_id", operador), zap.Int64("sessao_id", id))
-	return nil
+	s.invalidarFilme(ctx, filmeID)
+	s.logger.Info("sessão cancelada", zap.String("operador_id", operador), zap.Int64("sessao_id", id), zap.Int64("pedidos_estornados", n))
+	return n, nil
 }
+
+func (s *Servico) cancelarNaTx(ctx context.Context, tx outbox.Tx, id int64) (filmeID, n int64, err error) {
+	q := s.q.WithTx(tx)
+	linhas, err := q.TravarSessao(ctx, id)
+	if err != nil {
+		return 0, 0, fmt.Errorf("sessao: travar sessão: %w", err)
+	}
+	if len(linhas) == 0 {
+		return 0, 0, ErrSessaoNaoEncontrada
+	}
+	if linhas[0].Status == statusAgendada && !linhas[0].Inicio.After(s.cfg.Agora()) {
+		return 0, 0, ErrSessaoIniciada
+	}
+	if _, err := q.CancelarSessao(ctx, id); err != nil {
+		return 0, 0, fmt.Errorf("sessao: cancelar sessão: %w", err)
+	}
+	if s.pedidos != nil {
+		if n, err = s.pedidos.CancelarPedidosDaSessao(ctx, tx, id); err != nil {
+			return 0, 0, fmt.Errorf("sessao: estornar pedidos: %w", err)
+		}
+	}
+	return linhas[0].FilmeID, n, nil
+}
+
+// statusAgendada é o status da sessão em programação (CHECK da migration 008).
+const statusAgendada = "agendada"
 
 // SessaoPublica é a sessão vista pelo público (PRD 0014 RF01) — sem nenhum
 // campo de filme (o SPA já tem o filme; fronteira ADR 0003).
@@ -397,9 +454,10 @@ func (s *Servico) PrecoDaSessaoAberta(ctx context.Context, sessaoID int64) (int6
 
 // SessaoDoIngresso são os dados de uma sessão que o ingresso mostra.
 type SessaoDoIngresso struct {
-	FilmeID int64
-	Inicio  time.Time
-	Sala    string
+	FilmeID   int64
+	Inicio    time.Time
+	Sala      string
+	Cancelada bool
 }
 
 // DadosParaIngresso é a porta da notificação (PRD 0028): sessão de um
@@ -413,7 +471,14 @@ func (s *Servico) DadosParaIngresso(ctx context.Context, sessaoID int64) (Sessao
 		return SessaoDoIngresso{}, false, nil
 	}
 	l := linhas[0]
-	return SessaoDoIngresso{FilmeID: l.FilmeID, Inicio: l.Inicio, Sala: l.SalaNome}, true, nil
+	return SessaoDoIngresso{FilmeID: l.FilmeID, Inicio: l.Inicio, Sala: l.SalaNome, Cancelada: l.Status != statusAgendada}, true, nil
+}
+
+// InicioDaSessao é a porta do pedido (PRD 0036 RF09): início e se a sessão
+// foi cancelada, em qualquer status. ok=false quando não existe.
+func (s *Servico) InicioDaSessao(ctx context.Context, sessaoID int64) (time.Time, bool, bool, error) {
+	d, ok, err := s.DadosParaIngresso(ctx, sessaoID)
+	return d.Inicio, d.Cancelada, ok, err
 }
 
 func futuras(lista []SessaoPublica, agora time.Time) []SessaoPublica {

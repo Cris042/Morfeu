@@ -340,6 +340,8 @@ func registrarRotasDeDominio(e *echo.Echo, mode string, cfg *config.Config, dbPo
 	// usam o serviço do pedido e a porta transacional da reserva.
 	reservaHandler, reservaServico := montarReserva(dbPool, sessaoServico, redisClient, cacheLayer, log)
 	pedidoHandler, pedidoServico := montarPedido(cfg, dbPool, sessaoServico, reservaServico, infoSessao(sessaoServico, catalogoServico), redisClient, log)
+	// Cancelar sessão com vendidos (ADR 0011): porta transacional sessao → pedido.
+	sessaoServico.LigarPedidos(pedidoServico, pedidoServico.ContarCancelamentosDaSessao)
 	if mode == modeWorker {
 		return pedidoServico, sessaoServico
 	}
@@ -378,6 +380,7 @@ func montarSessao(dbPool *pgxpool.Pool, filmes sessao.FonteFilmes, c cache.Cache
 		os.Exit(1)
 	}
 	servico, err := sessao.NovoServico(sessaodb.New(dbPool), sessao.Config{
+		Pool:       dbPool,
 		Filmes:     filmes,
 		AoConflito: func(ctx context.Context) { conflitos.Add(ctx, 1) },
 		Cache:      c,
@@ -674,6 +677,11 @@ func montarPedido(cfg *config.Config, dbPool *pgxpool.Pool, sessoes pedido.Fonte
 	if err != nil {
 		fatal("métrica de compensações", err)
 	}
+	cancelamentos, err := meter.Int64Counter("cancelamentos_total",
+		metric.WithDescription("Pedidos pagos cancelados (→ estorno) por origem (cliente|operador|sessao)."))
+	if err != nil {
+		fatal("métrica de cancelamentos", err)
+	}
 	pc := pedido.Config{
 		SegredosToken: map[int16][]byte{1: segredoToken(cfg, log)},
 		Sessoes:       sessoes,
@@ -686,6 +694,9 @@ func montarPedido(cfg *config.Config, dbPool *pgxpool.Pool, sessoes pedido.Fonte
 		},
 		Compensacao: func(ctx context.Context, passo string) {
 			compensacoes.Add(ctx, 1, metric.WithAttributes(attribute.String("passo", passo)))
+		},
+		Cancelamento: func(ctx context.Context, origem string, n int64) {
+			cancelamentos.Add(ctx, n, metric.WithAttributes(attribute.String("origem", origem)))
 		},
 		// Consulta de convidado e página do ingresso (PRD 0034).
 		Consulta: &pedido.ConfigConsulta{
@@ -715,6 +726,9 @@ func montarPedido(cfg *config.Config, dbPool *pgxpool.Pool, sessoes pedido.Fonte
 	// As séries nascem em 0: sem isso o increase() não enxerga o 1º estorno.
 	for _, passo := range []string{pedido.PassoCobranca, pedido.PassoEstorno} {
 		compensacoes.Add(context.Background(), 0, metric.WithAttributes(attribute.String("passo", passo)))
+	}
+	for _, origem := range []string{pedido.OrigemCliente, pedido.OrigemOperador, pedido.OrigemSessao} {
+		cancelamentos.Add(context.Background(), 0, metric.WithAttributes(attribute.String("origem", origem)))
 	}
 	return pedido.NovoHandler(servico, log.Logger), servico
 }

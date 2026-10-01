@@ -64,8 +64,9 @@ func (s *Servico) ConverterDoPedido(ctx context.Context, tx outbox.Tx, pedidoID 
 	return codigos, nil
 }
 
-// LiberarDoPedido devolve os assentos ainda presos ao pedido (RF05); holds já
-// vendidos não são tocados.
+// LiberarDoPedido devolve os assentos do pedido (RF05): os presos e, quando o
+// pedido pago é estornado (cancelamento — ADR 0011), os vendidos. Só é
+// chamado na expiração/falha (nada vendido) e no estornado.
 func (s *Servico) LiberarDoPedido(ctx context.Context, tx outbox.Tx, pedidoID uuid.UUID) (int64, error) {
 	n, err := db.New(tx).LiberarDoPedido(ctx, db.LiberarDoPedidoParams{Agora: s.cfg.Agora(), PedidoID: &pedidoID})
 	if err != nil {

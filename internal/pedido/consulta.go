@@ -131,13 +131,24 @@ func (s *Servico) ContarIngresso(ctx context.Context, ip string) error {
 // inexistente e e-mail errado passam pelo mesmo caminho e dão o mesmo
 // ErrPedidoNaoEncontrado. Links só de ingressos ativos de pedido pago.
 func (s *Servico) Consultar(ctx context.Context, email, codigo string) (ResultadoConsulta, error) {
+	p, err := s.localizar(ctx, email, codigo)
+	if err != nil {
+		return ResultadoConsulta{}, err
+	}
+	return s.resultadoDaConsulta(ctx, p)
+}
+
+// localizar acha o pedido do convidado por e-mail + código: código
+// inexistente e e-mail errado passam pelo mesmo caminho (comparação em tempo
+// constante contra o e-mail fantasma) e dão o mesmo ErrPedidoNaoEncontrado.
+func (s *Servico) localizar(ctx context.Context, email, codigo string) (db.PedidoPorCodigoRow, error) {
 	q := db.New(s.pool)
 	codigo = normalizarCodigo(codigo)
 	var linhas []db.PedidoPorCodigoRow
 	if codigoValido(codigo) {
 		var err error
 		if linhas, err = q.PedidoPorCodigo(ctx, codigo); err != nil {
-			return ResultadoConsulta{}, fmt.Errorf("pedido: consulta: %w", err)
+			return db.PedidoPorCodigoRow{}, fmt.Errorf("pedido: consulta: %w", err)
 		}
 	}
 	alvo := emailFantasma
@@ -147,15 +158,25 @@ func (s *Servico) Consultar(ctx context.Context, email, codigo string) (Resultad
 	a := sha256.Sum256([]byte(normalizarEmail(email)))
 	b := sha256.Sum256([]byte(normalizarEmail(alvo)))
 	if subtle.ConstantTimeCompare(a[:], b[:]) != 1 || len(linhas) != 1 {
-		return ResultadoConsulta{}, ErrPedidoNaoEncontrado
+		return db.PedidoPorCodigoRow{}, ErrPedidoNaoEncontrado
 	}
-	p := linhas[0]
+	return linhas[0], nil
+}
+
+// resultadoDaConsulta monta a visão do convidado: links só de ingressos
+// ativos de pedido pago.
+func (s *Servico) resultadoDaConsulta(ctx context.Context, p db.PedidoPorCodigoRow) (ResultadoConsulta, error) {
 	out := ResultadoConsulta{Pedido: Visao{ID: p.ID, Codigo: p.Codigo, SessaoID: p.SessaoID, Assentos: p.Assentos,
 		TotalCentavos: p.TotalCentavos, Status: Status(p.Status), ExpiraEm: p.ExpiraEm}}
 	if out.Pedido.Status != Pago {
 		return out, nil
 	}
-	ingressos, err := q.IngressosAtivosDoPedido(ctx, p.ID)
+	vs := []Visao{out.Pedido}
+	if err := s.marcarCancelaveis(ctx, vs); err != nil {
+		return ResultadoConsulta{}, err
+	}
+	out.Pedido = vs[0]
+	ingressos, err := db.New(s.pool).IngressosAtivosDoPedido(ctx, p.ID)
 	if err != nil {
 		return ResultadoConsulta{}, fmt.Errorf("pedido: ingressos da consulta: %w", err)
 	}

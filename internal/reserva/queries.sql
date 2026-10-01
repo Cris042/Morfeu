@@ -91,7 +91,8 @@ WHERE pedido_id = @pedido_id AND status = 'convertido'
 ORDER BY assento_codigo;
 
 -- name: LiberarDoPedido :execrows
--- Porta do pedido (RF05): devolve os assentos ainda presos (nunca vendidos).
+-- Porta do pedido (RF05): devolve os assentos do pedido — presos ou, no
+-- estorno de pedido pago (cancelamento — ADR 0011), já vendidos.
 UPDATE holds
 SET status = 'liberado', atualizado_em = @agora
-WHERE pedido_id = @pedido_id AND status = 'ativo';
+WHERE pedido_id = @pedido_id AND status IN ('ativo', 'convertido');

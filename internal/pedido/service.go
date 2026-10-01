@@ -18,6 +18,9 @@ import (
 // uma sessão aberta. ok=false = sessão indisponível.
 type FonteSessoes interface {
 	PrecoDaSessaoAberta(ctx context.Context, sessaoID int64) (centavos int64, ok bool, err error)
+	// InicioDaSessao vale para qualquer status (PRD 0036 RF09): janela do
+	// cancelamento e sessão cancelada no pivô. ok=false = inexistente.
+	InicioDaSessao(ctx context.Context, sessaoID int64) (inicio time.Time, cancelada, ok bool, err error)
 }
 
 // Reserva é a porta transacional para o módulo reserva (ADR 0010): os
@@ -65,6 +68,8 @@ type Config struct {
 	SegredosToken map[int16][]byte
 	// Compensacao conta cada compensação executada (saga_compensacoes_total{passo}).
 	Compensacao func(ctx context.Context, passo string)
+	// Cancelamento conta os pedidos cancelados (cancelamentos_total{origem}).
+	Cancelamento func(ctx context.Context, origem string, n int64)
 	// Consulta liga a consulta de convidado e a página do ingresso (PRD
 	// 0034); nil = rotas desligadas.
 	Consulta *ConfigConsulta
@@ -102,6 +107,9 @@ func NovoServico(pool outbox.Pool, cfg Config, logger *zap.Logger) (*Servico, er
 	}
 	if cfg.Compensacao == nil {
 		cfg.Compensacao = func(context.Context, string) {}
+	}
+	if cfg.Cancelamento == nil {
+		cfg.Cancelamento = func(context.Context, string, int64) {}
 	}
 	return &Servico{pool: pool, cfg: cfg, logger: logger}, nil
 }
@@ -346,7 +354,11 @@ func (s *Servico) Obter(ctx context.Context, id uuid.UUID, donoHash []byte, usua
 	if !ok {
 		return Visao{}, ErrPedidoNaoEncontrado
 	}
-	return v, nil
+	vs := []Visao{v}
+	if err := s.marcarCancelaveis(ctx, vs); err != nil {
+		return Visao{}, err
+	}
+	return vs[0], nil
 }
 
 // TamanhoPaginaPedidos: "Meus pedidos" em páginas de 20.
@@ -357,7 +369,11 @@ func (s *Servico) MeusPedidos(ctx context.Context, usuarioID uuid.UUID, pagina i
 	if pagina < 1 || pagina > 1000 {
 		pagina = 1
 	}
-	return repositorio{q: db.New(s.pool)}.doUsuario(ctx, usuarioID, TamanhoPaginaPedidos, int32((pagina-1)*TamanhoPaginaPedidos)) //nolint:gosec // página limitada acima
+	vs, err := repositorio{q: db.New(s.pool)}.doUsuario(ctx, usuarioID, TamanhoPaginaPedidos, int32((pagina-1)*TamanhoPaginaPedidos)) //nolint:gosec // página limitada acima
+	if err != nil {
+		return nil, err
+	}
+	return vs, s.marcarCancelaveis(ctx, vs)
 }
 
 // Retomar devolve o segredo do cliente de um pedido ainda aguardando
