@@ -46,3 +46,23 @@ Antes de tudo: `make preflight` (nos dois `.env`) deve imprimir `preflight: ok`.
   Verificação: `docker inspect --format '{{.HostConfig.LogConfig.Config}} {{.HostConfig.RestartPolicy.Name}}' $(docker ps -q)` mostra `max-file:3 max-size:10m` e `unless-stopped` em todos.
 - [ ] **Alerta de disco chegando** (cobre `/`, onde moram os volumes do Docker).
   Verificação: Grafana → Alerting → "Disco acima de 80%" em estado `Normal` (e, no aceite, forçar um disparo de teste).
+
+## Backup e restore (task 0043 — ADR 0013; runbook em `docs/backup.md`)
+
+Aceite **real** da E0c-CD: o repositório prova o mecanismo (teste de ida e volta com a imagem real), mas bucket, credencial e restore de produção só existem na Oracle.
+
+- [ ] **Bucket privado criado** (nunca público) com as regras de lifecycle **`diario/` = 7 dias** e **`semanal/` = 31 dias**.
+  Verificação: console da Oracle → Object Storage → bucket → Lifecycle Rules mostra as duas regras; `rclone lsd <remote>:` não lista o bucket como público (`oci os bucket get --bucket-name <b> --query 'data."public-access-type"'` → `"NoPublicAccess"`).
+- [ ] **Credencial do job sem delete/overwrite** (política IAM só com `OBJECT_CREATE`, `OBJECT_READ`, `OBJECT_INSPECT`/listagem no bucket — sem `OBJECT_DELETE` e sem `OBJECT_OVERWRITE`).
+  Verificação: com a credencial do job, `rclone deletefile <remote>:<bucket>/diario/<objeto>` → `AccessDenied`/403; reenviar um objeto existente com o mesmo nome também falha. Se a Oracle não oferecer essa política, aplicar o **plano B** de `docs/backup.md` e registrar aqui.
+- [ ] **Endpoint/região/path-style do S3 da Oracle conferidos** (`BACKUP_S3_ENDPOINT` no formato `https://<namespace>.compat.objectstorage.<região>.oraclecloud.com`).
+  Verificação: o primeiro backup real (abaixo) conclui sem erro; se o SDK pedir outro estilo de endereçamento, ajustar o provider/env no compose.
+- [ ] **Chave age gerada fora da VM** e guardada em **dois lugares** (gerenciador de senhas + cópia offline); só `age1…` no `.env.prod`.
+  Verificação: `grep -c AGE-SECRET-KEY .env.prod` → `0` (e `make preflight` verde); o dono consegue ler a chave nos dois lugares.
+- [ ] **Heartbeat do backup** (healthchecks.io, check próprio de período 24 h + tolerância) configurado em `BACKUP_HEARTBEAT_URL` e com alerta no canal do dono.
+  Verificação: `docker compose logs backup` mostra a execução; o check fica verde após o primeiro backup; parar o container por > 24 h dispara o alerta.
+- [ ] **Primeiro backup real** concluído.
+  Verificação: `docker compose exec backup bash /opt/backup/backup.sh` → `backup: ok objeto=… bytes=…`; no bucket aparecem `.dump.age`, `.globals.age`, `.sha256` e `.manifesto` com tamanhos coerentes.
+- [ ] **Primeiro restore real**, em máquina do dono com a chave, num PG efêmero destruído ao final — **RTO medido registrado aqui** (meta ~1 h, `doc.md` §7).
+  Verificação: passo a passo de `docs/backup.md`; `restore.sh` termina com `invariantes verificadas` e imprime o tempo total. RTO medido: ______ (data: ______).
+- [ ] **Restore mensal agendado** (lembrete recorrente do dono) e **perda da chave** ensaiada no runbook (o que fazer: novo par, novo backup, histórico antigo perdido).

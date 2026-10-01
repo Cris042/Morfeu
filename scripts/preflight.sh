@@ -15,6 +15,7 @@ USUARIOS_PROIBIDOS=(postgres morfeu guest admin root)
 
 PROD_SENHAS=(POSTGRES_PASSWORD PG_MIGRATOR_PASSWORD PG_APP_PASSWORD PG_PURGE_PASSWORD PG_BACKUP_PASSWORD PG_MONITOR_PASSWORD REDIS_PASSWORD RABBITMQ_DEFAULT_PASS)
 PROD_USUARIOS=(POSTGRES_USER RABBITMQ_DEFAULT_USER)
+PROD_BACKUP_TEXTOS=(BACKUP_S3_REGION BACKUP_S3_BUCKET BACKUP_S3_ACCESS_KEY_ID BACKUP_S3_SECRET_ACCESS_KEY)
 OBS_SENHAS=(GF_SECURITY_ADMIN_PASSWORD DATA_SOURCE_PASS)
 OBS_URLS=(DISCORD_WEBHOOK_URL HEALTHCHECKS_PING_URL)
 
@@ -73,6 +74,32 @@ checar_url() {
   if [[ "$v" != https://* ]] || tem_placeholder "$v"; then falhar "$1" "$2" "precisa ser uma URL https real"; fi
 }
 
+# Backup (task 0043): só a chave PÚBLICA do age na VM; credenciais S3 reais;
+# endpoint e heartbeat (opcional) em https.
+checar_backup() { # arquivo
+  local v="${valores[BACKUP_AGE_RECIPIENT]:-}" t="${valores[BACKUP_HEARTBEAT_URL]:-}" e="${valores[BACKUP_S3_ENDPOINT]:-}" n
+  if [ -z "$v" ]; then
+    falhar "$1" BACKUP_AGE_RECIPIENT "ausente ou vazia"
+  elif [[ "$v" != age1* ]] || [[ "${v,,}" == *troque* ]]; then
+    falhar "$1" BACKUP_AGE_RECIPIENT "deve ser uma chave pública age (age1…) real"
+  fi
+  for n in "${PROD_BACKUP_TEXTOS[@]}"; do
+    v="${valores[$n]:-}"
+    if [ -z "$v" ]; then falhar "$1" "$n" "ausente ou vazia"; continue; fi
+    [[ "${v,,}" == *troque* || "${v,,}" == *changeme* ]] && falhar "$1" "$n" "contém placeholder"
+  done
+  if [ -z "$e" ]; then
+    falhar "$1" BACKUP_S3_ENDPOINT "ausente ou vazia"
+  elif [[ "$e" != https://* ]] || [[ "${e,,}" == *troque* ]]; then
+    falhar "$1" BACKUP_S3_ENDPOINT "precisa ser uma URL https real"
+  fi
+  # Heartbeat é opcional; presente, precisa ser https real.
+  if [ -n "$t" ] && { [[ "$t" != https://* ]] || tem_placeholder "$t"; }; then
+    falhar "$1" BACKUP_HEARTBEAT_URL "precisa ser uma URL https real (ou vazia)"
+  fi
+  return 0
+}
+
 if [ "$#" -eq 0 ]; then
   echo "uso: $0 <arquivo.env>..." >&2
   exit 2
@@ -83,6 +110,10 @@ for arquivo in "$@"; do
     falhar "$arquivo" "arquivo" "não encontrado ou ilegível"
     continue
   fi
+  # Chave privada do age em qualquer .env = vazamento da chave do backup (ADR 0013).
+  if grep -q 'AGE-SECRET-KEY' "$arquivo"; then
+    falhar "$arquivo" "chave privada age" "AGE-SECRET-KEY encontrada — remova do .env; a privada fica fora da VM"
+  fi
   carregar "$arquivo"
   if [[ "$(basename "$arquivo")" == *observability* ]]; then
     for v in "${OBS_SENHAS[@]}"; do checar_senha "$arquivo" "$v"; done
@@ -90,6 +121,7 @@ for arquivo in "$@"; do
   else
     for v in "${PROD_SENHAS[@]}"; do checar_senha "$arquivo" "$v"; done
     for v in "${PROD_USUARIOS[@]}"; do checar_usuario "$arquivo" "$v"; done
+    checar_backup "$arquivo"
   fi
 done
 

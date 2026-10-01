@@ -29,7 +29,7 @@ var (
 	reObrigatoria     = regexp.MustCompile(`^\$\{[A-Za-z0-9_]+:\?[^}]*\}$`)
 	servicosEsperados = []string{
 		"postgres", "redis", "rabbitmq", "prometheus", "loki", "tempo", "alloy",
-		"grafana", "node-exporter", "cadvisor", "postgres-exporter", "redis-exporter",
+		"grafana", "node-exporter", "cadvisor", "postgres-exporter", "redis-exporter", "backup",
 	}
 )
 
@@ -253,4 +253,44 @@ func TestComposeProd_CasosNegativos(t *testing.T) {
 			t.Errorf("violações inesperadas: %v", v)
 		}
 	})
+}
+
+// TestComposeProd_Backup: o serviço de backup (task 0043) usa o role
+// morfeu_backup, recebe só a chave PÚBLICA e as credenciais por ${VAR:?}, e
+// nunca publica portas.
+func TestComposeProd_Backup(t *testing.T) {
+	bruto, err := os.ReadFile(caminhoComposeProd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := lerCompose(t, bruto).Services["backup"]
+	if b == nil {
+		t.Fatal("serviço backup ausente")
+	}
+	if b["ports"] != nil {
+		t.Error("backup não pode publicar portas")
+	}
+	env := variaveisDeAmbiente(b)
+	if env["PGUSER"] != "morfeu_backup" {
+		t.Errorf("PGUSER = %q, esperado morfeu_backup", env["PGUSER"])
+	}
+	for _, k := range []string{"PGPASSWORD", "BACKUP_AGE_RECIPIENT", "BACKUP_DESTINO", "RCLONE_CONFIG_BACKUP_ENDPOINT",
+		"RCLONE_CONFIG_BACKUP_ACCESS_KEY_ID", "RCLONE_CONFIG_BACKUP_SECRET_ACCESS_KEY"} {
+		if !strings.Contains(env[k], ":?") {
+			t.Errorf("%s deveria usar ${VAR:?}: %q", k, env[k])
+		}
+	}
+	if !strings.Contains(env["BACKUP_HEARTBEAT_URL"], ":-") {
+		t.Errorf("BACKUP_HEARTBEAT_URL deveria ser opcional (${VAR:-}): %q", env["BACKUP_HEARTBEAT_URL"])
+	}
+	for k, v := range env {
+		if strings.Contains(v, "AGE-SECRET-KEY") {
+			t.Errorf("%s carrega chave privada", k)
+		}
+	}
+	dep, _ := b["depends_on"].(map[string]any)
+	pg, _ := dep["postgres"].(map[string]any)
+	if pg["condition"] != "service_healthy" {
+		t.Errorf("backup deveria depender do PG saudável: %v", b["depends_on"])
+	}
 }
