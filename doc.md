@@ -160,6 +160,8 @@ sequenceDiagram
 
 **Compensações por passo** (definidas antes do passo entrar): falha na cobrança → libera hold; falha na emissão → estorno no gateway + libera hold; falha no e-mail → retry com backoff → DLQ + alerta (passo pós-pivô — a venda permanece válida). Monitoramento da saga: métrica `saga_compensacoes_total{passo}` + trace OTel ponta a ponta (contexto propagado na mensagem RabbitMQ).
 
+**Cancelamento (ADR 0011):** é uma entrada nova da mesma compensação — cliente (logado ou por e-mail + código, até 2h antes, inclusivo), operador (pedido individual, 0037) ou sessão cancelada (porta transacional `sessao → pedido`, numa TX única) levam o pedido `pago → estorno_pendente` com o motivo (`cancelamento|operador|sessao_cancelada`); os ingressos são cancelados na mesma TX (o link `/i/*` vira 410) e os assentos só voltam à venda quando o estorno conclui (`estornado` libera também os holds vendidos). Pagamento confirmado depois do cancelamento da sessão vai direto a estorno. Métrica `cancelamentos_total{origem}`.
+
 ### 6.2 Disputa concorrente do mesmo assento
 
 ```mermaid
