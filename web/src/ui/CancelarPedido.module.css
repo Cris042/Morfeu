@@ -1,0 +1,57 @@
+.cancelar {
+  margin-top: var(--espaco-6);
+}
+
+.confirmacao {
+  padding: var(--espaco-4);
+  border: 1px solid var(--veludo);
+  border-radius: var(--raio-chip);
+}
+
+.confirmacao p {
+  margin: 0 0 var(--espaco-4);
+}
+
+.acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-3);
+}
+
+.perigo,
+.secundario {
+  padding: var(--espaco-2) var(--espaco-4);
+  font: inherit;
+  border-radius: var(--raio-chip);
+  cursor: pointer;
+}
+
+.perigo {
+  font-weight: 700;
+  color: var(--tinta-papoula);
+  background: var(--papoula);
+  border: 0;
+}
+
+.secundario {
+  color: var(--tela);
+  background: transparent;
+  border: 1px solid var(--veludo);
+  transition: border-color var(--transicao);
+}
+
+.secundario:hover {
+  border-color: var(--tungstenio);
+}
+
+.perigo:disabled,
+.secundario:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.erro {
+  min-height: 1.5em;
+  margin: var(--espaco-2) 0 0;
+  color: var(--tungstenio);
+}

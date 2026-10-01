@@ -33,6 +33,7 @@ export function MenuConta() {
   return (
     <nav className={styles.menu} aria-label="Conta">
       <span className={styles.usuario}>{sessao.usuario.nome}</span>
+      {sessao.usuario.papel === 'operador' && <Link to="/backoffice">Backoffice</Link>}
       <Link to="/conta/pedidos">Meus pedidos</Link>
       <button
         type="button"

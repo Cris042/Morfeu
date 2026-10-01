@@ -45,3 +45,4 @@ Convenção: `NNNN-titulo-kebab.md`, numeração sequencial a partir de `0001`. 
 | 0035 | [SPA: consulta e ingresso + E2E do M4](./0035-spa-consulta-m4.md) | E8 (T5) | concluída (auditoria APROVADA; PR #66) | `feature/0035-spa-consulta-m4` | [0035](../prd/0035-spa-consulta-m4.md) |
 | 0036 | [Backend: cancelamento pelo cliente e de sessão com vendidos](./0036-cancelamento.md) | E9 (T1) | concluída (auditoria APROVADA; PR #68) | `feature/0036-cancelamento` | [0036](../prd/0036-cancelamento.md) |
 | 0037 | [Trilha de auditoria + consulta e cancelamento de pedido pelo operador](./0037-auditoria-operador.md) | E9 (T2) | concluída (auditoria APROVADA; PR #69) | `feature/0037-auditoria-operador` | [0037](../prd/0037-auditoria-operador.md) |
+| 0038 | [SPA: cancelar pedido + backoffice de filmes e salas](./0038-spa-cancelar-backoffice.md) | E9 (T3a) | em andamento | `feature/0038-spa-cancelar-backoffice` | [0038](../prd/0038-spa-cancelar-backoffice.md) |

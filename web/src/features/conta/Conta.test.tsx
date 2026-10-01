@@ -21,6 +21,7 @@ const pedido: Pedido = {
   total_centavos: 6400,
   status: 'pago',
   expira_em: '2099-10-01T23:40:00Z',
+  cancelavel: false,
 }
 
 afterEach(() => {
@@ -154,6 +155,45 @@ describe('meus pedidos', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Mais antigos' }))
     expect(await screen.findByRole('link', { name: 'Pedido ANTIGO' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Mais recentes' })).toBeInTheDocument()
+  })
+
+  it('cancela o pedido cancelável com confirmação (PRD 0038)', async () => {
+    const id = pedido.id
+    await comoAna({ [`/api/pedidos/${id}`]: { corpo: { ...pedido, cancelavel: true } } })
+    abrir(`/conta/pedidos/${id}`)
+    await userEvent.click(await screen.findByRole('button', { name: 'Cancelar pedido' }))
+    expect(screen.getByText(/Os ingressos deixam de valer na hora/)).toBeInTheDocument()
+    // Depois de cancelar, o detalhe recarrega e já não oferece o botão.
+    const f = apiFalsa({
+      '/api/auth/refresh': sessaoOk,
+      [`/api/pedidos/${id}`]: { corpo: { ...pedido, status: 'estorno_pendente' } },
+      [`/api/pedidos/${id}/cancelar`]: { corpo: { ...pedido, status: 'estorno_pendente' } },
+    })
+    await userEvent.click(screen.getByRole('button', { name: 'Sim, cancelar' }))
+    expect(await screen.findByText(/Pedido cancelado: o valor volta/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Cancelar pedido' })).not.toBeInTheDocument()
+    const cancelar = f.mock.calls.find(([u]) => u === `/api/pedidos/${id}/cancelar`)
+    expect(cancelar?.[1]?.method).toBe('POST')
+    expect((cancelar?.[1]?.headers as Record<string, string>).Authorization).toBe('Bearer tok')
+  })
+
+  it('fora da janela: o servidor recusa e a mensagem explica', async () => {
+    const id = pedido.id
+    await comoAna({
+      [`/api/pedidos/${id}`]: { corpo: { ...pedido, cancelavel: true } },
+      [`/api/pedidos/${id}/cancelar`]: { status: 409, corpo: { erro: 'fora_da_janela' } },
+    })
+    abrir(`/conta/pedidos/${id}`)
+    await userEvent.click(await screen.findByRole('button', { name: 'Cancelar pedido' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Sim, cancelar' }))
+    expect(await screen.findByText('O cancelamento só é possível até 2 horas antes da sessão.')).toBeInTheDocument()
+  })
+
+  it('pedido não cancelável não mostra o botão', async () => {
+    await comoAna({ [`/api/pedidos/${pedido.id}`]: { corpo: pedido } })
+    abrir(`/conta/pedidos/${pedido.id}`)
+    await screen.findByRole('heading', { name: 'Pedido ABCD2345EFGH6789' })
+    expect(screen.queryByRole('button', { name: 'Cancelar pedido' })).not.toBeInTheDocument()
   })
 
   it('pedido de outra conta (404) não vaza nada', async () => {

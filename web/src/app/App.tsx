@@ -13,6 +13,9 @@ import { PaginaSessao } from '../features/sessao/PaginaSessao'
 import styles from './App.module.css'
 import { MenuConta } from './MenuConta'
 
+// Backoffice do operador (PRD 0038) em chunk próprio: não pesa no cartaz.
+const Backoffice = lazy(() => import('../features/backoffice/Backoffice').then((m) => ({ default: m.Backoffice })))
+
 // Demonstração do mapa só em dev (PRD 0019 RF06): em produção a constante é
 // false e o import dinâmico some do bundle.
 const DemoMapa = import.meta.env.DEV
@@ -42,6 +45,14 @@ export function App() {
           <Route path="/cadastro" element={<Entrar modo="cadastro" />} />
           <Route path="/conta/pedidos" element={<MeusPedidos />} />
           <Route path="/conta/pedidos/:id" element={<PedidoDaConta />} />
+          <Route
+            path="/backoffice/*"
+            element={
+              <Suspense fallback={null}>
+                <Backoffice />
+              </Suspense>
+            }
+          />
           {DemoMapa && (
             <Route
               path="/_demo/mapa"

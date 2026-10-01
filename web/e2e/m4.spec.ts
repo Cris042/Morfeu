@@ -7,7 +7,7 @@ import { PaginaSessao } from './PaginaSessao'
 // M4 (PRD 0035): cartaz → assento → checkout → pagamento (gateway fake, pelo
 // webhook real) → ingresso no e-mail (fake verificável) → link /i/… com QR.
 // Roda sob a CSP de produção (vite preview) e com varredura do axe. Compra de
-// verdade (D3, D4): cada execução precisa de uma sala nova (web/e2e/seed.sql).
+// verdade (D3, D4; D5 no cancelamento do E9): cada execução precisa de uma sala nova (web/e2e/seed.sql).
 
 interface SessaoPublica {
   id: number
@@ -169,5 +169,46 @@ test('M4 conta: logado, o e-mail vem da conta e o pedido aparece em "Meus pedido
   expect(await linksDoEmail(request, email)).toHaveLength(1)
 
   await semViolacaoDeCSP(pagina)
+  await contexto.close()
+})
+
+test('Cancelamento (E9): convidado cancela pela consulta; o ingresso perde a validade e o assento volta após o estorno', async ({
+  browser,
+  request,
+}) => {
+  test.setTimeout(240_000) // espera o job de estorno (1×/min)
+  const sessao = await sessaoE2E(request)
+  const contexto = await browser.newContext()
+  await vigiarCSP(contexto)
+  const pagina = await contexto.newPage()
+  const email = `e9-cancelamento-${String(Date.now())}@exemplo.com`
+  const codigo = await comprar(pagina, sessao.id, 'D', 5, email)
+  const [link] = await linksDoEmail(request, email)
+  if (!link) {
+    throw new Error('e-mail sem link de ingresso')
+  }
+
+  // A sessão de E2E é daqui a 2 dias: dentro da janela de 2h, o botão aparece.
+  await pagina.goto('/consulta')
+  await pagina.getByLabel('E-mail').fill(email)
+  await pagina.getByLabel('Código do pedido').fill(codigo)
+  await pagina.getByRole('button', { name: 'Consultar' }).click()
+  await pagina.getByRole('button', { name: 'Cancelar pedido' }).click()
+  await semProblemaDeAcessibilidade(pagina)
+  await pagina.getByRole('button', { name: 'Sim, cancelar' }).click()
+  await expect(pagina.getByText('Estorno em andamento')).toBeVisible()
+  await expect(pagina.getByRole('link', { name: 'Ingresso D5' })).toHaveCount(0)
+
+  // O link do e-mail deixa de valer na hora (410 → página de indisponível).
+  expect((await request.get(`/api${link}`)).status()).toBe(410)
+
+  // O job de estorno (worker, 1×/min) devolve o assento.
+  const outro = await browser.newContext()
+  const sala = new PaginaSessao(await outro.newPage())
+  await sala.abrir(sessao.id)
+  await expect(sala.assento('D', 5)).toHaveAccessibleName(/livre$/, { timeout: 150_000 })
+
+  await semViolacaoDeCSP(pagina)
+  await outro.close()
   await contexto.close()
 })

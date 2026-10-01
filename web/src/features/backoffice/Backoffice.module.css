@@ -1,0 +1,147 @@
+.backoffice {
+  max-width: 52rem;
+}
+
+.titulo {
+  margin: 0 0 var(--espaco-4);
+  font-size: var(--texto-xl);
+}
+
+.subtitulo {
+  margin: var(--espaco-6) 0 var(--espaco-3);
+  font-size: var(--texto-lg);
+}
+
+.abas {
+  display: flex;
+  gap: var(--espaco-4);
+  margin-bottom: var(--espaco-6);
+  border-bottom: 1px solid var(--veludo);
+}
+
+.aba,
+.ativa {
+  padding: var(--espaco-2) 0;
+  color: var(--nevoa);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+
+.ativa {
+  color: var(--tela);
+  border-bottom-color: var(--tungstenio);
+}
+
+.lista {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espaco-3);
+  padding: var(--espaco-3) 0;
+  border-bottom: 1px solid var(--veludo);
+}
+
+.nome {
+  flex: 1 1 14rem;
+  font-weight: 600;
+}
+
+.meta {
+  font-size: var(--texto-sm);
+  color: var(--nevoa);
+}
+
+.formulario {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-1);
+  font-size: var(--texto-sm);
+  color: var(--nevoa);
+}
+
+.campo input,
+.campo textarea {
+  padding: var(--espaco-3);
+  font: inherit;
+  font-size: var(--texto-md);
+  color: var(--tela);
+  background: var(--sala);
+  border: 1px solid var(--veludo);
+  border-radius: var(--raio-chip);
+}
+
+.campo textarea {
+  min-height: 10rem;
+  font-family: var(--fonte-mono);
+  font-size: var(--texto-sm);
+}
+
+.campo input:focus-visible,
+.campo textarea:focus-visible {
+  outline: none;
+  box-shadow: var(--halo);
+}
+
+.linha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--espaco-3);
+}
+
+.primario {
+  align-self: flex-start;
+  padding: 10px 22px;
+  font: inherit;
+  font-weight: 700;
+  color: var(--tinta-papoula);
+  background: var(--papoula);
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.secundario {
+  padding: var(--espaco-2) var(--espaco-4);
+  font: inherit;
+  color: var(--tela);
+  background: transparent;
+  border: 1px solid var(--veludo);
+  border-radius: var(--raio-chip);
+  cursor: pointer;
+  transition: border-color var(--transicao);
+}
+
+.secundario:hover {
+  border-color: var(--tungstenio);
+}
+
+.primario:disabled,
+.secundario:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.erro {
+  min-height: 1.5em;
+  margin: 0;
+  color: var(--tungstenio);
+}
+
+.aviso {
+  margin: 0;
+  font-size: var(--texto-sm);
+  color: var(--nevoa);
+}

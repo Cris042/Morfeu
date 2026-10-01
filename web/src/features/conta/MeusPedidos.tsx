@@ -3,9 +3,10 @@ import type { ReactNode } from 'react'
 import { Link, Navigate, useLocation, useParams } from 'react-router'
 
 import { naoEncontrado } from '../../api/consultas'
-import { PEDIDOS_POR_PAGINA, useMeusPedidos, usePedidoDaConta } from '../../api/conta'
+import { PEDIDOS_POR_PAGINA, useCancelarDaConta, useMeusPedidos, usePedidoDaConta } from '../../api/conta'
 import { useSessao } from '../../api/sessao'
 import type { Pedido, StatusPedido } from '../../api/tipos'
+import { CancelarPedido } from '../../ui/CancelarPedido'
 import { Carregando, Falha, Vazio } from '../../ui/Estado'
 import { hora, preco } from '../../ui/formato'
 import styles from './Conta.module.css'
@@ -96,6 +97,7 @@ export function MeusPedidos() {
 
 function Detalhe({ id }: { id: string }) {
   const consulta = usePedidoDaConta(id)
+  const cancelar = useCancelarDaConta(id)
   if (consulta.isPending) {
     return <Carregando texto="Buscando o pedido…" />
   }
@@ -130,6 +132,8 @@ function Detalhe({ id }: { id: string }) {
         )}
       </dl>
       {p.status === 'pago' && <p>Os ingressos com QR foram enviados ao e-mail do pedido.</p>}
+      {p.status === 'estorno_pendente' && <p>Pedido cancelado: o valor volta ao meio de pagamento em alguns dias.</p>}
+      {p.cancelavel && <CancelarPedido aoCancelar={() => cancelar.mutateAsync()} />}
       <p>
         <Link to="/conta/pedidos">Voltar aos meus pedidos</Link>
       </p>

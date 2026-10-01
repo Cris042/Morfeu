@@ -111,5 +111,6 @@ export async function requisitar<T>(metodo: Metodo, caminho: string, corpo?: unk
 export const api = {
   get: <T>(caminho: string) => requisitar<T>('GET', caminho),
   post: <T>(caminho: string, corpo?: unknown) => requisitar<T>('POST', caminho, corpo),
+  put: <T>(caminho: string, corpo: unknown) => requisitar<T>('PUT', caminho, corpo),
   delete: (caminho: string) => requisitar<undefined>('DELETE', caminho),
 }

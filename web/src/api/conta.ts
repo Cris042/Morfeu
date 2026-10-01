@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from './client'
 import { useSessao } from './sessao'
@@ -32,3 +32,12 @@ export function usePedidoDaConta(id: string) {
 
 /** Tamanho da página no servidor (pedido.TamanhoPaginaPedidos). */
 export const PEDIDOS_POR_PAGINA = 20
+
+/** Cancela o pedido da conta (PRD 0036): o servidor decide a janela de 2h. */
+export function useCancelarDaConta(id: string) {
+  const cliente = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.post<Pedido>(`/pedidos/${encodeURIComponent(id)}/cancelar`),
+    onSuccess: () => cliente.invalidateQueries({ queryKey: ['conta'] }),
+  })
+}

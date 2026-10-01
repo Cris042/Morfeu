@@ -3,8 +3,9 @@ import type { SubmitEvent } from 'react'
 import { Link } from 'react-router'
 
 import { ErroApi } from '../../api/client'
-import { consultarPedido } from '../../api/consulta'
+import { cancelarPorConsulta, consultarPedido } from '../../api/consulta'
 import type { ResultadoConsulta } from '../../api/consulta'
+import { CancelarPedido } from '../../ui/CancelarPedido'
 import { preco } from '../../ui/formato'
 import { ROTULOS } from '../conta/MeusPedidos'
 import styles from './Consulta.module.css'
@@ -25,6 +26,9 @@ function mensagemDe(erro: unknown): string {
 /** Consulta de convidado (PRD 0035): e-mail + código do pedido. */
 export function Consulta() {
   const [resultado, setResultado] = useState<ResultadoConsulta>()
+  // As credenciais da consulta ficam só em memória (nunca em storage) para o
+  // cancelamento (PRD 0038).
+  const [credenciais, setCredenciais] = useState<{ email: string; codigo: string }>()
   const [erro, setErro] = useState('')
   const [enviando, setEnviando] = useState(false)
 
@@ -38,8 +42,12 @@ export function Consulta() {
     setEnviando(true)
     setErro('')
     setResultado(undefined)
+    setCredenciais(undefined)
     try {
-      setResultado(await consultarPedido(texto('email'), texto('codigo')))
+      const email = texto('email')
+      const codigo = texto('codigo')
+      setResultado(await consultarPedido(email, codigo))
+      setCredenciais({ email, codigo })
     } catch (e) {
       setErro(mensagemDe(e))
     } finally {
@@ -69,12 +77,22 @@ export function Consulta() {
           {enviando ? 'Consultando…' : 'Consultar'}
         </button>
       </form>
-      {resultado && <Resultado r={resultado} />}
+      {resultado && (
+        <Resultado
+          r={resultado}
+          aoCancelar={
+            credenciais &&
+            (async () => {
+              setResultado(await cancelarPorConsulta(credenciais.email, credenciais.codigo))
+            })
+          }
+        />
+      )}
     </section>
   )
 }
 
-function Resultado({ r }: { r: ResultadoConsulta }) {
+function Resultado({ r, aoCancelar }: { r: ResultadoConsulta; aoCancelar?: () => Promise<void> }) {
   const p = r.pedido
   return (
     <section className={styles.resultado} aria-labelledby="titulo-resultado">
@@ -98,8 +116,13 @@ function Resultado({ r }: { r: ResultadoConsulta }) {
           ))}
         </ul>
       ) : (
-        <p className={styles.nota}>Os ingressos aparecem aqui quando o pagamento é confirmado.</p>
+        <p className={styles.nota}>
+          {p.status === 'estorno_pendente' || p.status === 'estornado'
+            ? 'Pedido cancelado: o valor volta ao meio de pagamento em alguns dias.'
+            : 'Os ingressos aparecem aqui quando o pagamento é confirmado.'}
+        </p>
       )}
+      {p.cancelavel && aoCancelar && <CancelarPedido aoCancelar={aoCancelar} />}
     </section>
   )
 }
