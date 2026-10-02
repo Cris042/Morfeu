@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0046-execucao-carga.md
 - **Branch:** feature/0046-execucao-carga
 - **Data:** 2026-10-01
-- **Status:** implementada (auditoria pendente)
+- **Status:** concluída (auditoria APROVADA em 2026-10-02; PR #81)
 
 ## Objetivo
 
@@ -41,11 +41,11 @@ Execuções, relatório versionado, ajustes pequenos que a carga exigir (com tes
 
 ## Critérios de aceite
 
-- [ ] CA01 — Todas as execuções do RF01 válidas (ou inválidas com motivo registrado e refeitas), invariante verde em todas.
-- [ ] CA02 — Veredito do M5 indicativo explícito: p95 server-side das leituras a 300 req/s (mediana de 3) e erro, contra o SLO (< 300 ms, < 1%).
-- [ ] CA03 — Disputa sem assento vendido duas vezes e sem 5xx; checkout com SLI medido.
-- [ ] CA04 — Relatório completo (RF04) versionado; ajustes (se houver) com teste.
-- [ ] CA05 — Checklist da E0c-CD, `docs/observabilidade.md`, roadmap, `state.md` e `plan.md` atualizados.
+- [x] CA01 — Todas as execuções do RF01 válidas (ou inválidas com motivo registrado e refeitas), invariante verde em todas.
+- [x] CA02 — Veredito do M5 indicativo explícito: p95 server-side das leituras a 300 req/s (mediana de 3) e erro, contra o SLO (< 300 ms, < 1%).
+- [x] CA03 — Disputa sem assento vendido duas vezes e sem 5xx; checkout com SLI medido.
+- [x] CA04 — Relatório completo (RF04) versionado; ajustes (se houver) com teste.
+- [x] CA05 — Checklist da E0c-CD, `docs/observabilidade.md`, roadmap, `state.md` e `plan.md` atualizados.
 - [ ] CA06 — CI verde.
 
 ## Plano de testes

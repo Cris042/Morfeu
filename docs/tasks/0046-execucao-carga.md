@@ -1,7 +1,7 @@
 # Task 0046 — Execução local da carga e relatório do M5 indicativo (E12, T2)
 
 - **Data:** 2026-10-01
-- **Status:** implementada (auditoria pendente)
+- **Status:** concluída (auditoria APROVADA em 2026-10-02; PR #81)
 - **Branch:** `feature/0046-execucao-carga`
 - **PRD:** docs/prd/0046-execucao-carga.md
 - **Item do roadmap:** E12 — Teste de carga k6 (2ª e última; última do roadmap). Refinamento: `docs/refinamentos/E12-teste-de-carga.md` §T2.

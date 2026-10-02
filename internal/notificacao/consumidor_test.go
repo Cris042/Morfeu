@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -235,6 +236,28 @@ func TestFake_HistoricoLimitado(t *testing.T) {
 	}
 	if n := len(f.Enviadas()); n > 2*limiteEnviadasFake {
 		t.Fatalf("histórico passou do teto: %d", n)
+	}
+}
+
+// TestFake_PodaConcorrente: envios e leituras paralelos atravessando várias
+// podas (rodar com -race) nunca passam do teto.
+func TestFake_PodaConcorrente(t *testing.T) {
+	f := NovoFake()
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() {
+			for range limiteEnviadasFake {
+				_ = f.Enviar(context.Background(), Mensagem{})
+				if n := len(f.Enviadas()); n > 2*limiteEnviadasFake {
+					t.Errorf("histórico passou do teto: %d", n)
+					return
+				}
+			}
+		})
+	}
+	wg.Wait()
+	if n := len(f.Enviadas()); n < limiteEnviadasFake || n > 2*limiteEnviadasFake {
+		t.Fatalf("após 8000 envios: %d mensagens, quer entre %d e %d", n, limiteEnviadasFake, 2*limiteEnviadasFake)
 	}
 }
 
