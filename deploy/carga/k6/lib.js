@@ -16,7 +16,7 @@ const BASE_URL = (__ENV.BASE_URL || 'http://app:8080').replace(/\/+$/, '');
 // (10/8, 172.16/12, 192.168/16) e host.docker.internal. Só http (o alvo local
 // não tem TLS; https implicaria um host público).
 function hostPermitido(url) {
-  const m = /^http:\/\/([^/:?#]+)(?::\d+)?(?:[/?#]|$)/.exec(url);
+  const m = /^http:\/\/([^/:?#@]+)(?::\d+)?(?:[/?#]|$)/.exec(url);
   if (!m) return false;
   const h = m[1].toLowerCase();
   if (!h.includes('.')) return true; // 'app', 'localhost'

@@ -3,7 +3,7 @@
 - **Task:** docs/tasks/0045-ferramental-carga.md
 - **Branch:** feature/0045-ferramental-carga
 - **Data:** 2026-10-01
-- **Status:** em implementação
+- **Status:** concluído
 
 ## Objetivo
 
@@ -40,14 +40,14 @@ Flag `MORFEU_LOADTEST` (config, limites por IP, gauge, alerta, rota de teste), V
 
 ## Critérios de aceite
 
-- [ ] CA01 — Testes de boot (table-driven): flag + produção, flag + gateway stripe, flag + e-mail resend, flag + banco sem `_carga` → erro; flag com tudo certo → ok; sem flag → nada muda.
-- [ ] CA02 — `limiteEfetivo` testado; com a flag os limites por IP sobem e os por dono continuam (teste de que o limite por dono das travas segue barrando).
-- [ ] CA03 — Rota `/__teste/pagar` ausente (404) com `AMBIENTE=producao` (teste).
-- [ ] CA04 — Registry expõe `http_server_request_duration_seconds_bucket{le="0.3"}`, sem série duplicada; contrato/dashboards existentes verdes.
-- [ ] CA05 — Alerta `morfeu-modo-loadtest` provisionado (20 regras por uid); contrato reconhece `morfeu_modo_loadtest`.
-- [ ] CA06 — `smoke.sh` roda limpo nesta máquina (todos os cenários a taxa mínima, checks 100%, invariante sem linhas); seed rodado 2× não duplica; seed recusa banco sem `_carga`.
-- [ ] CA07 — `invariante.sh` sai ≠ 0 diante de uma violação plantada (teste de integração ou passo do smoke).
-- [ ] CA08 — CI verde.
+- [x] CA01 — Testes de boot (table-driven): flag + produção, flag + gateway stripe, flag + e-mail resend, flag + banco sem `_carga` → erro; flag com tudo certo → ok; sem flag → nada muda.
+- [x] CA02 — `limiteEfetivo` testado; com a flag os limites por IP sobem e os por dono continuam (teste de que o limite por dono das travas segue barrando).
+- [x] CA03 — Rota `/__teste/pagar` ausente (404) com `AMBIENTE=producao` (teste).
+- [x] CA04 — Registry expõe `http_server_request_duration_seconds_bucket{le="0.3"}`, sem série duplicada; contrato/dashboards existentes verdes.
+- [x] CA05 — Alerta `morfeu-modo-loadtest` provisionado (20 regras por uid); contrato reconhece `morfeu_modo_loadtest`.
+- [x] CA06 — `smoke.sh` roda limpo nesta máquina (todos os cenários a taxa mínima, checks 100%, invariante sem linhas); seed rodado 2× não duplica; seed recusa banco sem `_carga`.
+- [x] CA07 — `invariante.sh` sai ≠ 0 diante de uma violação plantada (teste de integração ou passo do smoke).
+- [x] CA08 — CI verde.
 
 ## Plano de testes
 

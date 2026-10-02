@@ -6,7 +6,7 @@
 
 **E11 concluído (PR #78 mergeado). Épico E12 refinado** (`docs/refinamentos/E12-teste-de-carga.md`): 2 tasks — 0045 (ferramental de carga) → 0046 (execução local indicativa + relatório). Próxima: **0045**.
 
-**Task 0045 — Ferramental de carga (E12 T1): em implementação** (branch `feature/0045-ferramental-carga`, PRD `docs/prd/0045-ferramental-carga.md`).
+**Task 0045 — Ferramental de carga (E12 T1): auditoria APROVADA em 2026-10-01 (`security`), PR #80** (branch `feature/0045-ferramental-carga`, PRD `docs/prd/0045-ferramental-carga.md`).
 
 ### Plano da task 0045
 
@@ -16,7 +16,7 @@
 4. ~~Compose de carga + seed + invariante (+ `test/carga`)~~
 5. ~~Scripts k6 (5: `lib`, `leitura` [+rampa], `misto` [+soak], `disputa`, `checkout`) + smoke~~
 6. ~~Docs (`docs/carga/`) + `lib.md`~~
-7. ~~Smoke real nesta máquina~~ (OK); lint + suíte + passe de julgamento.
+7. ~~Smoke real nesta máquina; lint + suíte + passe de julgamento~~ — APROVADO, sem bloqueantes. Resolvido no passe: `lib.js` recusa `userinfo` (`http://localhost@host/`). Registrados: CA03 cobre o predicado `rotasDeTesteAtivas`, não o registro real; senha `carga` padrão no compose descartável; `postgres-exporter` precisa de `DATA_SOURCE_URI` para `morfeu_carga`; "19 → 20 alertas" do `docs/observabilidade.md` vai na 0046.
 
 ---
 

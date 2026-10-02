@@ -1,7 +1,7 @@
 # Task 0045 — Ferramental de carga (E12, T1)
 
 - **Data:** 2026-10-01
-- **Status:** em implementação
+- **Status:** concluída (auditoria APROVADA em 2026-10-01)
 - **Branch:** `feature/0045-ferramental-carga`
 - **PRD:** docs/prd/0045-ferramental-carga.md
 - **Item do roadmap:** E12 — Teste de carga k6 (1ª de 2). Refinamento: `docs/refinamentos/E12-teste-de-carga.md` §T1.
