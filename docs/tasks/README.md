@@ -53,3 +53,4 @@ Convenção: `NNNN-titulo-kebab.md`, numeração sequencial a partir de `0001`. 
 | 0043 | [Backup cifrado e restore validado](./0043-backup-restore.md) | E11 (T2) | concluída (auditoria APROVADA; PR #77) | `feature/0043-backup-restore` | [0043](../prd/0043-backup-restore.md) |
 | 0044 | [Limpeza operacional](./0044-limpeza-operacional.md) | E11 (T3) | concluída (auditoria APROVADA; PR #78) | `feature/0044-limpeza-operacional` | [0044](../prd/0044-limpeza-operacional.md) |
 | 0045 | [Ferramental de carga](./0045-ferramental-carga.md) | E12 (T1) | concluída (auditoria APROVADA; PR #80) | `feature/0045-ferramental-carga` | [0045](../prd/0045-ferramental-carga.md) |
+| 0046 | [Execução local da carga e relatório do M5 indicativo](./0046-execucao-carga.md) | E12 (T2) | concluída (auditoria APROVADA; PR #81) | `feature/0046-execucao-carga` | [0046](../prd/0046-execucao-carga.md) |

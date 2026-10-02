@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -207,6 +208,33 @@ func TestEntregar(t *testing.T) {
 	falho.FalharPrimeiras(1)
 	if err := entregadorTeste(t, fonteFixa{d: dadosTeste()}, falho).Entregar(ctx, uuid.New()); err == nil {
 		t.Fatal("falha do provedor deveria subir")
+	}
+}
+
+// TestFake_HistoricoLimitado: o fake não cresce sem teto sob carga (achado da
+// 0046) e o que sobra são sempre as mensagens mais recentes, em ordem.
+func TestFake_HistoricoLimitado(t *testing.T) {
+	f := NovoFake()
+	total := 2*limiteEnviadasFake + 1 // dispara uma poda
+	for i := range total {
+		if err := f.Enviar(context.Background(), Mensagem{Para: fmt.Sprintf("c%d@example.test", i)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := f.Enviadas()
+	if len(got) != limiteEnviadasFake {
+		t.Fatalf("após a poda: %d mensagens, quer %d", len(got), limiteEnviadasFake)
+	}
+	for i, m := range got {
+		if want := fmt.Sprintf("c%d@example.test", total-limiteEnviadasFake+i); m.Para != want {
+			t.Fatalf("posição %d: %q, quer %q", i, m.Para, want)
+		}
+	}
+	for range 3 * limiteEnviadasFake {
+		_ = f.Enviar(context.Background(), Mensagem{})
+	}
+	if n := len(f.Enviadas()); n > 2*limiteEnviadasFake {
+		t.Fatalf("histórico passou do teto: %d", n)
 	}
 }
 

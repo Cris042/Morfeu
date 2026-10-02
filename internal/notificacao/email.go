@@ -319,9 +319,15 @@ var (
 	tplEstornoTexto = sync.OnceValue(func() *texttemplate.Template { return texttemplate.Must(texttemplate.New("et").Parse(textoEstorno)) })
 )
 
+// limiteEnviadasFake é quantas mensagens o fake guarda após cada poda.
+// Cada uma carrega HTML + QRs (~7 KB): sem teto, um soak de horas no modo de
+// carga cresceria o heap até o GOMEMLIMIT (achado da task 0046).
+const limiteEnviadasFake = 1000
+
 // Fake é o EmailSender em memória (CI, dev e load-test — o Resend grátis
 // aguenta 100/dia). Recusado em produção pelo boot (task 0029). Seguro para
-// uso concorrente; falha programável.
+// uso concorrente; falha programável. Guarda no máximo 2×limiteEnviadasFake
+// mensagens (as mais recentes; poda amortizada).
 type Fake struct {
 	mu         sync.Mutex
 	enviadas   []Mensagem
@@ -348,6 +354,11 @@ func (f *Fake) Enviar(_ context.Context, m Mensagem) error {
 		return fmt.Errorf("notificacao: falha programada na tentativa %d", f.tentativas)
 	}
 	f.enviadas = append(f.enviadas, m)
+	if len(f.enviadas) > 2*limiteEnviadasFake {
+		// Poda amortizada: copia as mais recentes para um array novo (o antigo,
+		// com as mensagens descartadas, fica para o GC).
+		f.enviadas = append([]Mensagem(nil), f.enviadas[len(f.enviadas)-limiteEnviadasFake:]...)
+	}
 	return nil
 }
 

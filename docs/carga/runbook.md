@@ -46,11 +46,11 @@ $K -e TAXA=50 -e DURACAO=2m k6 run /scripts/leitura.js
 | **Rampa 50→400** | `-e PERFIL=rampa -e RAMPA_DE=50 -e RAMPA_ATE=400 -e PASSOS=7 -e PASSO=1m k6 run /scripts/leitura.js` | `ramping-arrival-rate`; achar o ponto onde o p95 ou o erro quebra |
 | **Patamar do SLO** | `-e TAXA=300 -e DURACAO=10m -e VUS_PRE=200 -e VUS_MAX=600 k6 run /scripts/leitura.js` | **3×**, mediana; janela do veredito = últimos 9 min |
 | **Misto 90/10** | `-e TAXA=50 -e DURACAO=10m k6 run /scripts/misto.js` | `TAXA` = iterações/s totais: 0,9·TAXA leituras e 0,1·TAXA checkouts (4 req cada) |
-| **Disputa** | `-e TAXA=5 -e DURACAO=1m -e DISPUTANTES=20 k6 run /scripts/disputa.js` | cada iteração = 20 travas paralelas no MESMO assento: 1×201 + 19×409, zero 5xx (checks e threshold) |
+| **Disputa** | `-e TAXA=5 -e DURACAO=1m -e DISPUTANTES=20 -e SESSOES_PULAR=10 k6 run /scripts/disputa.js` | cada iteração = 20 travas paralelas no MESMO assento: 1×201 + 19×409, zero 5xx (checks e threshold). **`SESSOES_PULAR`** dá à disputa sessões que o misto/checkout não consumiram (todos usam as primeiras sessões de cada filme): sem isso, depois do misto, a disputa cai em assentos vendidos, sai com 0 vencedores e passa sem provar nada — o threshold `disputa_vencedores > 0` agora a reprova (achado da 0046) |
 | **Checkout fim a fim** | `-e TAXA=3 -e DURACAO=5m k6 run /scripts/checkout.js` | trava → pedido → `/__teste/pagar` → pedido pago; `checkout_fluxo_duration` = SLI do fluxo |
 | **Soak** | `-e TAXA=30 -e DURACAO=30m k6 run /scripts/misto.js` | mesmo `misto.js`, só mais longo (o soak longo é da VM) |
 
-Variáveis: `TAXA`, `DURACAO`, `VUS_PRE` (padrão 50), `VUS_MAX` (200), `DISPUTANTES` (20), `PERFIL`/`PASSOS`/`PASSO`/`RAMPA_DE`/`RAMPA_ATE` (rampa), `SESSOES_POR_FILME`/`MAX_SESSOES` (descoberta), `BASE_URL` (padrão `http://app:8080`).
+Variáveis: `TAXA`, `DURACAO`, `VUS_PRE` (padrão 50), `VUS_MAX` (200), `DISPUTANTES` (20), `PERFIL`/`PASSOS`/`PASSO`/`RAMPA_DE`/`RAMPA_ATE` (rampa), `SESSOES_POR_FILME`/`MAX_SESSOES`/`SESSOES_PULAR` (descoberta — `SESSOES_PULAR=N` ignora as N primeiras sessões de cada filme), `BASE_URL` (padrão `http://app:8080`).
 
 Depois de **cada** execução:
 

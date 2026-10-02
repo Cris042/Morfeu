@@ -86,16 +86,21 @@ Run **inválido** (não "provisório") se qualquer uma:
 - CPU do gerador > ~70% do limite dele (2 núcleos no compose): 
 
 ```promql
-max_over_time((rate(container_cpu_usage_seconds_total{name=~".*k6.*"}[30s]) / 2)[$JANELA:15s]) > 0.7
+max(max_over_time((rate(container_cpu_usage_seconds_total{name=~".*k6.*"}[2m]) / 2)[$JANELA:30s])) > 0.7
 ```
+
+  Janela do `rate` de **2 min**, não menos: o cAdvisor é raspado a cada 30 s e atualiza as amostras de forma esparsa — com `[30s]`/`[1m]` a série do k6 volta vazia (verificado na 0046). Conferência na hora: `docker stats` (lá o limite é 200%, não 100%).
 
 - `dropped_iterations` > 0 no resumo do k6 (o threshold do script já falha o run);
 - `morfeu_modo_loadtest` = 0 (limites por IP voltaram a valer e o run mede o rate limit, não a carga).
 
 ## 6. Alertas durante o run
 
-```promql
-ALERTS{alertstate="firing"}   # o morfeu-modo-loadtest dispara SEMPRE durante um run — esperado
+Os alertas são **do Grafana** (unified alerting), não regras do Prometheus — a série `ALERTS` **não existe** no Prometheus. Consulte o estado no Grafana (Alerting → regras) ou pela API, com o admin do `.env.observability`:
+
+```bash
+curl -s -u "$GF_SECURITY_ADMIN_USER:$GF_SECURITY_ADMIN_PASSWORD" \
+  http://127.0.0.1:3000/api/prometheus/grafana/api/v1/alerts      # state = Alerting | Normal | Pending
 ```
 
-(Em Grafana: Alerting → regras; registre no relatório quais outras dispararam.)
+Esperados durante um run: **"Modo de carga (MORFEU_LOADTEST) ligado"** e o **Watchdog** (sempre). Registre no relatório qualquer outro.
