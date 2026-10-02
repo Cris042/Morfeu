@@ -4,6 +4,8 @@
 
 ## Estado corrente (2026-10-01)
 
+**E11 concluído (PR #78 mergeado). Épico E12 refinado** (`docs/refinamentos/E12-teste-de-carga.md`): 2 tasks — 0045 (ferramental de carga) → 0046 (execução local indicativa + relatório). Próxima: **0045**.
+
 **E10 concluído (PR #74 mergeado). Épico E11 refinado** (`docs/refinamentos/E11-hardening-backup.md`, ADR 0013): 3 tasks — 0042 (hardening + roles) → 0043 (backup/restore) → 0044 (limpeza operacional). 0042 ✅ (PR #76), 0043 ✅ (PR #77); próxima: **0044**.
 
 **Task 0044 — Limpeza operacional (E11 T3): auditoria APROVADA em 2026-10-01 (`qa`), PR #78. E11 concluído.** (branch `feature/0044-limpeza-operacional`, PRD `docs/prd/0044-limpeza-operacional.md`).
