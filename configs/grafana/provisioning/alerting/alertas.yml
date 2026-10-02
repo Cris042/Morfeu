@@ -543,6 +543,33 @@ groups:
         annotations:
           summary: "Limpeza de processed_messages/holds parada"
           description: "Alguma limpeza diária (processed_messages 30 d, holds terminais 7 d — PRD 0044) não conclui há mais de 48 h: worker parado ou erro no DELETE (log ‘limpeza diária’, atributo alvo). Runbook: docs/observabilidade.md, seção Limpeza operacional."
+      - uid: morfeu-modo-loadtest
+        title: "Modo de carga (MORFEU_LOADTEST) ligado"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'max(morfeu_modo_loadtest) or vector(0)'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+        for: 0m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "Modo de carga ligado"
+          description: "O processo roda com MORFEU_LOADTEST=1 (limites por IP ×1000, PRD 0045). Esperado só durante um teste de carga local; em qualquer outro ambiente é incidente de segurança — desligar a flag e reiniciar. O boot já recusa a flag em produção, gateway/e-mail reais e banco sem sufixo _carga."
       - uid: morfeu-watchdog
         title: "Watchdog (heartbeat externo)"
         condition: C

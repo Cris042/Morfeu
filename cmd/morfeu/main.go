@@ -213,6 +213,7 @@ func runServer(mode string) {
 	}
 
 	registrarMetricasMensageria(tel, dbPool, brokerClient, log)
+	registrarModoLoadTest(tel.Meter("morfeu/loadtest"), cfg, log)
 
 	e := setupRouter(log, tel, healthHandler)
 	pedidoServico, sessaoServico := registrarRotasDeDominio(e, mode, cfg, dbPool, redisClient, cacheLayer, catalogoServico, catalogoHandler, log)
@@ -334,7 +335,7 @@ func registrarRotasDeDominio(e *echo.Echo, mode string, cfg *config.Config, dbPo
 	sessaoHandler.RegistrarRotasPublicas(e)
 	// Reserva e pedido também existem no worker: as tarefas da saga (PRD 0025)
 	// usam o serviço do pedido e a porta transacional da reserva.
-	reservaHandler, reservaServico := montarReserva(dbPool, sessaoServico, redisClient, cacheLayer, log)
+	reservaHandler, reservaServico := montarReserva(cfg, dbPool, sessaoServico, redisClient, cacheLayer, log)
 	pedidoHandler, pedidoServico := montarPedido(cfg, dbPool, sessaoServico, reservaServico, infoSessao(sessaoServico, catalogoServico), redisClient, log)
 	// Cancelar sessão com vendidos (ADR 0011): porta transacional sessao → pedido.
 	sessaoServico.LigarPedidos(pedidoServico, pedidoServico.ContarCancelamentosDaSessao)
@@ -412,10 +413,55 @@ const (
 	janelaTravas     = time.Minute
 )
 
+// multiplicadorLoadTest: no modo de carga (MORFEU_LOADTEST=1) os limites POR
+// IP sobem ×1000 — o gerador sai de um IP só. Nunca desligados: o middleware
+// segue exercitado (PRD 0045 RF02).
+const multiplicadorLoadTest = 1000
+
+// limiteEfetivo devolve o limite por IP a aplicar. Só os limites por IP
+// passam por aqui; por dono, por conta/e-mail e o do webhook ficam fixos.
+func limiteEfetivo(base int, loadtest bool) int {
+	if loadtest {
+		return base * multiplicadorLoadTest
+	}
+	return base
+}
+
+// limitesDasTravas devolve (por IP, por dono): só o IP sobe no modo de carga.
+func limitesDasTravas(loadtest bool) (ip, dono int) {
+	return limiteEfetivo(limiteTravasIP, loadtest), limiteTravasDono
+}
+
+// registrarModoLoadTest expõe morfeu_modo_loadtest (0|1) e avisa no boot: o
+// alerta morfeu-modo-loadtest dispara se o modo estiver ligado fora de um
+// teste de carga (PRD 0045 RF03).
+func registrarModoLoadTest(meter metric.Meter, cfg *config.Config, log *logger.Logger) {
+	if cfg.LoadTest {
+		log.Warn("MORFEU_LOADTEST ATIVO: limites por IP ×1000 — somente teste de carga, nunca em produção")
+	}
+	gauge, err := meter.Int64ObservableGauge("morfeu_modo_loadtest",
+		metric.WithDescription("1 se o processo roda em modo de carga (limites por IP ×1000); 0 caso contrário."))
+	if err != nil {
+		log.ErrorMsg("métrica do modo de carga", zap.Error(err))
+		os.Exit(1)
+	}
+	var valor int64
+	if cfg.LoadTest {
+		valor = 1
+	}
+	if _, err = meter.RegisterCallback(func(_ context.Context, o metric.Observer) error {
+		o.ObserveInt64(gauge, valor)
+		return nil
+	}, gauge); err != nil {
+		log.ErrorMsg("métrica do modo de carga", zap.Error(err))
+		os.Exit(1)
+	}
+}
+
 // montarReserva liga o módulo reserva: porta de assentos = sessao (ADR 0003),
 // limitadores do E1 (Redis + fallback em memória), métricas (PRD 0015) e o
 // cache da ocupação (PRD 0016).
-func montarReserva(dbPool *pgxpool.Pool, sessoes reserva.FonteSessoes, redisClient redis.Cmdable, c cache.Cache, log *logger.Logger) (*reserva.Handler, *reserva.Servico) {
+func montarReserva(cfg *config.Config, dbPool *pgxpool.Pool, sessoes reserva.FonteSessoes, redisClient redis.Cmdable, c cache.Cache, log *logger.Logger) (*reserva.Handler, *reserva.Servico) {
 	fatal := func(msg string, err error) {
 		log.ErrorMsg(msg, zap.Error(err))
 		os.Exit(1)
@@ -429,10 +475,11 @@ func montarReserva(dbPool *pgxpool.Pool, sessoes reserva.FonteSessoes, redisClie
 		}
 		return l
 	}
+	limiteIP, limiteDono := limitesDasTravas(cfg.LoadTest)
 	servico, err := reserva.NovoServico(dbPool, reserva.Config{
 		Sessoes:    sessoes,
-		LimiteIP:   novoLimitador("trava-ip", limiteTravasIP),
-		LimiteDono: novoLimitador("trava-dono", limiteTravasDono),
+		LimiteIP:   novoLimitador("trava-ip", limiteIP),
+		LimiteDono: novoLimitador("trava-dono", limiteDono),
 		Metricas:   metricasReserva(log),
 		Cache:      c,
 	}, log.Logger)
@@ -459,10 +506,11 @@ func iniciarRotinasDaSaga(ctx context.Context, e *echo.Echo, mode string, cfg *c
 	}
 }
 
-// rotasDeTesteAtivas: gateway fake + segredo do webhook (o boot recusa o
-// fake em produção — PRD 0024/0031).
+// rotasDeTesteAtivas: gateway fake + segredo do webhook + fora de produção
+// (o boot já recusa o fake em produção — PRD 0024/0031; a checagem aqui é a
+// segunda trava, PRD 0045 RF04).
 func rotasDeTesteAtivas(cfg *config.Config) bool {
-	return cfg.Gateway == "fake" && cfg.StripeWebhookSegredo != ""
+	return cfg.Gateway == "fake" && cfg.StripeWebhookSegredo != "" && cfg.Ambiente != "producao"
 }
 
 // refIngresso acha os links de ingresso no texto do e-mail.
@@ -837,7 +885,7 @@ func montarPedido(cfg *config.Config, dbPool *pgxpool.Pool, sessoes pedido.Fonte
 		Sessoes:       sessoes,
 		Reserva:       reservaDoPedido{r},
 		Gateway:       montarGateway(cfg, meter, log),
-		LimiteIP:      novoLimitador("pedido-ip", limitePedidosIP),
+		LimiteIP:      novoLimitador("pedido-ip", limiteEfetivo(limitePedidosIP, cfg.LoadTest)),
 		LimiteDono:    novoLimitador("pedido-dono", limitePedidosDono),
 		Funil: func(ctx context.Context, etapa string) {
 			funil.Add(ctx, 1, metric.WithAttributes(attribute.String("etapa", etapa)))
@@ -850,9 +898,9 @@ func montarPedido(cfg *config.Config, dbPool *pgxpool.Pool, sessoes pedido.Fonte
 		},
 		// Consulta de convidado e página do ingresso (PRD 0034).
 		Consulta: &pedido.ConfigConsulta{
-			LimiteIP:       novoLimitador("consulta-ip", limiteConsultaIP),
+			LimiteIP:       novoLimitador("consulta-ip", limiteEfetivo(limiteConsultaIP, cfg.LoadTest)),
 			LimiteEmail:    novoLimitador("consulta-email", limiteConsultaEmail),
-			LimiteIngresso: novoLimitador("ingresso-ip", limiteIngressoIP),
+			LimiteIngresso: novoLimitador("ingresso-ip", limiteEfetivo(limiteIngressoIP, cfg.LoadTest)),
 			Sessao:         info,
 			QR:             notificacao.QR,
 			BaseURL:        cfg.BaseURLPublica,
@@ -1273,8 +1321,8 @@ func montarIdentidade(cfg *config.Config, dbPool *pgxpool.Pool, redisClient redi
 		Argon2:           parametrosArgon2(cfg),
 		HashConcorrencia: cfg.HashConcorrencia,
 		LimiteConta:      novoLimitador("conta", limiteFalhasConta, janelaFalhasLogin),
-		LimiteIP:         novoLimitador("ip", limiteFalhasIP, janelaFalhasLogin),
-		LimiteRegistro:   novoLimitador("registro", limiteCadastrosIP, janelaCadastrosIP),
+		LimiteIP:         novoLimitador("ip", limiteEfetivo(limiteFalhasIP, cfg.LoadTest), janelaFalhasLogin),
+		LimiteRegistro:   novoLimitador("registro", limiteEfetivo(limiteCadastrosIP, cfg.LoadTest), janelaCadastrosIP),
 	}, metricas, log.Logger)
 	if err != nil {
 		fatal("serviço de identidade", err)
