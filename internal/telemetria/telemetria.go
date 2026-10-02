@@ -118,10 +118,7 @@ func Iniciar(ctx context.Context, cfg Config) (*Telemetria, error) {
 	mp := sdkmetric.NewMeterProvider(
 		sdkmetric.WithResource(res),
 		sdkmetric.WithReader(exporter),
-		sdkmetric.WithView(sdkmetric.NewView(
-			sdkmetric.Instrument{Name: "*"},
-			sdkmetric.Stream{AttributeFilter: attribute.NewAllowKeysFilter(LabelsPermitidos...)},
-		)),
+		sdkmetric.WithView(viewPadrao()),
 	)
 
 	otel.SetTracerProvider(tp)
@@ -129,6 +126,30 @@ func Iniciar(ctx context.Context, cfg Config) (*Telemetria, error) {
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 
 	return &Telemetria{TracerProvider: tp, MeterProvider: mp, registry: registry, sampler: sampler}, nil
+}
+
+// nomeDuracaoHTTP é o instrumento do otelecho (httpconv.ServerRequestDuration).
+const nomeDuracaoHTTP = "http.server.request.duration"
+
+// FronteirasDuracaoHTTP (segundos): inclui 0,3 s — a fronteira do SLO de p95
+// (PRD 0045 RF05); com os buckets padrão do OTel o p95 seria interpolado
+// entre 0,25 e 0,5.
+var FronteirasDuracaoHTTP = []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.2, 0.3, 0.5, 1, 2.5, 5, 10}
+
+// viewPadrao é a ÚNICA view do provider: duas views casando o mesmo
+// instrumento gerariam streams duplicados. Todo instrumento recebe o filtro
+// de atributos (allowlist — RNF01); o histograma HTTP ganha também as
+// fronteiras próprias.
+func viewPadrao() sdkmetric.View {
+	filtro := attribute.NewAllowKeysFilter(LabelsPermitidos...)
+	return func(i sdkmetric.Instrument) (sdkmetric.Stream, bool) {
+		// View customizada não herda nome/descrição/unidade do instrumento.
+		s := sdkmetric.Stream{Name: i.Name, Description: i.Description, Unit: i.Unit, AttributeFilter: filtro}
+		if i.Name == nomeDuracaoHTTP {
+			s.Aggregation = sdkmetric.AggregationExplicitBucketHistogram{Boundaries: FronteirasDuracaoHTTP}
+		}
+		return s, true
+	}
 }
 
 // Handler serve o registry dedicado no formato de exposição do Prometheus.

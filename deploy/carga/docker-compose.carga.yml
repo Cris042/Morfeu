@@ -1,0 +1,134 @@
+# Stack de TESTE DE CARGA local (PRD 0045, refinamento E12). Nunca vai para a VM.
+#
+# Uso (sempre a partir da RAIZ do repo; o projeto isola containers/volumes do dev):
+#   export JWT_SEGREDO=$(openssl rand -hex 32)
+#   export INGRESSO_TOKEN_SEGREDO_V1=$(openssl rand -hex 32)
+#   export STRIPE_WEBHOOK_SECRET=whsec_$(openssl rand -hex 16)
+#   docker compose -p morfeu-carga --project-directory . -f deploy/carga/docker-compose.carga.yml up -d --build --wait
+#   # com observabilidade (Prometheus/Grafana/Alloy) — compose combinado:
+#   docker compose -p morfeu-carga --project-directory . \
+#     -f deploy/carga/docker-compose.carga.yml -f docker-compose.observability.yml up -d --build --wait
+#
+# Garantias: banco morfeu_carga (o boot recusa MORFEU_LOADTEST com outro nome),
+# gateway e e-mail fakes, nenhuma porta além de 127.0.0.1, segredos só por env
+# (nada versionado). Os limites de CPU/memória aproximam a VM-alvo (2 vCPU/2 GB
+# para o app). A senha do PG/RabbitMQ abaixo é de uma stack descartável
+# sem porta publicada.
+name: morfeu-carga
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: morfeu-carga-postgres
+    environment:
+      POSTGRES_DB: morfeu_carga
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${CARGA_SENHA:-carga}
+      # Monitoração (só usada com o compose de observabilidade combinado).
+      PG_MONITOR_PASSWORD: ${CARGA_SENHA:-carga}
+    volumes:
+      - morfeu-carga-postgres:/var/lib/postgresql/data
+      - ./configs/postgres/01-usuario-monitoracao.sh:/docker-entrypoint-initdb.d/01-usuario-monitoracao.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d morfeu_carga"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    cpus: 2
+    mem_limit: 1g
+    networks:
+      - morfeu-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: morfeu-carga-redis
+    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "PING"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    mem_limit: 640m
+    networks:
+      - morfeu-network
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: morfeu-carga-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: morfeu
+      RABBITMQ_DEFAULT_PASS: ${CARGA_SENHA:-carga}
+    volumes:
+      - morfeu-carga-rabbitmq:/var/lib/rabbitmq
+      - ./configs/rabbitmq.conf:/etc/rabbitmq/conf.d/10-morfeu.conf:ro
+      - ./configs/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+    mem_limit: 512m
+    networks:
+      - morfeu-network
+
+  # App com o modo de carga: limites por IP ×1000 (MORFEU_LOADTEST=1), gateway e
+  # e-mail fakes e /__teste/pagar. GOMEMLIMIT ~80% do mem_limit (como na VM).
+  app:
+    build:
+      context: .
+    image: morfeu:carga
+    container_name: morfeu-carga-app
+    command: ["-mode=all"]
+    stop_grace_period: 45s
+    environment:
+      AMBIENTE: dev
+      MORFEU_LOADTEST: "1"
+      MORFEU_GATEWAY: fake
+      EMAIL_PROVEDOR: fake
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:?exporte STRIPE_WEBHOOK_SECRET (ver topo do arquivo)}
+      JWT_SEGREDO: ${JWT_SEGREDO:?exporte JWT_SEGREDO (ver topo do arquivo)}
+      INGRESSO_TOKEN_SEGREDO_V1: ${INGRESSO_TOKEN_SEGREDO_V1:?exporte INGRESSO_TOKEN_SEGREDO_V1 (ver topo do arquivo)}
+      DATABASE_URL: postgres://postgres:${CARGA_SENHA:-carga}@postgres:5432/morfeu_carga?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      RABBITMQ_URL: amqp://morfeu:${CARGA_SENHA:-carga}@rabbitmq:5672/
+      LOG_LEVEL: warn
+      APP_PORT: "8080"
+      GOMEMLIMIT: 1600MiB
+    ports:
+      - "127.0.0.1:18080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    cpus: 2
+    mem_limit: 2g
+    networks:
+      - morfeu-network
+
+  # Gerador de carga (profile "k6"): CPU própria e limitada, para não disputar
+  # com o app. Imagem por versão + digest (lib.md). Roda via
+  #   docker compose ... run --rm k6 run /scripts/leitura.js
+  k6:
+    image: grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34
+    container_name: morfeu-carga-k6
+    profiles: ["k6"]
+    entrypoint: ["k6"]
+    environment:
+      BASE_URL: http://app:8080
+    volumes:
+      - ./deploy/carga/k6:/scripts:ro
+    cpus: 2
+    mem_limit: 1g
+    networks:
+      - morfeu-network
+
+volumes:
+  morfeu-carga-postgres:
+  morfeu-carga-rabbitmq:
+
+networks:
+  morfeu-network:
+    driver: bridge

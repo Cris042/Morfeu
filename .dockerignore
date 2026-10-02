@@ -1,0 +1,16 @@
+# Contexto de build enxuto (PRD 0045): o Dockerfile só precisa de go.mod/go.sum,
+# cmd/, internal/ e migrations/. Fora daqui ficam os .env (segredos não entram
+# no contexto) e a web/node_modules (centenas de MB lidos do NTFS a cada build).
+.git
+.github
+.idea
+.claude
+.env
+.env.*
+web
+docs
+deploy
+test
+configs
+scripts
+*.md

@@ -6,6 +6,20 @@
 
 **E11 concluído (PR #78 mergeado). Épico E12 refinado** (`docs/refinamentos/E12-teste-de-carga.md`): 2 tasks — 0045 (ferramental de carga) → 0046 (execução local indicativa + relatório). Próxima: **0045**.
 
+**Task 0045 — Ferramental de carga (E12 T1): auditoria APROVADA em 2026-10-01 (`security`), PR #80** (branch `feature/0045-ferramental-carga`, PRD `docs/prd/0045-ferramental-carga.md`).
+
+### Plano da task 0045
+
+1. ~~Config (`MORFEU_LOADTEST` + guardas) + `limiteEfetivo` + gauge + rota de teste fora de produção~~
+2. ~~View de buckets (0,3 s)~~
+3. ~~Alerta `morfeu-modo-loadtest` (20 regras)~~
+4. ~~Compose de carga + seed + invariante (+ `test/carga`)~~
+5. ~~Scripts k6 (5: `lib`, `leitura` [+rampa], `misto` [+soak], `disputa`, `checkout`) + smoke~~
+6. ~~Docs (`docs/carga/`) + `lib.md`~~
+7. ~~Smoke real nesta máquina; lint + suíte + passe de julgamento~~ — APROVADO, sem bloqueantes. Resolvido no passe: `lib.js` recusa `userinfo` (`http://localhost@host/`). Registrados: CA03 cobre o predicado `rotasDeTesteAtivas`, não o registro real; senha `carga` padrão no compose descartável; `postgres-exporter` precisa de `DATA_SOURCE_URI` para `morfeu_carga`; "19 → 20 alertas" do `docs/observabilidade.md` vai na 0046.
+
+---
+
 **E10 concluído (PR #74 mergeado). Épico E11 refinado** (`docs/refinamentos/E11-hardening-backup.md`, ADR 0013): 3 tasks — 0042 (hardening + roles) → 0043 (backup/restore) → 0044 (limpeza operacional). 0042 ✅ (PR #76), 0043 ✅ (PR #77); próxima: **0044**.
 
 **Task 0044 — Limpeza operacional (E11 T3): auditoria APROVADA em 2026-10-01 (`qa`), PR #78. E11 concluído.** (branch `feature/0044-limpeza-operacional`, PRD `docs/prd/0044-limpeza-operacional.md`).

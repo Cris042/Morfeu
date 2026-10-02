@@ -222,3 +222,32 @@ func TestIniciar_SamplerEExporter(t *testing.T) {
 		t.Errorf("Shutdown: %v", err)
 	}
 }
+
+// TestHistogramaHTTP_FronteiraNoSLO (PRD 0045 CA04): o histograma HTTP tem a
+// fronteira de 0,3 s, não tem a de 0,25 s dos buckets padrão e não gera
+// stream duplicado (view única).
+func TestHistogramaHTTP_FronteiraNoSLO(t *testing.T) {
+	tel := iniciarTeste(t)
+	e := servidorTeste(tel)
+	get(t, e, "/filmes")
+	metrics := get(t, e, "/metrics")
+
+	const prefixo = "http_server_request_duration_seconds_bucket{"
+	var les []string
+	for _, l := range strings.Split(metrics, "\n") {
+		if strings.HasPrefix(l, prefixo) && strings.Contains(l, `http_route="/filmes"`) {
+			i := strings.Index(l, `le="`)
+			les = append(les, l[i+4:i+4+strings.Index(l[i+4:], `"`)])
+		}
+	}
+	want := []string{"0.005", "0.01", "0.025", "0.05", "0.1", "0.2", "0.3", "0.5", "1", "2.5", "5", "10", "+Inf"}
+	if strings.Join(les, ",") != strings.Join(want, ",") {
+		t.Errorf("fronteiras = %v, quer %v (duplicata ou buckets padrão?)", les, want)
+	}
+	if strings.Count(metrics, "# TYPE http_server_request_duration_seconds histogram") != 1 {
+		t.Errorf("família do histograma duplicada:\n%s", metrics)
+	}
+	if fora := labelsForaDaAllowlist(t, tel); len(fora) != 0 {
+		t.Errorf("labels fora da allowlist: %v", fora)
+	}
+}

@@ -64,7 +64,15 @@ type Config struct {
 	EmailProvedor  string
 	ResendChave    string
 	EmailRemetente string
+
+	// LoadTest (PRD 0045, refinamento E12): MORFEU_LOADTEST=1 sobe os limites
+	// por IP ×1000 para o teste de carga. Só com fakes, fora de produção e
+	// com banco *_carga (ver validarLoadTest).
+	LoadTest bool
 }
+
+// sufixoBancoCarga: o modo de carga só roda contra bancos descartáveis.
+const sufixoBancoCarga = "_carga"
 
 // LoadConfig loads configuration from environment variables with defaults
 func LoadConfig() (*Config, error) {
@@ -99,6 +107,7 @@ func LoadConfig() (*Config, error) {
 		EmailProvedor:        getEnv("EMAIL_PROVEDOR", "fake"),
 		ResendChave:          getEnv("RESEND_API_KEY", ""),
 		EmailRemetente:       getEnv("EMAIL_REMETENTE", "Morfeu <onboarding@resend.dev>"),
+		LoadTest:             getEnv("MORFEU_LOADTEST", "") == "1",
 	}
 
 	// URLs dos roles de menor privilégio: sem elas, tudo no usuário único (dev/CI).
@@ -150,7 +159,42 @@ func (c *Config) Validate() error {
 	if c.CacheTTL < 1*time.Second {
 		return fmt.Errorf("CACHE_TTL_SECONDS must be >= 1")
 	}
+	if err := c.validarLoadTest(); err != nil {
+		return err
+	}
 	return c.validarArgon2()
+}
+
+// validarLoadTest é a trava do modo de carga (PRD 0045 RF01): recusa a flag
+// em produção, com gateway/e-mail reais ou contra banco que não termine em
+// _carga. As mensagens nunca incluem a URL do banco.
+func (c *Config) validarLoadTest() error {
+	if !c.LoadTest {
+		return nil
+	}
+	switch {
+	case c.Ambiente == "producao":
+		return fmt.Errorf("MORFEU_LOADTEST é proibido com AMBIENTE=producao")
+	case c.Gateway != "fake":
+		return fmt.Errorf("MORFEU_LOADTEST exige MORFEU_GATEWAY=fake")
+	case c.EmailProvedor != "fake":
+		return fmt.Errorf("MORFEU_LOADTEST exige EMAIL_PROVEDOR=fake")
+	}
+	for _, dsn := range []string{c.DatabaseURL, c.DatabaseMigrateURL, c.DatabasePurgeURL} {
+		if dsn != "" && !strings.HasSuffix(nomeDoBanco(dsn), sufixoBancoCarga) {
+			return fmt.Errorf("MORFEU_LOADTEST exige banco cujo nome termine em %s", sufixoBancoCarga)
+		}
+	}
+	return nil
+}
+
+// nomeDoBanco extrai o nome do banco da URL; vazio se não der para ler.
+func nomeDoBanco(dsn string) string {
+	u, err := url.Parse(dsn)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimPrefix(u.Path, "/")
 }
 
 // validarRedis exige senha no Redis em produção (ADR 0013, doc.md §14.5). Só

@@ -236,3 +236,45 @@ func TestLoadConfig_ProducaoExigeSenhaDoRedis(t *testing.T) {
 		t.Fatalf("produção com senha: %v", err)
 	}
 }
+
+// TestValidate_LoadTest cobre as guardas do modo de carga (PRD 0045 CA01).
+func TestValidate_LoadTest(t *testing.T) {
+	const bancoCarga = "postgres://u:senha-secreta@pg:5432/morfeu_carga" //nolint:gosec // G101: DSN fictícia de teste
+	casos := []struct {
+		nome   string
+		env    map[string]string
+		recusa string
+	}{
+		{"sem a flag nada muda", map[string]string{}, ""},
+		{"sem a flag, banco comum e produção seguem valendo", map[string]string{"DATABASE_URL": "postgres://u:p@pg/morfeu"}, ""}, //nolint:gosec // G101: DSN fictícia de teste
+		{"flag com tudo certo", map[string]string{"MORFEU_LOADTEST": "1", "DATABASE_URL": bancoCarga}, ""},
+		{"flag com valor diferente de 1 é ignorada", map[string]string{"MORFEU_LOADTEST": "true", "AMBIENTE": "producao"}, ""},
+		{"flag + produção", map[string]string{"MORFEU_LOADTEST": "1", "AMBIENTE": "producao", "DATABASE_URL": bancoCarga}, "AMBIENTE=producao"},
+		{"flag + gateway stripe", map[string]string{"MORFEU_LOADTEST": "1", "MORFEU_GATEWAY": "stripe", "DATABASE_URL": bancoCarga}, "MORFEU_GATEWAY"},
+		{"flag + e-mail resend", map[string]string{"MORFEU_LOADTEST": "1", "EMAIL_PROVEDOR": "resend", "DATABASE_URL": bancoCarga}, "EMAIL_PROVEDOR"},
+		{"flag + banco sem _carga", map[string]string{"MORFEU_LOADTEST": "1", "DATABASE_URL": "postgres://u:senha-secreta@pg:5432/morfeu"}, "_carga"}, //nolint:gosec // G101: DSN fictícia de teste
+		{"flag + banco padrão (morfeu)", map[string]string{"MORFEU_LOADTEST": "1"}, "_carga"},
+		{"flag + role de migração em outro banco", map[string]string{"MORFEU_LOADTEST": "1", "DATABASE_URL": bancoCarga, "DATABASE_MIGRATE_URL": "postgres://u:p@pg/morfeu"}, "_carga"}, //nolint:gosec // G101: DSN fictícia de teste
+	}
+	for _, c := range casos {
+		os.Clearenv()
+		t.Setenv("REDIS_URL", "redis://:senha@redis:6379/0") // produção exige senha
+		for k, v := range c.env {
+			t.Setenv(k, v)
+		}
+		cfg, err := LoadConfig()
+		if c.recusa == "" {
+			if err != nil {
+				t.Errorf("%s: err = %v", c.nome, err)
+			} else if want := c.env["MORFEU_LOADTEST"] == "1"; cfg.LoadTest != want {
+				t.Errorf("%s: LoadTest = %v", c.nome, cfg.LoadTest)
+			}
+			continue
+		}
+		if err == nil || !strings.Contains(err.Error(), c.recusa) {
+			t.Errorf("%s: err = %v", c.nome, err)
+		} else if strings.Contains(err.Error(), "senha-secreta") {
+			t.Errorf("%s: a mensagem vaza a URL do banco: %v", c.nome, err)
+		}
+	}
+}

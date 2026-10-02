@@ -141,7 +141,7 @@ func TestContrato_AlertasCitamMetricasDoApp(t *testing.T) {
 	}
 	var exprs []string
 	coletarExprs(cfg, &exprs)
-	if len(exprs) < 19 {
+	if len(exprs) < 20 {
 		t.Fatalf("só %d expressões nas regras", len(exprs))
 	}
 	for _, e := range exprs {
