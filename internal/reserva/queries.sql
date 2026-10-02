@@ -96,3 +96,14 @@ ORDER BY assento_codigo;
 UPDATE holds
 SET status = 'liberado', atualizado_em = @agora
 WHERE pedido_id = @pedido_id AND status IN ('ativo', 'convertido');
+
+-- name: LimparHoldsTerminais :execrows
+-- Limpeza (PRD 0044): só terminais sem efeito (liberado/expirado) com
+-- atualizado_em anterior ao corte, em lote. ativo e convertido nunca entram
+-- (convertido ocupa o índice da trava). Usa holds_terminais_atualizado_em_idx.
+DELETE FROM holds
+WHERE id IN (
+    SELECT id FROM holds
+    WHERE status IN ('liberado', 'expirado') AND atualizado_em < @antes_de::timestamptz
+    LIMIT @limite::int
+);

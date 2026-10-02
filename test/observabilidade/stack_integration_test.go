@@ -166,11 +166,11 @@ var regrasEsperadas = []string{
 	"morfeu-refresh-reuso", "morfeu-trava-recusas", "morfeu-sweeper-parado",
 	"morfeu-saga-estorno", "morfeu-saga-estorno-preso", "morfeu-saga-reconciliacao-parada", "morfeu-gateway-breaker", "morfeu-saga-latencia",
 	"morfeu-email-recusado", "morfeu-email-falhando",
-	"morfeu-auditoria-purga-parada", "morfeu-watchdog",
+	"morfeu-auditoria-purga-parada", "morfeu-limpeza-parada", "morfeu-watchdog",
 }
 
 // TestGrafana_Provisionamento cobre CA03: o provisioning do repo é aceito no
-// boot e expõe 7 dashboards, 3 datasources, as 18 regras (por uid) e os
+// boot e expõe 7 dashboards, 3 datasources, as 19 regras (por uid) e os
 // contact points do Discord e do heartbeat.
 func TestGrafana_Provisionamento(t *testing.T) {
 	t.Parallel() // containers próprios e portas efêmeras: isolados entre si

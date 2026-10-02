@@ -142,6 +142,30 @@ func LimparPublicados(ctx context.Context, pool Pool, dias int) (int64, error) {
 	return total, nil
 }
 
+// JanelaDedup é a retenção de processed_messages (PRD 0044): depois dela o
+// dedup deixa de proteger o consumidor. O replay da DLQ recusa mensagens cujo
+// evento é mais velho que a janela (broker.Reprocessar), porque o registro de
+// dedup delas já pode ter sido apagado.
+const JanelaDedup = 30 * 24 * time.Hour
+
+// LimparProcessadas apaga registros de dedup com processed_at anterior a
+// antesDe (normalmente agora − JanelaDedup), em lotes de 1000 até esvaziar —
+// cada lote é um DELETE curto. Devolve o total apagado.
+func LimparProcessadas(ctx context.Context, pool Pool, antesDe time.Time) (int64, error) {
+	var total int64
+	for ctx.Err() == nil {
+		n, err := db.New(pool).LimparProcessadas(ctx, db.LimparProcessadasParams{AntesDe: pgtype.Timestamptz{Time: antesDe, Valid: true}, Limite: lotePublicados})
+		if err != nil {
+			return total, fmt.Errorf("outbox: limpar processed_messages: %w", err)
+		}
+		total += n
+		if n < lotePublicados {
+			break
+		}
+	}
+	return total, nil
+}
+
 // RodarLimpeza limpa a outbox a cada intervalo até ctx acabar (worker).
 func RodarLimpeza(ctx context.Context, pool Pool, intervalo time.Duration, logger *zap.Logger) {
 	ticker := time.NewTicker(intervalo)

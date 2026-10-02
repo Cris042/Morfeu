@@ -70,6 +70,30 @@ func (q *Queries) InsertEvent(ctx context.Context, arg InsertEventParams) (Outbo
 	return i, err
 }
 
+const limparProcessadas = `-- name: LimparProcessadas :execrows
+DELETE FROM processed_messages
+WHERE (message_id, consumidor) IN (
+    SELECT message_id, consumidor FROM processed_messages
+    WHERE processed_at < $1::timestamptz
+    LIMIT $2::int
+)
+`
+
+type LimparProcessadasParams struct {
+	AntesDe pgtype.Timestamptz `db:"antes_de"`
+	Limite  int32              `db:"limite"`
+}
+
+// Limpeza do dedup (PRD 0044): apaga, em lote, registros com processed_at
+// anterior ao corte (janela de 30 dias). Usa processed_messages_processed_at_idx.
+func (q *Queries) LimparProcessadas(ctx context.Context, arg LimparProcessadasParams) (int64, error) {
+	result, err := q.db.Exec(ctx, limparProcessadas, arg.AntesDe, arg.Limite)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const limparPublicados = `-- name: LimparPublicados :execrows
 DELETE FROM outbox_events
 WHERE id IN (
