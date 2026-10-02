@@ -4,7 +4,21 @@
 
 ## Estado corrente (2026-10-01)
 
-**E11 concluído (PR #78 mergeado). Épico E12 refinado** (`docs/refinamentos/E12-teste-de-carga.md`): 2 tasks — 0045 (ferramental de carga) → 0046 (execução local indicativa + relatório). Próxima: **0045**.
+**E11 concluído (PR #78 mergeado). Épico E12 refinado** (`docs/refinamentos/E12-teste-de-carga.md`): 2 tasks — 0045 (ferramental de carga) → 0046 (execução local indicativa + relatório). 0045 ✅ (PR #80); **0046** implementada (última do roadmap) — com o merge, **roadmap do MVP concluído** (resta só a E0c-CD, bloqueada pela VM, e o pós-MVP).
+
+**Task 0046 — Execução local da carga e relatório do M5 indicativo (E12 T2): auditoria APROVADA em 2026-10-02 (`qa`; 4 ressalvas não bloqueantes corrigidas: aritmética da disputa, p50/p99 no relatório, teste concorrente do Fake, contexto pessoal removido), PR #81** (branch `feature/0046-execucao-carga`, PRD `docs/prd/0046-execucao-carga.md`). Relatório: `docs/carga/2026-10-01-local.md`.
+
+### Plano da task 0046
+
+1. ~~Stack + seed + métricas conferidas no Prometheus~~ (Grafana em porta alternativa por override local — a 3000 estava ocupada)
+2. ~~Baseline (quente/frio) e ramp~~ — rampa em degraus constantes; sem joelho até 400 → exploração até 3200 req/s (sem joelho)
+3. ~~SLO 300 req/s × 10 min, 3×~~ — p95 < 5 ms, 0% erro
+4. ~~Misto, disputa, checkout~~ — **desvio:** a 1ª disputa saiu vazia (0 vencedores; assentos já vendidos pelo misto) → `SESSOES_PULAR` + threshold `disputa_vencedores > 0`, refeita (601 × 1 vencedor)
+5. ~~Soak 30 min~~ — **desvio:** 1º soak inválido (colisão de pool) e revelou RSS crescente (e-mail fake sem teto) → poda no `notificacao.Fake` + teste, soak final refeito
+6. ~~Ajustes + reexecução~~ — também: bit de execução dos scripts de carga; queries de CPU do gerador (`[2m]`) e de alertas (API do Grafana)
+7. ~~Relatório, checklist da E0c-CD, docs~~; ~~passe de julgamento → PR #81~~
+
+---
 
 **Task 0045 — Ferramental de carga (E12 T1): auditoria APROVADA em 2026-10-01 (`security`), PR #80** (branch `feature/0045-ferramental-carga`, PRD `docs/prd/0045-ferramental-carga.md`).
 

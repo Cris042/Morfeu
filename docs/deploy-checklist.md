@@ -66,3 +66,21 @@ Aceite **real** da E0c-CD: o repositório prova o mecanismo (teste de ida e volt
 - [ ] **Primeiro restore real**, em máquina do dono com a chave, num PG efêmero destruído ao final — **RTO medido registrado aqui** (meta ~1 h, `doc.md` §7).
   Verificação: passo a passo de `docs/backup.md`; `restore.sh` termina com `invariantes verificadas` e imprime o tempo total. RTO medido: ______ (data: ______).
 - [ ] **Restore mensal agendado** (lembrete recorrente do dono) e **perda da chave** ensaiada no runbook (o que fazer: novo par, novo backup, histórico antigo perdido).
+
+## Teste de carga — M5 oficial (E12, task 0046; runbook em `docs/carga/runbook.md`)
+
+Aceite **real** da E0c-CD: o relatório `docs/carga/2026-10-01-local.md` é **indicativo (local)** — gerador e app no mesmo notebook, hardware e disco diferentes da VM. O M5 oficial repete os **mesmos scripts e queries** na VM-alvo, com o **gerador fora dela**. Resultado vai para um relatório novo em `docs/carga/` (data do run, selo "oficial (VM)"), nunca por cima do local.
+
+- [ ] **Stack de carga na VM, separada da produção**: subir `deploy/carga/docker-compose.carga.yml` + `docker-compose.observability.yml` (projeto `morfeu-carga`, banco `morfeu_carga`, `MORFEU_LOADTEST=1`) numa VM/janela **sem tráfego real** e **sem o compose de produção no ar** (o boot recusa `MORFEU_LOADTEST` com `AMBIENTE=producao`, banco sem sufixo `_carga` e gateway/e-mail reais). Limites do compose = os da VM-alvo (app 2 vCPU/2 GB).
+  Verificação: `curl -s http://127.0.0.1:18080/metrics | grep morfeu_modo_loadtest` → `1`; o alerta "Modo de carga ligado" dispara (esperado) e **volta a `Normal`** ao derrubar a stack (`down -v`).
+- [ ] **Gerador fora da VM** (outra máquina na mesma região/rede, k6 `2.3.0`, ≥ 2 vCPU livres; imagem do `lib.md` com digest). O alvo é a rede privada ou um túnel — `lib.js` só aceita `http://` com host do compose, loopback ou rede privada, **nunca** a URL pública.
+  Verificação: `docker stats`/cAdvisor do gerador ≤ ~70% de CPU durante o patamar e `dropped_iterations = 0` (senão o run é **inválido** e refeito — `docs/carga/runbook.md`, "Critérios de validade").
+- [ ] **Patamar do SLO — leitura 300 req/s × 10 min, 3 vezes**: `-e TAXA=300 -e DURACAO=10m k6 run /scripts/leitura.js`. Veredito **server-side** pelas queries de `docs/carga/queries.md` (janela = últimos 9 min de cada patamar, UTC registrado) e **mediana das 3**: p95 < 300 ms nas 3 rotas do SLO (cartaz, sessões, ocupação) e erro 5xx < 1% (sem contar 409).
+  Verificação: tabela das 3 execuções no relatório oficial; `invariante.sh` com exit 0 após cada uma.
+- [ ] **Demais cenários na VM**: baseline quente/frio (10 req/s), ramp até o joelho, misto 90/10 × 10 min, disputa (≤ 1 vencedor por assento, zero 5xx) e checkout fim a fim (SLI), cada um seguido de `deploy/carga/invariante.sh` (exit 0).
+  Verificação: relatório oficial com a mesma tabela do local (req/s alcançado, p50/p95/p99 server e client, erro, dropped, CPU do gerador).
+- [ ] **Soak (≥ 30 min, idealmente horas) com o RSS real do Alloy** — o local não representa a VM: memória do app (`GOMEMLIMIT`), goroutines, pool do PG, filas do RabbitMQ e **RSS do Alloy** (limite de 512 MB do compose com tail sampling) sem crescimento monotônico.
+  Verificação: queries §4 de `docs/carga/queries.md`; nenhum alerta além do "Modo de carga" e do Watchdog.
+- [ ] **Recalibrar o Argon2 na VM** (`ARGON2_MEMORIA_KIB`/`ARGON2_ITERACOES`/`ARGON2_PARALELISMO` — padrão OWASP 19 MiB/t=2/p=1): medir o tempo de um login (`POST /auth/login`, conta criada via `/auth/registro`; o seed de carga **não** tem login) sob a carga de leitura do patamar; alvo p95 de login < 500 ms com o app a 2 vCPU. Se estourar, reduzir a concorrência de hash (ou subir parâmetros só se sobrar folga) e registrar os valores escolhidos aqui. Hashes antigos continuam válidos (a verificação lê os parâmetros do próprio hash).
+  Verificação: valores finais anotados aqui: memória ______ KiB, iterações ______, paralelismo ______ (data: ______); p95 de login medido: ______ ms.
+- [ ] **Resultado do M5 oficial registrado**: p95 mediano a 300 req/s = ______ ms (SLO < 300 ms), erro = ______ % (SLO < 1%), joelho do ramp = ______ req/s. Se o SLO não fechar, abrir task de ajuste com a evidência (nenhuma mudança estrutural sem ADR).

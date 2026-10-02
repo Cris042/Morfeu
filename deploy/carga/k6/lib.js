@@ -38,6 +38,9 @@ export const VUS_PRE = Number(__ENV.VUS_PRE || 50);
 export const VUS_MAX = Number(__ENV.VUS_MAX || 200);
 const SESSOES_POR_FILME = Number(__ENV.SESSOES_POR_FILME || 5);
 const MAX_SESSOES = Number(__ENV.MAX_SESSOES || 200);
+// Pula as N primeiras sessões de cada filme na descoberta: dá a um cenário um
+// pool de assentos que runs anteriores (ex.: o misto) não consumiram.
+const SESSOES_PULAR = Number(__ENV.SESSOES_PULAR || 0);
 
 // --- Métricas próprias. -----------------------------------------------------
 export const fluxoCheckout = new Trend('checkout_fluxo_duration', true);
@@ -85,7 +88,7 @@ export function descobrir() {
   const sessoes = [];
   for (const f of filmes) {
     const lista = lerJSON(`${BASE_URL}/filmes/${f.id}/sessoes`);
-    for (const s of lista.slice(0, SESSOES_POR_FILME)) sessoes.push(s.id);
+    for (const s of lista.slice(SESSOES_PULAR, SESSOES_PULAR + SESSOES_POR_FILME)) sessoes.push(s.id);
     if (sessoes.length >= MAX_SESSOES) break;
   }
   if (sessoes.length === 0) throw new Error('setup: nenhuma sessão futura — rode deploy/carga/seed.sql');

@@ -2,7 +2,9 @@
 // PARALELAS (http.batch) tentam travar o MESMO assento, cada uma sem carrinho
 // (donos distintos). Esperado por assento livre: exatamente 1× 201 e N−1× 409;
 // zero 5xx. TAXA = assentos disputados por segundo. Assento já ocupado de run
-// anterior = 0 vencedor (contado, não é erro); 2+ vencedores = violação.
+// anterior = 0 vencedor (contado, não é erro); 2+ vencedores = violação. Um run
+// sem NENHUM vencedor não provou nada (todos os assentos já estavam ocupados):
+// o threshold de disputa_vencedores o reprova — use SESSOES_PULAR (lib.js).
 import exec from 'k6/execution';
 import http from 'k6/http';
 import { check } from 'k6';
@@ -17,7 +19,10 @@ const multiplosVencedores = new Counter('disputa_assentos_com_mais_de_um_vencedo
 export const options = {
   batchPerHost: DISPUTANTES, // o padrão (6) serializaria a disputa
   scenarios: { disputa: constante('disputa', TAXA) },
-  thresholds: thresholds({ disputa_assentos_com_mais_de_um_vencedor: ['count==0'] }),
+  thresholds: thresholds({
+    disputa_assentos_com_mais_de_um_vencedor: ['count==0'],
+    disputa_vencedores: ['count>0'],
+  }),
 };
 
 export function setup() {
